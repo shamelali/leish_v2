@@ -8,6 +8,10 @@ modern Next.js application.
 
 ## Features
 
+- **Branded header** — gem logo (`public/images/logo.png`) in the navbar with the header
+  background gradient matched to the logo's sampled brand color (`#c9284b` family).
+  To use your own logo, replace `public/images/logo.png` and the header colors in
+  `src/app/globals.css` (`--leish-header-from` / `--leish-header-to`).
 - **Dark & light themes** — dark mode by default, with a sun/moon toggle in the navbar
   (choice is remembered in `localStorage`)
 - **Home** — hero, browse-by-category, featured artists, stats, how-it-works, and join CTAs
