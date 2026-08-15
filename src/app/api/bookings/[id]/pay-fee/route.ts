@@ -1,0 +1,75 @@
+import { NextResponse } from "next/server";
+import { getDb, type BookingRow, type UserRow } from "@/server/db";
+import { verifySessionToken } from "@/server/session";
+import { createBookingFeePayment, getPaymentForBooking } from "@/server/payments";
+import { getActiveQuotation } from "@/server/quotations";
+import { jsonError, statefulRoute } from "@/server/http";
+import { logger } from "@/server/logger";
+
+/**
+ * POST /api/bookings/[id]/pay-fee
+ * Client pays the flat, non-refundable RM 200 booking fee (Billplz bill).
+ * The booking becomes confirmed when the webhook reports the payment.
+ * A quotation must exist and be within its 24h window.
+ */
+export const POST = statefulRoute(
+  async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+
+    const token = request.headers.get("cookie")?.match(/(?:^|;\s*)leish_session=([^;]+)/)?.[1];
+    const payload = token ? await verifySessionToken(token) : null;
+    if (!payload) return jsonError("Not authenticated", 401);
+
+    const db = await getDb();
+    const user = (await db.prepare("SELECT * FROM users WHERE id = ?").get(payload.sub)) as
+      UserRow | undefined;
+    if (!user) return jsonError("Not authenticated", 401);
+
+    const booking = (await db.prepare("SELECT * FROM bookings WHERE id = ?").get(id)) as
+      BookingRow | undefined;
+    if (!booking) return jsonError("Booking not found", 404);
+    if (booking.user_id !== user.id) return jsonError("Only the booking owner can pay", 403);
+    if (booking.status !== "accepted") {
+      return jsonError("This booking is not waiting for a fee payment", 409);
+    }
+
+    const quotation = await getActiveQuotation(booking.id);
+    if (!quotation) {
+      return jsonError("No quotation available for this booking", 409);
+    }
+    if (quotation.status === "expired") {
+      return jsonError("The quotation has expired — ask the artist for a new one", 410);
+    }
+
+    // One active fee bill at a time.
+    const existing = await getPaymentForBooking(booking.id);
+    if (existing && existing.status === "required") {
+      return NextResponse.json({
+        payment: {
+          amount: existing.amount,
+          status: existing.status,
+          provider: existing.provider,
+          reference: existing.provider_ref,
+          url: existing.provider_url,
+        },
+      });
+    }
+
+    const payment = await createBookingFeePayment(booking.id);
+    logger.info({ bookingId: booking.id, amount: payment.amount }, "booking fee bill created");
+
+    return NextResponse.json(
+      {
+        payment: {
+          amount: payment.amount,
+          status: payment.status,
+          provider: payment.provider,
+          reference: payment.provider_ref,
+          url: payment.provider_url,
+        },
+      },
+      { status: 201 },
+    );
+  },
+  { route: "POST /api/bookings/[id]/pay-fee" },
+);
