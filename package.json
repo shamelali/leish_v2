@@ -16,6 +16,7 @@
     "db:migrate": "node --experimental-strip-types scripts/migrate.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.4",
     "jose": "6.2.8",
     "next": "16.3.1",
     "pdf-lib": "^1.17.1",
