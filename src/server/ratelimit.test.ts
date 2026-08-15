@@ -1,0 +1,108 @@
+// @vitest-environment node
+
+import { describe, expect, it, vi } from "vitest";
+import { createMemoryStore, createRateLimiter, createUpstashStore } from "./ratelimit";
+
+describe("memory rate limit store", () => {
+  it("allows requests under the limit", async () => {
+    const limiter = createRateLimiter(createMemoryStore());
+    for (let i = 0; i < 3; i++) {
+      const result = await limiter("key:under", 5, 60_000);
+      expect(result.allowed).toBe(true);
+      expect(result.remaining).toBe(5 - i - 1);
+    }
+  });
+
+  it("blocks requests over the limit and reports retry-after", async () => {
+    const limiter = createRateLimiter(createMemoryStore());
+    for (let i = 0; i < 3; i++) await limiter("key:over", 3, 60_000);
+    const blocked = await limiter("key:over", 3, 60_000);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.retryAfterMs).toBeGreaterThan(0);
+    expect((await limiter("key:over", 3, 60_000)).allowed).toBe(false);
+  });
+
+  it("treats different keys independently", async () => {
+    const limiter = createRateLimiter(createMemoryStore());
+    await limiter("key:a", 2, 60_000);
+    await limiter("key:a", 2, 60_000);
+    expect((await limiter("key:a", 2, 60_000)).allowed).toBe(false);
+    expect((await limiter("key:b", 2, 60_000)).allowed).toBe(true);
+  });
+
+  it("expires hits outside the window", async () => {
+    const limiter = createRateLimiter(createMemoryStore());
+    expect((await limiter("key:window", 2, 1)).allowed).toBe(true);
+    // A 1ms window has elapsed by the time this resolves.
+    expect((await limiter("key:window", 2, 1)).allowed).toBe(true);
+  });
+});
+
+describe("upstash rate limit store", () => {
+  function mockUpstash(handler: (path: string) => { result?: unknown; error?: string }) {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const path = url.replace("https://example.upstash.io/", "");
+      const body = handler(path);
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    return createUpstashStore({ url: "https://example.upstash.io/", token: "t", fetchImpl });
+  }
+
+  it("returns null without configuration", () => {
+    const prevUrl = process.env.UPSTASH_REST_URL;
+    const prevToken = process.env.UPSTASH_REST_TOKEN;
+    process.env.UPSTASH_REST_URL = "";
+    process.env.UPSTASH_REST_TOKEN = "";
+    expect(createUpstashStore()).toBeNull();
+    if (prevUrl !== undefined) process.env.UPSTASH_REST_URL = prevUrl;
+    else delete process.env.UPSTASH_REST_URL;
+    if (prevToken !== undefined) process.env.UPSTASH_REST_TOKEN = prevToken;
+    else delete process.env.UPSTASH_REST_TOKEN;
+  });
+
+  it("allows within the limit and sets expiry on first hit", async () => {
+    let incr = 0;
+    const store = mockUpstash((path) => {
+      if (path.startsWith("TTL")) return { result: -1 };
+      if (path.startsWith("INCR")) {
+        incr += 1;
+        return { result: incr };
+      }
+      if (path.startsWith("EXPIRE")) return { result: 1 };
+      return { result: null };
+    });
+    const result = await store!.checkAndIncrement("auth:1.2.3.4", 5, 60_000);
+    expect(result.allowed).toBe(true);
+    expect(result.remaining).toBe(4);
+    expect(incr).toBe(1);
+  });
+
+  it("blocks once the limit is exceeded", async () => {
+    let incr = 0;
+    const store = mockUpstash((path) => {
+      if (path.startsWith("TTL")) return { result: -1 };
+      if (path.startsWith("INCR")) {
+        incr += 1;
+        return { result: incr };
+      }
+      if (path.startsWith("EXPIRE")) return { result: 1 };
+      return { result: null };
+    });
+    await store!.checkAndIncrement("k", 2, 60_000);
+    await store!.checkAndIncrement("k", 2, 60_000);
+    const blocked = await store!.checkAndIncrement("k", 2, 60_000);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.retryAfterMs).toBeGreaterThan(0);
+  });
+
+  it("respects an active block marker", async () => {
+    const store = mockUpstash((path) => {
+      if (path.startsWith("TTL")) return { result: 42 };
+      return { result: null };
+    });
+    const result = await store!.checkAndIncrement("k", 5, 60_000);
+    expect(result.allowed).toBe(false);
+    expect(result.retryAfterMs).toBe(42_000);
+  });
+});
