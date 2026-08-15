@@ -6,9 +6,12 @@ import { getDb } from "./db";
 import { hashPassword } from "./password";
 import { findExpiredQuotations, markQuotationExpired } from "./quotations";
 
-function createBookingAndQuote(expiresInMs: number) {
+let quoteCounter = 0;
+
+async function createBookingAndQuote(expiresInMs: number) {
+  quoteCounter++;
   const userId = randomUUID();
-  getDb()
+  await getDb()
     .prepare(
       "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
@@ -22,7 +25,7 @@ function createBookingAndQuote(expiresInMs: number) {
     );
 
   const bookingId = randomUUID();
-  getDb()
+  await getDb()
     .prepare(
       "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'accepted', ?)",
     )
@@ -33,13 +36,13 @@ function createBookingAndQuote(expiresInMs: number) {
       "Aisha Azman",
       "Solemnization Makeup",
       580,
-      "2026-09-01",
+      `2026-09-${String(quoteCounter).padStart(2, "0")}`,
       "10:00 AM",
       new Date().toISOString(),
     );
 
   const quoteId = randomUUID();
-  getDb()
+  await getDb()
     .prepare(
       "INSERT INTO quotations (id, booking_id, base_fee, extras, total, status, created_at, expires_at) VALUES (?, ?, ?, '[]', ?, 'pending', ?, ?)",
     )
@@ -55,29 +58,29 @@ function createBookingAndQuote(expiresInMs: number) {
 }
 
 describe("quotation expiry sweep", () => {
-  beforeEach(() => {
-    getDb().prepare("DELETE FROM quotations").run();
-    getDb().prepare("DELETE FROM bookings").run();
-    getDb().prepare("DELETE FROM users").run();
+  beforeEach(async () => {
+    await getDb().prepare("DELETE FROM quotations").run();
+    await getDb().prepare("DELETE FROM bookings").run();
+    await getDb().prepare("DELETE FROM users").run();
   });
 
   it("finds only pending quotations past their expiry", async () => {
-    createBookingAndQuote(-1000); // expired
-    createBookingAndQuote(60_000); // still valid
+    await createBookingAndQuote(-1000); // expired
+    await createBookingAndQuote(60_000); // still valid
 
     const expired = await findExpiredQuotations();
     expect(expired).toHaveLength(1);
   });
 
   it("marks a quotation expired only when pending", async () => {
-    const { quoteId } = createBookingAndQuote(-1000);
+    const { quoteId } = await createBookingAndQuote(-1000);
     expect(await markQuotationExpired(quoteId)).toBe(true);
     // Second call: already expired → no change.
     expect(await markQuotationExpired(quoteId)).toBe(false);
   });
 
   it("does not pick up already-expired quotations", async () => {
-    const { quoteId } = createBookingAndQuote(-1000);
+    const { quoteId } = await createBookingAndQuote(-1000);
     await markQuotationExpired(quoteId);
     expect(await findExpiredQuotations()).toHaveLength(0);
   });

@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendTransactionalEmail } from "@/lib/email/brevo";
 import { z } from "zod";
 
-// Internal-only route — call from server actions/webhooks, not the client.
-// TODO: add an internal shared-secret header check before wiring this up
-// to anything reachable from the browser.
 const schema = z.object({
   to: z.array(z.object({ email: z.string().email(), name: z.string().optional() })),
   subject: z.string().min(1),
@@ -12,6 +9,16 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  // Shared secret check for internal route security
+  const internalSecret = process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET;
+  if (internalSecret) {
+    const authHeader = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const customHeader = req.headers.get("x-internal-secret");
+    if (authHeader !== internalSecret && customHeader !== internalSecret) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+  }
+
   const body = await req.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {

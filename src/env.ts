@@ -4,7 +4,10 @@
  * but not during static builds (next build sets NODE_ENV=production yet
  * does not need runtime secrets).
  */
-const isBuild = process.env.NEXT_PHASE === "phase-production-build";
+const isBuild =
+  process.env.NEXT_PHASE === "phase-production-build" ||
+  process.env.npm_lifecycle_event === "build" ||
+  process.argv.some((arg) => arg.includes("build"));
 const required =
   !isBuild && process.env.NODE_ENV === "production" ? (["SESSION_SECRET"] as const) : ([] as const);
 

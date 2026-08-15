@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 /**
  * Root-level error boundary (Next.js renders this when the app/root layout
  * itself throws — the route-level error.tsx can't catch layout errors).
@@ -54,22 +56,20 @@ export default function GlobalError({
             >
               Try again
             </button>
-            <button
-              // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full-screen fallback has no router
-              onClick={() => {
-                window.location.href = "/";
-              }}
+            <Link
+              href="/"
               style={{
                 borderRadius: 999,
                 border: "1px solid #44403c",
                 padding: "10px 22px",
                 color: "#e7e5e4",
                 fontSize: 14,
-                cursor: "pointer",
+                textDecoration: "none",
+                display: "inline-block",
               }}
             >
               Back home
-            </button>
+            </Link>
           </div>
           <script
             dangerouslySetInnerHTML={{

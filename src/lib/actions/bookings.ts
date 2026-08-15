@@ -40,11 +40,13 @@ export async function createBooking(input: CreateBookingInput) {
     throw new Error("[createBooking] Service does not belong to provider.");
   }
 
+  const providerPercent = Array.isArray(service.providers)
+    ? service.providers[0]?.default_deposit_percent
+    : service.providers?.default_deposit_percent;
+
   const { amount, depositAmount, commissionPercent } = resolveBookingAmount({
     servicePrice: service.price,
-    // @ts-expect-error — Supabase nested select typing; tighten once
-    // db:types has been generated against the real schema.
-    providerDefaultDepositPercent: service.providers.default_deposit_percent,
+    providerDefaultDepositPercent: providerPercent ?? 30,
   });
 
   const { data: booking, error: bookingError } = await supabase

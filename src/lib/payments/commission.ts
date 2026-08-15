@@ -27,7 +27,7 @@ export function resolveBookingAmount(params: {
   const depositPercent = clamp(
     params.providerDefaultDepositPercent,
     MIN_DEPOSIT_PERCENT,
-    MAX_DEPOSIT_PERCENT
+    MAX_DEPOSIT_PERCENT,
   );
 
   const amount = round2(params.servicePrice);

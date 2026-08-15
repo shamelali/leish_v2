@@ -17,6 +17,15 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
+  },
   // Static security headers (production). The Content-Security-Policy with a
   // per-request nonce is applied in middleware (see src/middleware.ts).
   async headers() {

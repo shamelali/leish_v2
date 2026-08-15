@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { verifyWebhookSignature } from "@/lib/payments/billplz";
+import { sendTransactionalEmail } from "@/lib/email/brevo";
+import { bookingConfirmationEmail } from "@/lib/email/templates";
 import type { BillplzWebhookPayload } from "@/lib/payments/types";
 
 /**
@@ -59,8 +61,76 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Booking update failed." }, { status: 500 });
     }
 
-    // TODO: send bookingConfirmationEmail via lib/email/brevo.ts here,
-    // fetching client + provider + service details for the template.
+    // Send confirmation email via Brevo
+    try {
+      const { data: bookingData } = await supabase
+        .from("bookings")
+        .select(
+          `
+          id,
+          amount,
+          deposit_amount,
+          client_id,
+          profiles ( full_name, phone ),
+          providers ( display_name ),
+          services ( name ),
+          availability_slots ( start_at )
+        `,
+        )
+        .eq("id", bookingId)
+        .single();
+
+      if (bookingData) {
+        let clientEmail: string | undefined = payload.email || undefined;
+        if (!clientEmail && bookingData.client_id) {
+          const { data: userData } = await supabase.auth.admin.getUserById(bookingData.client_id);
+          clientEmail = userData.user?.email;
+        }
+
+        if (clientEmail) {
+          const profile = Array.isArray(bookingData.profiles)
+            ? bookingData.profiles[0]
+            : bookingData.profiles;
+          const provider = Array.isArray(bookingData.providers)
+            ? bookingData.providers[0]
+            : bookingData.providers;
+          const service = Array.isArray(bookingData.services)
+            ? bookingData.services[0]
+            : bookingData.services;
+          const slot = Array.isArray(bookingData.availability_slots)
+            ? bookingData.availability_slots[0]
+            : bookingData.availability_slots;
+
+          const clientName = profile?.full_name || payload.name || "Client";
+          const providerName = provider?.display_name || "Artist";
+          const serviceName = service?.name || "Beauty Service";
+          const dateTime = slot?.start_at
+            ? new Date(slot.start_at).toLocaleString("en-MY", {
+                dateStyle: "full",
+                timeStyle: "short",
+                timeZone: "Asia/Kuala_Lumpur",
+              })
+            : "Scheduled Date";
+
+          const template = bookingConfirmationEmail({
+            clientName,
+            providerName,
+            serviceName,
+            dateTime,
+            amount: Number(bookingData.amount),
+          });
+
+          await sendTransactionalEmail({
+            to: [{ email: clientEmail, name: clientName }],
+            subject: template.subject,
+            htmlContent: template.htmlContent,
+          });
+        }
+      }
+    } catch (emailErr) {
+      // Non-fatal: logged to prevent dropping webhook confirmation response
+      console.error("[billplz/webhook] failed to send confirmation email", emailErr);
+    }
   }
 
   return NextResponse.json({ ok: true });
