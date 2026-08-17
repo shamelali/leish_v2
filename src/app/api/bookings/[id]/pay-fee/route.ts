@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb, type BookingRow, type UserRow } from "@/server/db";
 import { verifySessionToken } from "@/server/session";
-import { createBookingFeePayment, getPaymentForBooking } from "@/server/payments";
+import { createBookingFeePayment, getPaymentForBooking, activePaymentProvider } from "@/server/payments";
 import { getActiveQuotation } from "@/server/quotations";
 import { jsonError, statefulRoute } from "@/server/http";
 import { logger } from "@/server/logger";
@@ -55,7 +55,21 @@ export const POST = statefulRoute(
       });
     }
 
-    const payment = await createBookingFeePayment(booking.id);
+    // Billplz is a network call — surface gateway outages as a clear retryable
+    // message instead of the generic 500 (details still go to logs/Sentry).
+    let payment;
+    try {
+      payment = await createBookingFeePayment(booking.id);
+    } catch (err) {
+      if (activePaymentProvider() === "billplz") {
+        logger.error({ bookingId: booking.id, err: err instanceof Error ? err.message : String(err) }, "payment gateway unreachable");
+        return jsonError(
+          "The payment gateway is temporarily unavailable. Please try again in a few minutes.",
+          503,
+        );
+      }
+      throw err;
+    }
     logger.info({ bookingId: booking.id, amount: payment.amount }, "booking fee bill created");
 
     return NextResponse.json(
