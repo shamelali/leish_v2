@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { verifyWebhookSignature } from "@/lib/payments/billplz";
+import { sendTransactionalEmail } from "@/lib/email/brevo";
+import { bookingConfirmationEmail } from "@/lib/email/templates";
+import { logger } from "@/server/logger";
 import type { BillplzWebhookPayload } from "@/lib/payments/types";
 
 /**
@@ -55,12 +58,51 @@ export async function POST(req: NextRequest) {
       .eq("status", "pending_payment"); // don't clobber an already-processed booking
 
     if (updateError) {
-      console.error("[billplz/webhook] failed to confirm booking", updateError);
+      logger.error({ updateError }, "[billplz/webhook] failed to confirm booking");
       return NextResponse.json({ error: "Booking update failed." }, { status: 500 });
     }
 
-    // TODO: send bookingConfirmationEmail via lib/email/brevo.ts here,
-    // fetching client + provider + service details for the template.
+    // Send booking confirmation email
+    try {
+      // Fetch booking details to populate email template
+      const { data: booking } = await supabase
+        .from("bookings")
+        .select(
+          `
+          id,
+          clients:profiles!bookings_client_id_fkey (full_name, email),
+          providers:providers (display_name),
+          services:name,
+          availability_slots (start_at)
+        `,
+        )
+        .eq("id", bookingId)
+        .single();
+
+      if (booking) {
+        const clientName = booking.clients?.full_name || "Client";
+        const clientEmail = booking.clients?.email || "";
+        const providerName = booking.providers?.display_name || "Artist";
+        const serviceName = booking.services?.name || "Service";
+        const dateTime = booking.availability_slots?.start_at
+          ? new Date(booking.availability_slots.start_at).toLocaleString()
+          : "TBD";
+
+        await sendTransactionalEmail({
+          to: [{ email: clientEmail, name: clientName }],
+          ...bookingConfirmationEmail({
+            clientName,
+            providerName,
+            serviceName,
+            dateTime,
+            amount: booking.amount,
+          }),
+        });
+      }
+    } catch (emailError) {
+      logger.error({ emailError }, "[billplz/webhook] failed to send confirmation email");
+      // Don't fail the webhook if email fails — booking is still confirmed
+    }
   }
 
   return NextResponse.json({ ok: true });

@@ -14,7 +14,7 @@ function assertEnv() {
   if (!url || !anonKey) {
     throw new Error(
       "[supabase/server] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY. " +
-        "Check Vercel project env vars for this environment."
+        "Check Vercel project env vars for this environment.",
     );
   }
   return { url, anonKey };
@@ -31,9 +31,7 @@ export async function createClient() {
       },
       setAll(cookiesToSet) {
         try {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
         } catch {
           // Called from a Server Component — middleware refreshes the
           // session instead. Safe to ignore.
@@ -56,9 +54,9 @@ export function createServiceRoleClient() {
     throw new Error("[supabase/server] Missing SUPABASE_SERVICE_ROLE_KEY.");
   }
   // Lazy import to avoid bundling service-role usage into client code paths.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { createClient: createRawClient } = require("@supabase/supabase-js");
-  return createRawClient<Database>(url, serviceKey, {
+  return createRawClient(url, serviceKey, {
     auth: { persistSession: false },
   });
 }

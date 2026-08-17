@@ -22,11 +22,20 @@ export async function POST(req: NextRequest) {
 
   // RLS ensures this only returns a row if the caller is the booking's
   // client — do not add a manual ownership check here, trust the policy.
-  const { data: booking, error } = await supabase
+  const { data: booking, error } = (await supabase
     .from("bookings")
     .select("id, deposit_amount, status, client_id, profiles ( full_name, phone )")
     .eq("id", parsed.data.bookingId)
-    .single();
+    .single()) as {
+    data: {
+      id: string;
+      deposit_amount: number;
+      status: string;
+      client_id: string;
+      profiles: { full_name: string; phone: string };
+    } | null;
+    error: unknown;
+  };
 
   if (error || !booking) {
     return NextResponse.json({ error: "Booking not found." }, { status: 404 });

@@ -1,11 +1,6 @@
 "use client";
 
-/**
- * Root-level error boundary (Next.js renders this when the app/root layout
- * itself throws — the route-level error.tsx can't catch layout errors).
- * Sanitized: never exposes the error message to end users; reports via the
- * client error ingestion endpoint.
- */
+import { redirect } from "next/navigation";
 export default function GlobalError({
   error,
   reset,
@@ -55,9 +50,8 @@ export default function GlobalError({
               Try again
             </button>
             <button
-              // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full-screen fallback has no router
               onClick={() => {
-                window.location.href = "/";
+                redirect("/");
               }}
               style={{
                 borderRadius: 999,

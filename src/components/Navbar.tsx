@@ -108,36 +108,33 @@ export function Navbar() {
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </button>
 
-          {!loading &&
-            (user ? (
+          {!loading && (
               <>
-                <span className="hidden text-sm text-rose-50/90 lg:inline">
-                  {ROLE_LABELS[user.role]} · {user.name}
-                </span>
-                <Link href="/dashboard" className={ghostBtn}>
-                  Dashboard
-                </Link>
-                <button onClick={logout} className={outlineBtn}>
-                  Log out
-                </button>
+                {user ? (
+                  <>
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setOpen(false)}
+                      className={ghostBtn}
+                    >
+                      Dashboard
+                    </Link>
+                    <button onClick={logout} className={outlineBtn}>
+                      Log out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/login" className={ghostBtn}>
+                      Log in
+                    </Link>
+                    <Link href="/register" className={solidBtn}>
+                      Sign up free
+                    </Link>
+                  </>
+                )}
               </>
-            ) : (
-              <>
-                <a
-                  href="/leish-v2.bundle"
-                  download="leish-v2.bundle"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/40 px-4 text-sm font-medium text-white transition-colors hover:bg-white/10"
-                >
-                  ⬇ Bundle
-                </a>
-                <Link href="/login" className={ghostBtn}>
-                  Log in
-                </Link>
-                <Link href="/register" className={solidBtn}>
-                  Sign up free
-                </Link>
-              </>
-            ))}
+            )}
         </div>
 
         {/* Mobile toggle */}

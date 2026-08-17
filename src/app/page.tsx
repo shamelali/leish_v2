@@ -257,13 +257,6 @@ export default function HomePage() {
               Full git history of this build (bundle, ~1.8 MB) — clone and push to GitHub.
             </p>
           </div>
-          <a
-            href="/leish-v2.bundle"
-            download="leish-v2.bundle"
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-stone-900 px-6 text-sm font-medium text-white transition-colors hover:bg-stone-700 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-200"
-          >
-            ⬇ Download leish-v2.bundle
-          </a>
         </div>
       </section>
     </div>

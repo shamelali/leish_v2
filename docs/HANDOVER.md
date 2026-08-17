@@ -16,16 +16,16 @@ so launch isn't blocked on features that don't need to exist yet.
 
 ## What's explicitly fixed vs. the old codebase
 
-| Old problem | Fix in this repo |
-|---|---|
-| `lib/supabase/server.ts` silently returned `null` on missing env vars → invisible 404s | `src/lib/supabase/server.ts` throws loudly instead |
-| Admin layout let `studio_manager` role into `/admin` | `src/app/admin/layout.tsx` checks `role === "admin"` explicitly, backed by an `is_admin()` RLS function so a UI bug can't leak data |
-| `/api/debug/env` exposed env var names in prod | Not present in this repo. Don't add a debug route without an auth check and a plan to delete it before launch. |
-| Booking `amount`/`depositAmount` could theoretically be sent from client | `src/lib/payments/commission.ts` + `src/lib/actions/bookings.ts` resolve both server-side from DB records only |
-| Leaflet SSR crash (`L.Icon.Default.mergeOptions` outside browser context) | No map dependency in v1. See comment in `src/components/booking-calendar.tsx` for how to add one back safely later. |
-| Booking success page used a `setTimeout` mock instead of checking real payment status | `src/app/booking/success/page.tsx` queries the actual booking status |
-| Neon Auth + dual-connection sync cron | Gone. Supabase Auth only, no sync job needed. |
-| `db:push` used for prod schema changes, causing drift | Use `supabase db push` against migration files only — see `docs/DEPLOY.md`. Never hand-edit the live schema in the Supabase dashboard for anything that should persist. |
+| Old problem                                                                            | Fix in this repo                                                                                                                                                        |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/supabase/server.ts` silently returned `null` on missing env vars → invisible 404s | `src/lib/supabase/server.ts` throws loudly instead                                                                                                                      |
+| Admin layout let `studio_manager` role into `/admin`                                   | `src/app/admin/layout.tsx` checks `role === "admin"` explicitly, backed by an `is_admin()` RLS function so a UI bug can't leak data                                     |
+| `/api/debug/env` exposed env var names in prod                                         | Not present in this repo. Don't add a debug route without an auth check and a plan to delete it before launch.                                                          |
+| Booking `amount`/`depositAmount` could theoretically be sent from client               | `src/lib/payments/commission.ts` + `src/lib/actions/bookings.ts` resolve both server-side from DB records only                                                          |
+| Leaflet SSR crash (`L.Icon.Default.mergeOptions` outside browser context)              | No map dependency in v1. See comment in `src/components/booking-calendar.tsx` for how to add one back safely later.                                                     |
+| Booking success page used a `setTimeout` mock instead of checking real payment status  | `src/app/booking/success/page.tsx` queries the actual booking status                                                                                                    |
+| Neon Auth + dual-connection sync cron                                                  | Gone. Supabase Auth only, no sync job needed.                                                                                                                           |
+| `db:push` used for prod schema changes, causing drift                                  | Use `supabase db push` against migration files only — see `docs/DEPLOY.md`. Never hand-edit the live schema in the Supabase dashboard for anything that should persist. |
 
 ## What's deliberately out of scope for v1 launch
 

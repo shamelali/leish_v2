@@ -1,9 +1,5 @@
 import crypto from "crypto";
-import type {
-  BillplzBillResponse,
-  BillplzCreateBillParams,
-  BillplzWebhookPayload,
-} from "./types";
+import type { BillplzBillResponse, BillplzCreateBillParams, BillplzWebhookPayload } from "./types";
 
 const BASE_URL = process.env.BILLPLZ_BASE_URL ?? "https://www.billplz.com/api/v3";
 
@@ -13,9 +9,7 @@ function authHeader() {
   return "Basic " + Buffer.from(`${apiKey}:`).toString("base64");
 }
 
-export async function createBill(
-  params: BillplzCreateBillParams
-): Promise<BillplzBillResponse> {
+export async function createBill(params: BillplzCreateBillParams): Promise<BillplzBillResponse> {
   const collectionId = process.env.BILLPLZ_COLLECTION_ID;
   if (!collectionId) throw new Error("[billplz] BILLPLZ_COLLECTION_ID is not set.");
 
@@ -57,23 +51,11 @@ export function verifyWebhookSignature(payload: BillplzWebhookPayload): boolean 
   const signatureKey = process.env.BILLPLZ_X_SIGNATURE_KEY;
   if (!signatureKey) throw new Error("[billplz] BILLPLZ_X_SIGNATURE_KEY is not set.");
 
-  const fieldsToSign = [
-    "amount",
-    "collection_id",
-    "id",
-    "paid",
-    "paid_amount",
-    "state",
-  ] as const;
+  const fieldsToSign = ["amount", "collection_id", "id", "paid", "paid_amount", "state"] as const;
 
-  const sourceString = fieldsToSign
-    .map((field) => `${field}${payload[field] ?? ""}`)
-    .join("|");
+  const sourceString = fieldsToSign.map((field) => `${field}${payload[field] ?? ""}`).join("|");
 
-  const expected = crypto
-    .createHmac("sha256", signatureKey)
-    .update(sourceString)
-    .digest("hex");
+  const expected = crypto.createHmac("sha256", signatureKey).update(sourceString).digest("hex");
 
   return timingSafeEqual(expected, payload.x_signature);
 }

@@ -23,6 +23,7 @@ const MAX_DEPOSIT_PERCENT = 100;
 export function resolveBookingAmount(params: {
   servicePrice: number;
   providerDefaultDepositPercent: number;
+  commissionPercent?: number;
 }) {
   const depositPercent = clamp(
     params.providerDefaultDepositPercent,
@@ -32,11 +33,12 @@ export function resolveBookingAmount(params: {
 
   const amount = round2(params.servicePrice);
   const depositAmount = round2((amount * depositPercent) / 100);
+  const commission = params.commissionPercent ?? MUA_COMMISSION_PERCENT;
 
   return {
     amount,
     depositAmount,
-    commissionPercent: MUA_COMMISSION_PERCENT,
+    commissionPercent: commission,
   };
 }
 

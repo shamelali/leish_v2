@@ -26,7 +26,7 @@ export async function getArtistBySlug(slug: string) {
     .select(
       `id, slug, display_name, bio, state, district, specialties, default_deposit_percent,
        services ( id, name, description, price, duration_minutes, is_active ),
-       availability_slots ( id, start_at, end_at, is_booked )`
+       availability_slots ( id, start_at, end_at, is_booked )`,
     )
     .eq("slug", slug)
     .eq("is_active", true)

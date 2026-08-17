@@ -19,11 +19,11 @@ export default async function BookingSuccessPage({
   }
 
   const supabase = await createClient();
-  const { data: booking } = await supabase
+  const { data: booking, error } = (await supabase
     .from("bookings")
     .select("status, amount")
     .eq("id", bookingId)
-    .single();
+    .single()) as { data: { status: string; amount: number } | null; error: unknown };
 
   if (!booking) {
     return <main className="p-16">Booking not found.</main>;
@@ -41,9 +41,7 @@ export default async function BookingSuccessPage({
   return (
     <main className="mx-auto max-w-md px-6 py-16 text-center">
       <h1 className="text-2xl font-bold">Processing your payment…</h1>
-      <p className="mt-2 text-gray-600">
-        This usually takes a few seconds. Refresh in a moment.
-      </p>
+      <p className="mt-2 text-gray-600">This usually takes a few seconds. Refresh in a moment.</p>
     </main>
   );
 }

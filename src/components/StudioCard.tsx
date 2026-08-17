@@ -36,9 +36,9 @@ export function StudioCard({ studio }: { studio: Studio }) {
           {studio.tagline}
         </p>
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {studio.services.slice(0, 3).map((s) => (
+          {studio.services.slice(0, 3).map((s, i) => (
             <span
-              key={s}
+              key={`service-${i}`}
               className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs text-stone-600 dark:bg-stone-800 dark:text-stone-300"
             >
               {s}
