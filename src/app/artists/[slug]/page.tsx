@@ -7,7 +7,8 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
   const { slug } = await params;
 
   // Catalog-backed profile (src/lib/data.ts) — the same source the listing
-  // pages use, so artist pages need no external DB to render.
+  // pages use, so artist pages need no external DB to render. Unknown slugs
+  // also get a true 404 from the proxy middleware (see src/proxy.ts).
   const artist = getArtist(slug);
   if (!artist) notFound();
 
