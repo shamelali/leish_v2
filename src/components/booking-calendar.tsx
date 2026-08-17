@@ -1,112 +1,155 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createBooking } from "@/lib/actions/bookings";
 
-interface Slot {
-  id: string;
-  start_at: string;
-  end_at: string;
-  is_booked: boolean;
+interface CatalogService {
+  name: string;
+  price: number;
+  duration: string;
 }
 
-interface Service {
+interface EventTypeOption {
   id: string;
-  name: string;
-  description?: string | null;
-  price: number;
-  duration_minutes: number;
+  label: string;
 }
 
 interface BookingCalendarProps {
-  providerId: string;
-  slots: Slot[];
-  services: Service[];
-  defaultDepositPercent?: number;
+  artistId: string;
+  artistName: string;
+  services: CatalogService[];
+  eventTypes: EventTypeOption[];
 }
 
+const BOOKING_FEE_RM = 200;
+
+function todayISO(): string {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * Booking request flow (db-facade journey):
+ * browse → request → MUA accepts → quotation (24h) → pay RM 200 booking fee
+ * → webhook confirms. This component only sends the request; the quotation
+ * and payment steps live in the dashboard.
+ */
 export default function BookingCalendar({
-  providerId,
-  slots,
+  artistId,
+  artistName,
   services,
-  defaultDepositPercent = 30,
+  eventTypes,
 }: BookingCalendarProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
 
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
-    services[0]?.id ?? null,
+  const [selectedService, setSelectedService] = useState<string | null>(
+    services[0]?.name ?? null,
   );
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [eventType, setEventType] = useState<string>(eventTypes[0]?.label ?? "");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isConflict, setIsConflict] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
 
-  const availableSlots = slots.filter((s) => !s.is_booked);
-  const selectedService = services.find((s) => s.id === selectedServiceId);
-
-  // Financial calculations
-  const servicePrice = selectedService?.price ?? 0;
-  const depositAmount = Math.round((servicePrice * defaultDepositPercent) / 100);
-  const balanceAmount = Math.max(0, servicePrice - depositAmount);
+  const service = services.find((s) => s.name === selectedService);
+  const servicePrice = service?.price ?? 0;
 
   async function handleBookingSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedServiceId || !selectedSlotId) return;
+    if (!selectedService || !date || !time) {
+      setError("Choose a service, date and time to continue.");
+      return;
+    }
 
     setError(null);
-    setIsConflict(false);
+    setNeedsVerification(false);
+    setIsSubmitting(true);
 
-    startTransition(async () => {
-      try {
-        // 1. Create booking server-side (server resolves pricing)
-        const booking = await createBooking({
-          providerId,
-          serviceId: selectedServiceId,
-          slotId: selectedSlotId,
-          notes: notes.trim() || undefined,
-        });
+    try {
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artistId,
+          service: selectedService,
+          date,
+          time,
+          eventType,
+          venue: "",
+          guestCount: 0,
+          notes: notes.trim(),
+        }),
+      });
 
-        // 2. Request Billplz payment bill for the deposit
-        setIsRedirecting(true);
-        const payRes = await fetch("/api/payments/billplz/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bookingId: booking.id }),
-        });
-
-        const payData = await payRes.json();
-        if (!payRes.ok || !payData.url) {
-          throw new Error(payData.error || "Unable to initiate payment gateway.");
-        }
-
-        // 3. Redirect to hosted payment page
-        window.location.assign(payData.url);
-      } catch (err: unknown) {
-        setIsRedirecting(false);
-        const message = err instanceof Error ? err.message : "Something went wrong.";
-
-        if (
-          message.toLowerCase().includes("slot was just booked") ||
-          message.toLowerCase().includes("duplicate") ||
-          message.toLowerCase().includes("conflict")
-        ) {
-          setIsConflict(true);
-          setSelectedSlotId(null);
-          setError("This time slot was just booked by another client. Please select another slot.");
-        } else if (message.toLowerCase().includes("not authenticated")) {
-          setError("Please sign in to complete your booking.");
+      const data = await res.json();
+      if (!res.ok) {
+        const message: string = data.error ?? "Unable to send your booking request.";
+        if (res.status === 401) {
+          setError("Please sign in to send a booking request.");
           router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
-        } else {
-          setError(message);
+          return;
         }
+        if (data.code === "EMAIL_NOT_VERIFIED" || message.toLowerCase().includes("verify your email")) {
+          setNeedsVerification(true);
+          setError(message);
+          return;
+        }
+        setError(message);
+        return;
       }
-    });
+
+      setCreatedBookingId(data.booking.id);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  const isBusy = isPending || isRedirecting;
+  if (createdBookingId) {
+    return (
+      <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900">
+        <div className="rounded-xl bg-green-50 border border-green-200 p-5 dark:bg-green-950/40 dark:border-green-900">
+          <div className="flex items-start gap-3">
+            <svg
+              className="h-6 w-6 text-green-600 dark:text-green-400 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <div>
+              <p className="font-semibold text-green-800 dark:text-green-200">
+                Booking request sent!
+              </p>
+              <p className="mt-1 text-sm text-green-700 dark:text-green-300">
+                {artistName} will review your request and send a quotation (valid 24 hours).
+                Pay the RM {BOOKING_FEE_RM} booking fee from your dashboard to secure the date.
+              </p>
+            </div>
+          </div>
+        </div>
+        <Link
+          href="/dashboard"
+          className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 py-3 px-4 font-semibold text-white shadow-sm hover:bg-rose-700 transition-all"
+        >
+          Track request in Dashboard &rarr;
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900">
@@ -118,13 +161,13 @@ export default function BookingCalendar({
           </label>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {services.map((s) => {
-              const active = selectedServiceId === s.id;
+              const active = selectedService === s.name;
               return (
                 <button
                   type="button"
-                  key={s.id}
-                  onClick={() => setSelectedServiceId(s.id)}
-                  disabled={isBusy}
+                  key={s.name}
+                  onClick={() => setSelectedService(s.name)}
+                  disabled={isSubmitting}
                   className={`flex flex-col text-left p-3.5 rounded-xl border transition-all ${
                     active
                       ? "border-rose-600 bg-rose-50/60 ring-2 ring-rose-500/20 dark:border-rose-500 dark:bg-rose-950/30"
@@ -134,16 +177,11 @@ export default function BookingCalendar({
                   <span className="font-medium text-sm text-stone-900 dark:text-stone-100">
                     {s.name}
                   </span>
-                  {s.description && (
-                    <span className="mt-0.5 text-xs text-stone-500 line-clamp-1 dark:text-stone-400">
-                      {s.description}
-                    </span>
-                  )}
                   <div className="mt-2 flex items-center justify-between text-xs">
                     <span className="font-semibold text-rose-600 dark:text-rose-400">
                       RM {s.price}
                     </span>
-                    <span className="text-stone-400">{s.duration_minutes} min</span>
+                    <span className="text-stone-400">{s.duration}</span>
                   </div>
                 </button>
               );
@@ -151,86 +189,63 @@ export default function BookingCalendar({
           </div>
         </div>
 
-        {/* Step 2: Time Slot Selection */}
+        {/* Step 2: Date, time & event type */}
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-semibold text-stone-900 dark:text-stone-100">
-              2. Choose Available Date & Time
-            </label>
-            <span className="text-xs text-stone-500 dark:text-stone-400">
-              {availableSlots.length} available
-            </span>
+          <label className="block text-sm font-semibold text-stone-900 dark:text-stone-100 mb-2">
+            2. Choose Date &amp; Time
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input
+              type="date"
+              value={date}
+              min={todayISO()}
+              onChange={(e) => setDate(e.target.value)}
+              disabled={isSubmitting}
+              className="w-full rounded-xl border border-stone-300 bg-white p-3 text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:[color-scheme:dark] dark:focus:ring-rose-950"
+            />
+            <input
+              type="time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              disabled={isSubmitting}
+              className="w-full rounded-xl border border-stone-300 bg-white p-3 text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:[color-scheme:dark] dark:focus:ring-rose-950"
+            />
           </div>
 
-          {availableSlots.length > 0 ? (
-            <div className="grid gap-2 sm:grid-cols-2 max-h-56 overflow-y-auto pr-1">
-              {availableSlots.map((slot) => {
-                const active = selectedSlotId === slot.id;
-                const dateObj = new Date(slot.start_at);
-                const dateFormatted = dateObj.toLocaleDateString("en-MY", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                });
-                const timeFormatted = dateObj.toLocaleTimeString("en-MY", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                });
-
-                return (
-                  <button
-                    type="button"
-                    key={slot.id}
-                    onClick={() => {
-                      setSelectedSlotId(slot.id);
-                      if (isConflict) setIsConflict(false);
-                      if (error) setError(null);
-                    }}
-                    disabled={isBusy}
-                    className={`flex items-center justify-between p-3 rounded-xl border text-sm transition-all ${
-                      active
-                        ? "border-rose-600 bg-rose-600 text-white font-medium shadow-sm"
-                        : "border-stone-200 bg-white text-stone-800 hover:border-stone-300 dark:border-stone-800 dark:bg-stone-900/60 dark:text-stone-200"
-                    }`}
-                  >
-                    <span>{dateFormatted}</span>
-                    <span
-                      className={
-                        active
-                          ? "text-rose-100"
-                          : "text-stone-500 dark:text-stone-400 font-mono text-xs"
-                      }
-                    >
-                      {timeFormatted}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-800">
-              No open slots currently available. Please check back later or contact the artist.
-            </div>
-          )}
+          <label className="block text-sm font-semibold text-stone-900 dark:text-stone-100 mt-4 mb-2">
+            3. Event Type
+          </label>
+          <select
+            value={eventType}
+            onChange={(e) => setEventType(e.target.value)}
+            disabled={isSubmitting}
+            className="w-full rounded-xl border border-stone-300 bg-white p-3 text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:ring-rose-950"
+          >
+            {eventTypes.map((et) => (
+              <option key={et.id} value={et.label}>
+                {et.label}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Step 3: Optional Notes */}
+        {/* Step 4: Optional Notes */}
         <div>
           <label className="block text-sm font-semibold text-stone-900 dark:text-stone-100 mb-1.5">
-            3. Special Requests / Event Details (Optional)
+            4. Special Requests (Optional)
           </label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="E.g., Event venue in Bangsar, bridal look preference, early call time…"
             rows={2}
-            disabled={isBusy}
-            maxLength={500}
+            disabled={isSubmitting}
+            maxLength={2000}
             className="w-full rounded-xl border border-stone-300 bg-white p-3 text-sm text-stone-800 placeholder-stone-400 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:ring-rose-950"
           />
         </div>
 
-        {/* Error / Conflict Alert */}
+        {/* Error Alert */}
         {error && (
           <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 dark:bg-red-950/40 dark:border-red-900 dark:text-red-300 flex items-start gap-3">
             <svg
@@ -248,32 +263,32 @@ export default function BookingCalendar({
             </svg>
             <div>
               <p className="font-medium">{error}</p>
-              {isConflict && (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                  Slots are secured on a first-come, first-served basis. Choose an alternative slot
-                  above to proceed.
-                </p>
+              {needsVerification && (
+                <Link
+                  href="/verify-email"
+                  className="mt-1 inline-block text-xs font-semibold text-rose-600 hover:underline dark:text-rose-400"
+                >
+                  Verify your email &rarr;
+                </Link>
               )}
             </div>
           </div>
         )}
 
         {/* Pricing Summary */}
-        {selectedService && (
+        {service && (
           <div className="rounded-xl bg-stone-50 p-4 dark:bg-stone-800/40 border border-stone-100 dark:border-stone-800 text-sm space-y-2">
             <div className="flex justify-between text-stone-600 dark:text-stone-400">
-              <span>Service Total</span>
-              <span>RM {servicePrice.toFixed(2)}</span>
+              <span>Service price</span>
+              <span>RM {servicePrice}</span>
             </div>
-            <div className="flex justify-between font-medium text-stone-900 dark:text-stone-100">
-              <span>Deposit Payable Now ({defaultDepositPercent}%)</span>
-              <span className="text-rose-600 dark:text-rose-400">
-                RM {depositAmount.toFixed(2)}
-              </span>
+            <div className="flex justify-between text-stone-600 dark:text-stone-400">
+              <span>Booking fee (after quotation, secures your date)</span>
+              <span>RM {BOOKING_FEE_RM}</span>
             </div>
             <div className="flex justify-between text-xs text-stone-500 border-t border-stone-200 dark:border-stone-700/60 pt-2">
               <span>Balance due 3 days before event</span>
-              <span>RM {balanceAmount.toFixed(2)}</span>
+              <span>RM {Math.max(0, servicePrice - BOOKING_FEE_RM)}</span>
             </div>
           </div>
         )}
@@ -281,10 +296,10 @@ export default function BookingCalendar({
         {/* Submit CTA */}
         <button
           type="submit"
-          disabled={!selectedSlotId || !selectedServiceId || isBusy}
+          disabled={!selectedService || !date || !time || isSubmitting}
           className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 px-4 font-semibold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
-          {isBusy ? (
+          {isSubmitting ? (
             <>
               <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                 <circle
@@ -297,10 +312,10 @@ export default function BookingCalendar({
                 />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg>
-              <span>{isRedirecting ? "Connecting to Billplz…" : "Reserving slot…"}</span>
+              <span>Sending request…</span>
             </>
           ) : (
-            <span>Book Now & Pay RM {depositAmount.toFixed(2)} Deposit &rarr;</span>
+            <span>Send Booking Request &rarr;</span>
           )}
         </button>
       </form>

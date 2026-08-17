@@ -43,6 +43,11 @@ export async function POST(request: Request) {
   if (!ARTIST_ROLES.includes(user.role as (typeof ARTIST_ROLES)[number])) {
     return jsonError("Only artist and studio accounts can claim a profile", 403);
   }
+  // Claims are public-facing (an unverified account could impersonate a
+  // catalog artist), so require a verified email — same gate as booking.
+  if (!user.email_verified) {
+    return jsonError("Please verify your email before claiming a profile", 403);
+  }
 
   const body = await readJson<unknown>(request);
   if (!body.ok) return body.error;

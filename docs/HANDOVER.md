@@ -1,5 +1,26 @@
 # Handover — read this first
 
+## 2026-08-17 — public booking loop unified onto the db-facade backend
+
+The repo briefly shipped two parallel booking implementations: the public
+artist-page flow (`/artists/[slug]` + `BookingCalendar`) ran on Supabase
+client actions with slot/deposit-percent billing, while the dashboard and
+`/api/*` routes ran on the tested db-facade backend (request → quotation →
+RM 200 fee → webhook). The public loop was unified onto the db-facade path:
+
+- `src/app/artists/[slug]/page.tsx` reads the catalog (`src/lib/data.ts`),
+  same source as the listing pages — artist pages no longer need Supabase.
+- `src/components/booking-calendar.tsx` sends a booking **request** via
+  `POST /api/bookings` (service + date + time + event type). Quotation and
+  fee payment happen in the dashboard, per the leish.my journey.
+- `src/app/booking/success/page.tsx` reads the real booking status from the
+  db-facade instead of the Supabase client.
+- Removed: `src/lib/actions/*`, `src/lib/payments/*`,
+  `src/app/api/payments/billplz/*` (legacy slot-based billing path).
+- The single Billplz webhook is `POST /api/payments/webhook`.
+- `/admin/**` and `src/proxy.ts` remain Supabase-based (internal tooling);
+  they require `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
 ## Why this rebuild happened
 
 The previous Leish codebase (Next.js + Drizzle ORM + Neon Postgres, mid-way
@@ -47,7 +68,7 @@ All launch stubs have been implemented and verified:
 
 - `src/app/admin/providers/page.tsx` — approve/reject server actions wired with DB updates and path revalidation.
 - `src/app/admin/page.tsx` — overview metrics for pending approvals, active MUAs, total bookings, and recent Billplz transaction webhook log.
-- `src/app/api/payments/billplz/webhook/route.ts` — transactional booking confirmation email dispatch wired via Brevo with client/provider/service metadata.
+- `src/app/api/payments/webhook/route.ts` — transactional booking confirmation email dispatch wired via Brevo with client/provider/service metadata.
 - `src/app/api/email/send/route.ts` — secured with internal shared-secret authorization.
 - `src/components/booking-calendar.tsx` — styled booking component with service selection, deposit/balance calculations, slot conflict retry UX, and loading indicators.
 - `src/lib/types/database.ts` — full Supabase Database TypeScript definitions matching `0001_core_schema.sql` and `0002_rls_policies.sql`.
