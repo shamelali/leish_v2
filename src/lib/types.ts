@@ -75,3 +75,43 @@ export interface User {
   role: Role;
   emailVerified: boolean;
 }
+
+export interface Product {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  price: number;
+  category: string;
+  brand: string | null;
+  image_url: string | null;
+  rating: number | null;
+  review_count: number | null;
+  is_featured: boolean;
+  stock_count: number | null;
+  min_order: number | null;
+  return_policy: string | null;
+  ingredients: string | null;
+  is_clean: boolean;
+  is_cruelty_free: boolean;
+  sort_order: number;
+}
+
+export interface ProductReview {
+  id: string;
+  product_id: string;
+  user_id: string;
+  rating: number;
+  title: string | null;
+  comment: string | null;
+  verified_purchase: boolean;
+}
+
+export interface Referral {
+  id: string;
+  referrer_id: string;
+  referee_id: string;
+  product_id: string | null;
+  status: "pending" | "completed" | "cancelled";
+  reward_amount: number | null;
+}
