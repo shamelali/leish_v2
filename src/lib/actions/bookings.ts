@@ -65,32 +65,8 @@ export async function createBooking(input: CreateBookingInput) {
       notes: parsed.notes,
       status: "pending_payment",
     })
-    .select()
-    .single()) as {
-    data: {
-      id: string;
-      client_id: string;
-      provider_id: string;
-      service_id: string;
-      slot_id: string;
-      amount: number;
-      deposit_amount: number;
-      commission_percent: number;
-      notes?: string;
-      status:
-        | "pending_payment"
-        | "confirmed"
-        | "completed"
-        | "cancelled"
-        | "disputed";
-      created_at: string;
-      updated_at: string;
-    } | null;
-    error: {
-      code?: string;
-      message?: string;
-    };
-  };
+    .select("id, client_id, provider_id, service_id, slot_id, amount, deposit_amount, commission_percent, notes, status, created_at, updated_at")
+    .single());
 
   // The unique index on (slot_id) where status != 'cancelled' will raise a
   // unique_violation here if two clients race for the same slot. Surface
