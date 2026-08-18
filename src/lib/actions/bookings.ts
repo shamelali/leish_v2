@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { Database } from "@/lib/types/database";
 import { resolveBookingAmount } from "@/lib/payments/commission";
 import { z } from "zod";
 
@@ -27,11 +28,14 @@ export async function createBooking(input: CreateBookingInput) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("[createBooking] Not authenticated.");
 
-  const { data: service, error: serviceError } = await supabase
-    .from("services")
-    .select("price, provider_id, providers ( default_deposit_percent )")
+  const { data: service, error: serviceError } = (await supabase
+    .from<Database["public"]["Tables"]["services"]>("services")
+    .select<Database["public"]["Tables"]["services"]>("price, provider_id, providers ( default_deposit_percent )")
     .eq("id", parsed.serviceId)
-    .single();
+    .single()) as {
+    data: Database["public"]["Tables"]["services"]["Row"] | null;
+    error: unknown;
+  };
 
   if (serviceError || !service) {
     throw new Error("[createBooking] Service not found.");
@@ -42,13 +46,11 @@ export async function createBooking(input: CreateBookingInput) {
 
   const { amount, depositAmount, commissionPercent } = resolveBookingAmount({
     servicePrice: service.price,
-    // @ts-expect-error — Supabase nested select typing; tighten once
-    // db:types has been generated against the real schema.
     providerDefaultDepositPercent: service.providers.default_deposit_percent,
   });
 
-  const { data: booking, error: bookingError } = await supabase
-    .from("bookings")
+  const { data: booking, error: bookingError } = (await supabase
+    .from<Database["public"]["Tables"]["bookings"]>("bookings")
     .insert({
       client_id: user.id,
       provider_id: parsed.providerId,
@@ -60,17 +62,20 @@ export async function createBooking(input: CreateBookingInput) {
       notes: parsed.notes,
       status: "pending_payment",
     })
-    .select()
-    .single();
+    .select<Database["public"]["Tables"]["bookings"]["Insert"]>()
+    .single()) as {
+    data: Database["public"]["Tables"]["bookings"]["Row"] | null;
+    error: unknown;
+  };
 
   // The unique index on (slot_id) where status != 'cancelled' will raise a
   // unique_violation here if two clients race for the same slot. Surface
   // that as a clean error instead of a generic 500.
   if (bookingError) {
-    if (bookingError.code === "23505") {
+    if ((bookingError as { code?: string }).code === "23505") {
       throw new Error("[createBooking] This slot was just booked by someone else.");
     }
-    throw new Error(`[createBooking] ${bookingError.message}`);
+    throw new Error(`[createBooking] ${(bookingError as { message?: string }).message ?? "Unknown error"}`);
   }
 
   return booking;

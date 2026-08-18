@@ -1,6 +1,13 @@
 "use client";
 
-import { redirect } from "next/navigation";
+import Link from "next/link";
+
+/**
+ * Root-level error boundary (Next.js renders this when the app/root layout
+ * itself throws — the route-level error.tsx can't catch layout errors).
+ * Sanitized: never exposes the error message to end users; reports via the
+ * client error ingestion endpoint.
+ */
 export default function GlobalError({
   error,
   reset,
@@ -49,21 +56,20 @@ export default function GlobalError({
             >
               Try again
             </button>
-            <button
-              onClick={() => {
-                redirect("/");
-              }}
+            <Link
+              href="/"
               style={{
                 borderRadius: 999,
                 border: "1px solid #44403c",
                 padding: "10px 22px",
                 color: "#e7e5e4",
                 fontSize: 14,
-                cursor: "pointer",
+                textDecoration: "none",
+                display: "inline-block",
               }}
             >
               Back home
-            </button>
+            </Link>
           </div>
           <script
             dangerouslySetInnerHTML={{
