@@ -27,7 +27,7 @@ export function resolveProductPriceAndReward(params: {
   const rewardPercent = 10;
   const rewardAmount = Math.max(
     MIN_REWARD * 100, // minimum $5 in cents
-    Math.min(MAX_REWARD_AMOUNT * 100, // maximum $20 in cents
+    MAX_REWARD * 100, // maximum $20 in cents
       Math.round((price * rewardPercent) / 100)
     )
   );
