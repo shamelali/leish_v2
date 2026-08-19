@@ -248,24 +248,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Dev-only: download the full git bundle via the preview proxy */}
-      <section className="border-t border-stone-200 bg-white py-8 dark:border-stone-800 dark:bg-stone-900/50">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 sm:px-6">
-          <div>
-            <p className="font-semibold text-stone-900 dark:text-stone-100">Developer export</p>
-            <p className="text-sm text-stone-500 dark:text-stone-400">
-              Full git history of this build (bundle, ~1.8 MB) — clone and push to GitHub.
-            </p>
-          </div>
-          <a
-            href="/leish-v2.bundle"
-            download="leish-v2.bundle"
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-stone-900 px-6 text-sm font-medium text-white transition-colors hover:bg-stone-700 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-200"
-          >
-            ⬇ Download leish-v2.bundle
-          </a>
-        </div>
-      </section>
+      
     </div>
   );
 }
