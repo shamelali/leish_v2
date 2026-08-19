@@ -148,6 +148,28 @@ export type Database = {
           created_at?: string;
         };
       };
+      referrals: {
+        Row: {
+          id: string;
+          referrer_id: string;
+          referee_id: string;
+          product_id: string | null;
+          status: "pending" | "completed" | "cancelled";
+          reward_amount: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          referrer_id: string;
+          referee_id: string;
+          product_id: string | null;
+          status?: "pending" | "completed" | "cancelled";
+          reward_amount?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Enums: {
       [key: string]: string;

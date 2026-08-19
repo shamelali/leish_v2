@@ -89,7 +89,7 @@ export default function BookingCalendar({
             Choose a service
           </option>
           {services.map((s) => (
-            <option key={s.id} value={s.id}>
+            <option key={s.name} value={s.id}>
               {s.name} — RM {s.price}
             </option>
           ))}
