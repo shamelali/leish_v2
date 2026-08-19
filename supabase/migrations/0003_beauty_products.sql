@@ -98,4 +98,4 @@ create index referrals_referrer_id_idx on public.referrals(referrer_id);
 create index referrals_referee_id_idx on public.referrals(referee_id);
 create index referrals_product_id_idx on public.referrals(product_id);
 create index products_category_idx on public.products(category);
-create products_is_featured_idx on public.products(is_featured);
+create index products_is_featured_idx on public.products(is_featured);
