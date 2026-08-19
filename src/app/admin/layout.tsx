@@ -10,6 +10,10 @@ import { createClient } from "@/lib/supabase/server";
  * a non-admin.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    redirect("/sign-in?redirect=/admin&error=missing_config");
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
