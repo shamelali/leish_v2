@@ -127,6 +127,15 @@ function LoginForm() {
       <p className="mt-8 text-center text-xs text-stone-400 dark:text-stone-500">
         Accounts are stored securely in the demo database.
       </p>
+      <p className="mt-3 text-center text-xs text-stone-400 dark:text-stone-500">
+        Platform administrator?{" "}
+        <Link
+          href="/sign-in"
+          className="font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300"
+        >
+          Admin sign in
+        </Link>
+      </p>
     </div>
   );
 }

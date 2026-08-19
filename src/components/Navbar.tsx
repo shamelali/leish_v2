@@ -123,13 +123,6 @@ export function Navbar() {
               </>
             ) : (
               <>
-                <a
-                  href="/leish-v2.bundle"
-                  download="leish-v2.bundle"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/40 px-4 text-sm font-medium text-white transition-colors hover:bg-white/10"
-                >
-                  ⬇ Bundle
-                </a>
                 <Link href="/login" className={ghostBtn}>
                   Log in
                 </Link>

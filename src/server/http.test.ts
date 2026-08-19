@@ -3,10 +3,13 @@
 import { describe, expect, it } from "vitest";
 import { enforceSameOrigin } from "./http";
 
-function makeRequest(origin: string | null): Request {
+function makeRequest(origin: string | null, extraHeaders: Record<string, string> = {}): Request {
   return new Request("http://localhost:3000/api/test", {
     method: "POST",
-    headers: origin ? { Origin: origin } : {},
+    headers: {
+      ...(origin ? { Origin: origin } : {}),
+      ...extraHeaders,
+    },
   });
 }
 
@@ -17,6 +20,25 @@ describe("enforceSameOrigin (CSRF)", () => {
     expect(enforceSameOrigin(makeRequest("http://localhost:3000"))).toBeNull();
     if (prev === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
     else process.env.NEXT_PUBLIC_SITE_URL = prev;
+  });
+
+  it("allows the public preview origin from forwarded proxy headers", () => {
+    const prev = process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    expect(
+      enforceSameOrigin(
+        makeRequest("https://3000-preview123.e2b.app", {
+          "X-Forwarded-Host": "3000-preview123.e2b.app",
+          "X-Forwarded-Proto": "https",
+        }),
+      ),
+    ).toBeNull();
+    if (prev === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = prev;
+  });
+
+  it("allows Arena preview origins outside production", () => {
+    expect(enforceSameOrigin(makeRequest("https://3000-preview123.e2b.app"))).toBeNull();
   });
 
   it("rejects a cross-origin request", () => {
