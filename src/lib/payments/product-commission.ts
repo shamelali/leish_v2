@@ -26,7 +26,7 @@ export function resolveProductPriceAndReward(params: {
   // Referral reward: 10% of product price, minimum $5, maximum $20
   const rewardPercent = 10;
   const rewardAmount = Math.max(
-    MIN_REWARD_AMOUNT * 100, // minimum $5 in cents
+    MIN_REWARD * 100, // minimum $5 in cents
     Math.min(MAX_REWARD_AMOUNT * 100, // maximum $20 in cents
       Math.round((price * rewardPercent) / 100)
     )
