@@ -141,7 +141,12 @@ function createSqliteFacade(db: DatabaseSync): DbFacade {
 
 // ── Schema (PostgreSQL) ─────────────────────────────────────────────────────
 
-const PG_SCHEMA = `
+/**
+ * Single source of truth for the db-facade PostgreSQL schema. Applied lazily
+ * by getDb() on first query, and explicitly by `npm run db:migrate`
+ * (scripts/migrate.ts) — never duplicate these statements elsewhere.
+ */
+export const PG_SCHEMA = `
   CREATE TABLE IF NOT EXISTS users (
     id            TEXT PRIMARY KEY,
     email         TEXT NOT NULL UNIQUE,

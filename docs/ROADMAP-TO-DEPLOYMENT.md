@@ -13,21 +13,22 @@ dashboard URL is login-gated; verify its state from the Vercel console).
 | Production build (`next build`) | ✅ passes without secrets (build is exempt from env checks) |
 | E2E suite discovery | ✅ 6 tests in `e2e/smoke.spec.ts` |
 | E2E assertions vs live production server | ✅ all 6 replayed and pass against `PORT=3100 next start` |
-| E2E `webServer` boot in CI | ❌ **was broken** — `next start` requires `SESSION_SECRET` at runtime (`src/env.ts`, added in `54e77a8`), and neither `playwright.config.ts` nor `ci.yml` set it. **Fixed in this branch** by injecting a throwaway `SESSION_SECRET` via `webServer.env` (verified: server boots + tests pass) |
+| E2E `webServer` boot in CI | ❌ **was broken** — `next start` requires `SESSION_SECRET` at runtime (`src/env.ts`, added in `54e77a8`), and neither `playwright.config.ts` nor `ci.yml` set it. **Fixed on this branch** by injecting a throwaway `SESSION_SECRET` via `webServer.env` (verified: server boots + tests pass) |
+| `npm run db:migrate` | ❌ **was broken** — `package.json` pointed at `scripts/migrate.ts`, which was never committed (`MODULE_NOT_FOUND`). **Fixed on this branch**: script added, imports the same `PG_SCHEMA` from `src/server/db.ts` (single source of truth), idempotent + additive column backfills |
 | GitHub Actions | ❌ **billing-locked.** Both `check` and `e2e` jobs on `main` failed instantly: *"The job was not started because your account is locked due to a billing issue."* No green e2e run exists in recorded history (only 2 runs, both locked, 2026-08-17) |
 | Vercel project | ⚠️ unverifiable from outside (private dashboard; public `*.vercel.app` aliases not resolving). Confirm from console |
-| `leish-code/` directory | ⚠️ stale near-duplicate of the app (older `env.ts`, `proxy.ts`). Harmless to CI; **deployment hazard** if the Vercel project's Root Directory points at it — confirm it is set to the repo root |
+| `leish-code/` directory | ⚠️ was a stale near-duplicate of the app (older `env.ts`, `proxy.ts`), referenced nowhere — **removed on this branch**. Deployment hazard gone; still confirm the Vercel project's Root Directory is the repo root |
 
 ## Phase 0 — Unblock the pipeline (no deploy yet)
 
 1. **Fix GitHub billing**: Settings → Billing, clear the lock so Actions can run again.
-2. **Merge the e2e fix** (this branch, `arena/01a019be-leish-v2`): `playwright.config.ts`
-   now injects `SESSION_SECRET`/`PORT` for the test webServer. After merge, require a
-   green `check` + `e2e` run on `main` (first true green e2e run on record).
-3. **Confirm Vercel project settings**: Root Directory = repo root (**not** `leish-code/`),
-   Production branch = `main`, and "auto-deploy from bot/agent commits" disabled
+2. **Merge the readiness PR** (branch `arena/01a019be-leish-v2`): e2e `webServer`
+   `SESSION_SECRET` fix, the missing `scripts/migrate.ts` restored, and the stale
+   `leish-code/` copy removed. After merge, require a green `check` + `e2e` run on
+   `main` (first true green e2e run on record).
+3. **Confirm Vercel project settings**: Root Directory = repo root, Production
+   branch = `main`, and "auto-deploy from bot/agent commits" disabled
    (per HANDOVER non-negotiable: human review gate on `main`).
-4. Optional hygiene: remove or archive `leish-code/` to eliminate the stale-copy hazard.
 
 ## Phase 1 — Infrastructure & environment
 
