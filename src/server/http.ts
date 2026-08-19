@@ -66,26 +66,92 @@ export function tryRoute<A extends unknown[]>(
 
 // ── CSRF / origin protection ────────────────────────────────────────────────
 
-/** The app origin used to validate cross-origin requests. */
+/** Return the first value from a possibly comma-separated proxy header. */
+function firstHeaderValue(request: Request, name: string): string | null {
+  const value = request.headers.get(name);
+  return value?.split(",")[0]?.trim() || null;
+}
+
+/** Normalize an origin so configured values may include a trailing slash. */
+function normalizeOrigin(value: string): string | null {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the origin the browser used to reach the app. In the hosted preview
+ * the request URL can point at the internal Next.js server, while the browser
+ * Origin points at the public proxy host. Prefer the standard forwarded host
+ * and protocol headers before falling back to Host/request.url.
+ */
+export function requestOrigin(request: Request): string {
+  const forwardedHost = firstHeaderValue(request, "x-forwarded-host");
+  const host = forwardedHost ?? request.headers.get("host")?.trim();
+  const forwardedProto = firstHeaderValue(request, "x-forwarded-proto");
+
+  if (host) {
+    const protocol = forwardedProto ?? new URL(request.url).protocol.replace(":", "");
+    const resolved = normalizeOrigin(`${protocol}://${host}`);
+    if (resolved) return resolved;
+  }
+
+  return new URL(request.url).origin;
+}
+
+/** The configured app origin used to validate cross-origin requests. */
 export function appOrigin(request: Request): string {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin;
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  return (configured && normalizeOrigin(configured)) || requestOrigin(request);
 }
 
 /**
  * CSRF protection for state-changing routes. Rejects requests whose Origin
- * header doesn't match the app origin (or ALLOWED_ORIGINS). Requests without
- * an Origin header — same-origin navigation and server-to-server callers like
- * webhooks/cron — are allowed through.
+ * header doesn't match the configured app origin, the public request origin,
+ * an explicitly allowed origin, or the current Vercel deployment URL.
+ * Requests without an Origin header — same-origin navigation and
+ * server-to-server callers like webhooks/cron — are allowed through.
  */
 export function enforceSameOrigin(request: Request): NextResponse | null {
-  const origin = request.headers.get("origin");
-  if (!origin) return null;
+  const rawOrigin = request.headers.get("origin");
+  if (!rawOrigin) return null;
+
+  const origin = normalizeOrigin(rawOrigin.trim());
   const allowed = (process.env.ALLOWED_ORIGINS ?? "")
     .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
-  if (origin === appOrigin(request) || allowed.includes(origin)) return null;
-  logger.warn({ origin }, "cross-origin state-changing request blocked");
+    .map((value) => normalizeOrigin(value.trim()))
+    .filter((value): value is string => Boolean(value));
+  const expected = new Set([appOrigin(request), requestOrigin(request), ...allowed]);
+
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  if (vercelUrl) {
+    const vercelOrigin = normalizeOrigin(
+      vercelUrl.startsWith("http://") || vercelUrl.startsWith("https://")
+        ? vercelUrl
+        : `https://${vercelUrl}`,
+    );
+    if (vercelOrigin) expected.add(vercelOrigin);
+  }
+
+  // Arena's browser preview is an HTTPS proxy around the local dev server.
+  // It may not forward Host in every environment, so allow only the platform's
+  // well-defined preview hostname while running outside production.
+  const isArenaPreview =
+    process.env.NODE_ENV !== "production" &&
+    origin !== null &&
+    (() => {
+      try {
+        const parsed = new URL(origin);
+        return parsed.protocol === "https:" && /^\d+-[a-z0-9-]+\.e2b\.app$/i.test(parsed.hostname);
+      } catch {
+        return false;
+      }
+    })();
+
+  if (origin && (expected.has(origin) || isArenaPreview)) return null;
+  logger.warn({ origin: rawOrigin.trim() }, "cross-origin state-changing request blocked");
   return jsonError("Invalid origin", 403);
 }
 
