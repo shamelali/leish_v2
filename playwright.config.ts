@@ -16,7 +16,14 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "npm run build && PORT=3100 npm run start",
+    command: "npm run build && npm run start",
+    env: {
+      // `next start` runs with NODE_ENV=production, where src/env.ts requires
+      // SESSION_SECRET (build is exempt). CI does not set it, so provide a
+      // throwaway value here — it never leaves the test machine.
+      SESSION_SECRET: "e2e-test-secret",
+      PORT: "3100",
+    },
     url: "http://localhost:3100",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

@@ -1,0 +1,85 @@
+# Roadmap to Deployment — 2026-08-19 audit
+
+Projects: **GitHub** [`shamelali/leish_v2`](https://github.com/shamelali/leish_v2) ·
+**Vercel** `shamelalis-projects/leish-v2` (deployment `UkJN7XcZFEZyXLPp4LHFNxALYNt8` —
+dashboard URL is login-gated; verify its state from the Vercel console).
+
+## Current state (verified in this audit)
+
+| Check | Result |
+| --- | --- |
+| `npm ci` / typecheck / lint | ✅ pass |
+| Unit tests (vitest) | ✅ 122/122 pass |
+| Production build (`next build`) | ✅ passes without secrets (build is exempt from env checks) |
+| E2E suite discovery | ✅ 6 tests in `e2e/smoke.spec.ts` |
+| E2E assertions vs live production server | ✅ all 6 replayed and pass against `PORT=3100 next start` |
+| E2E `webServer` boot in CI | ❌ **was broken** — `next start` requires `SESSION_SECRET` at runtime (`src/env.ts`, added in `54e77a8`), and neither `playwright.config.ts` nor `ci.yml` set it. **Fixed in this branch** by injecting a throwaway `SESSION_SECRET` via `webServer.env` (verified: server boots + tests pass) |
+| GitHub Actions | ❌ **billing-locked.** Both `check` and `e2e` jobs on `main` failed instantly: *"The job was not started because your account is locked due to a billing issue."* No green e2e run exists in recorded history (only 2 runs, both locked, 2026-08-17) |
+| Vercel project | ⚠️ unverifiable from outside (private dashboard; public `*.vercel.app` aliases not resolving). Confirm from console |
+| `leish-code/` directory | ⚠️ stale near-duplicate of the app (older `env.ts`, `proxy.ts`). Harmless to CI; **deployment hazard** if the Vercel project's Root Directory points at it — confirm it is set to the repo root |
+
+## Phase 0 — Unblock the pipeline (no deploy yet)
+
+1. **Fix GitHub billing**: Settings → Billing, clear the lock so Actions can run again.
+2. **Merge the e2e fix** (this branch, `arena/01a019be-leish-v2`): `playwright.config.ts`
+   now injects `SESSION_SECRET`/`PORT` for the test webServer. After merge, require a
+   green `check` + `e2e` run on `main` (first true green e2e run on record).
+3. **Confirm Vercel project settings**: Root Directory = repo root (**not** `leish-code/`),
+   Production branch = `main`, and "auto-deploy from bot/agent commits" disabled
+   (per HANDOVER non-negotiable: human review gate on `main`).
+4. Optional hygiene: remove or archive `leish-code/` to eliminate the stale-copy hazard.
+
+## Phase 1 — Infrastructure & environment
+
+5. Create the fresh **Supabase** project (do not reuse v1 Neon/old Supabase).
+   Set `DATABASE_URL` (pooler, `sslmode=require`) in Vercel **Production**.
+6. `npm run db:migrate` against prod `DATABASE_URL`; `supabase link` + `supabase db push`
+   (`supabase/migrations/*`); verify RLS enabled on all tables.
+7. Set every var from `.env.example` in Vercel Production — real values for
+   `NEXT_PUBLIC_URL`/`NEXT_PUBLIC_SITE_URL` (`https://leish.my`, never localhost),
+   `SESSION_SECRET` (`openssl rand -base64 32` — **required**, server won't boot without it),
+   Supabase URL/anon key, Brevo, Billplz, Sentry. No `NEXT_PUBLIC_*` marked "sensitive".
+8. Supabase Storage bucket for portfolio images (public-read policy only if uploads ship).
+
+## Phase 2 — Payments, email, observability
+
+9. **Billplz**: production API key; callback URL `https://leish.my/api/payments/webhook`;
+   one real low-value (RM 1) end-to-end payment — bill → webhook → HMAC verified →
+   `payments.paid` → booking `confirmed`. The webhook is the only path that confirms.
+10. **Brevo**: SPF/DKIM verified; test send via `/api/email/send`; check free-plan cap
+    vs launch volume.
+11. **Sentry**: new project; confirm errors from `webhook/route.ts` and `brevo.ts` arrive.
+
+## Phase 3 — Pre-launch verification
+
+12. Green CI on `main` (Phase 0 outcome) is the gate for every merge until launch.
+13. Manual smoke of the core loop (ordered list in `docs/DEPLOY.md` §6):
+    client signup+verify → artist signup+verify+claim → request → accept → quotation →
+    RM 200 fee → webhook confirm; negative tests (unverified book, bad webhook signature
+    401, duplicate-date no-500).
+
+## Phase 4 — Cutover
+
+14. Connect `leish.my` in Vercel; point Cloudflare DNS at Vercel; verify
+    `NEXT_PUBLIC_URL`-derived metadataBase, sitemap, robots, redirect/callback URLs.
+15. Only after Phase 3 is fully checked: DNS cutover, then monitor Sentry + webhook logs
+    for the first real bookings.
+
+---
+
+### E2E audit appendix (evidence)
+
+- Suite: `e2e/smoke.spec.ts`, 6 tests (3 UI via chromium, 3 API-level), `fullyParallel`,
+  2 retries on CI, trace on first retry.
+- Runner: `.github/workflows/ci.yml` job `e2e` → `playwright install --with-deps chromium`
+  → `npx playwright test` on PRs to `main` and pushes to `main`.
+- Sandbox blocks the Playwright browser CDN (no browser could be installed locally), so
+  the 6 tests were verified by replaying each assertion against the exact production
+  server the `webServer` spawns (`build` + `PORT=3100 next start`): homepage title/hero
+  h1 accessible name "Your Beauty, Perfected." + "Find & Book Artists" CTA; artists
+  listing "Aisha Azman"; profile "Reception Makeup" + "Send Booking Request";
+  `GET /api/bookings` → 401; register-then-book → 403 `EMAIL_NOT_VERIFIED`;
+  register-artist-then-claim → 403 "verify your email". All matched.
+- Root-cause of the red `main`: GitHub Actions billing lock (2-second job deaths), not a
+  test/code failure — but the `SESSION_SECRET` gap means the e2e job would have failed
+  even unlocked. Both addressed above.
