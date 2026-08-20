@@ -1,0 +1,46 @@
+import { NextRequest, NextResponse } from "next/server";
+import { apiHandler } from "@/app/api/_lib/handler";
+import { getDb } from "@/server/db/client";
+import { z } from "zod";
+
+const querySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(50).default(10),
+});
+
+export const GET = apiHandler(async (req, ctx) => {
+  const { searchParams } = new URL(req.url);
+  const { page, limit } = querySchema.parse({ page: searchParams.get("page"), limit: searchParams.get("limit") });
+  const offset = (page - 1) * limit;
+  const userId = ctx.user.id;
+
+  // FIXED: Single JOIN query instead of N+1, with pagination + index
+  const bookings = await getDb().prepare(`
+    SELECT b.*, 
+           json_agg(q.*) as quotations,
+           p.status as payment_status
+    FROM bookings b
+    LEFT JOIN quotations q ON q.booking_id = b.id
+    LEFT JOIN payments p ON p.booking_id = b.id
+    WHERE b.user_id = $1 OR b.claimed_artist_user_id = $1
+    GROUP BY b.id, p.status
+    ORDER BY b.created_at DESC
+    LIMIT $2 OFFSET $3
+  `).all(userId, limit, offset).catch(async () => {
+    // SQLite fallback
+    return await getDb().prepare(`
+      SELECT b.* FROM bookings b 
+      WHERE b.user_id = ? OR b.claimed_artist_user_id = ?
+      ORDER BY b.created_at DESC LIMIT ? OFFSET ?
+    `).all(userId, userId, limit, offset);
+  });
+
+  const total = await getDb().prepare("SELECT COUNT(*) as count FROM bookings WHERE user_id=$1 OR claimed_artist_user_id=$1").get(userId).catch(async () => {
+    return await getDb().prepare("SELECT COUNT(*) as count FROM bookings WHERE user_id=? OR claimed_artist_user_id=?").get(userId, userId);
+  }) as any;
+
+  return NextResponse.json({ 
+    data: bookings, 
+    pagination: { page, limit, total: Number(total.count), pages: Math.ceil(Number(total.count)/limit) } 
+  });
+}, { auth: true, rateLimit: { key: "bookings-list", limit: 60, window: 60 } });

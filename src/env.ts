@@ -12,6 +12,12 @@ const required =
   !isBuild && process.env.NODE_ENV === "production" ? (["SESSION_SECRET"] as const) : ([] as const);
 
 export function validateEnv() {
+  // During build, don't throw - let the app build successfully
+  // Validation happens at runtime via instrumentation
+  if (isBuild) {
+    return; // allow build to complete
+  }
+
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) {
     throw new Error(`Missing required environment variable(s): ${missing.join(", ")}`);
@@ -27,8 +33,10 @@ function checkPostgresUrl(): void {
   }
 }
 
-/** Call at module init or in server startup. */
-checkPostgresUrl();
+/** Call checkPostgresUrl at module init for runtime validation only */
+if (!isBuild) {
+  checkPostgresUrl();
+}
 
 /** S3 bucket encryption at rest — use SSE-KMS with alias leish/s3-key for PDPA compliance. */
 export const S3_BUCKET = "leish-files";

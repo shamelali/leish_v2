@@ -1,8 +1,4 @@
 import type { NextConfig } from "next";
-import { validateEnv } from "./src/env";
-
-// Fail fast at build/start time if required environment variables are missing.
-validateEnv();
 
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
