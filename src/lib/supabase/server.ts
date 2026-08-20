@@ -1,6 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createRawClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
 import type { Database } from "@/lib/types/database";
 
 /**
@@ -21,7 +20,20 @@ function assertEnv() {
   return { url, anonKey };
 }
 
+export function createServiceRoleClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    throw new Error("[supabase/server] Missing SUPABASE_SERVICE_ROLE_KEY.");
+  }
+  return createRawClient<Database>(url, serviceKey, {
+    auth: { persistSession: false },
+  });
+}
+
 export async function createClient() {
+  // Dynamic import to avoid Turbopack Pages Router error
+  const { cookies } = await import("next/headers");
   const { url, anonKey } = assertEnv();
   const cookieStore = await cookies();
 
@@ -32,29 +44,14 @@ export async function createClient() {
       },
       setAll(cookiesToSet) {
         try {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
         } catch {
           // Called from a Server Component — middleware refreshes the
           // session instead. Safe to ignore.
         }
       },
     },
-  });
-}
-
-/**
- * Service-role client — bypasses RLS. Only use in trusted server contexts:
- * the Billplz webhook handler and admin server actions. Never import this
- * into anything that runs with user input in the same call path without
- * validating that input first.
- */
-export function createServiceRoleClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    throw new Error("[supabase/server] Missing SUPABASE_SERVICE_ROLE_KEY.");
-  }
-  return createRawClient<Database>(url, serviceKey, {
-    auth: { persistSession: false },
   });
 }
