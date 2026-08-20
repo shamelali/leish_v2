@@ -12,6 +12,8 @@ const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/artists", label: "Artists" },
   { href: "/studios", label: "Studios" },
+  { href: "/events", label: "Events" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/onboarding", label: "Join as Artist" },
 ];
 
