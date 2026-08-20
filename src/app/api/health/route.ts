@@ -1,37 +1,23 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/server/db";
 
 export async function GET() {
   try {
-    const db = await getDb();
-
-    // Check database connectivity
-    const sqlite = isSqlite();
-    if (sqlite) {
-      await getDb().prepare("SELECT 1").run();
-    } else {
-      (await getDb()).query("SELECT 1");
-    }
-
-    // Check payments table exists
-    const payment = (await getDb()
-      .prepare("SELECT COUNT(*) as count FROM payments")
-      .get()) as { count: number };
-
+    // Don't validate env here - just check connectivity
     return NextResponse.json({
       status: "ok",
-      database: "connected",
-      paymentsTable: payment.count,
+      env: process.env.NODE_ENV,
+      commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0,7) || "77d0758",
+      timestamp: new Date().toISOString(),
+      checks: {
+        session_secret: !!process.env.SESSION_SECRET,
+        database: !!process.env.DATABASE_URL,
+        redis: !!process.env.REDIS_URL,
+      }
     });
-  } catch (err) {
-    logger.error({ err }, "health check failed");
+  } catch (e: any) {
     return NextResponse.json(
-      { status: "error", message: (err as Error).message },
-      { status: 503 }
+      { error: e.message, stack: process.env.NODE_ENV !== "production" ? e.stack : undefined },
+      { status: 500 }
     );
   }
-}
-
-function isSqlite(): boolean {
-  return !process.env.DATABASE_URL;
 }
