@@ -47,3 +47,7 @@ next-env.d.ts
 # playwright
 /test-results/
 /playwright-report/
+
+# Prevent git bundles from being committed
+*.bundle
+leish-v2.bundle
