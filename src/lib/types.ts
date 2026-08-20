@@ -75,3 +75,24 @@ export interface User {
   role: Role;
   emailVerified: boolean;
 }
+
+export interface Product {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  category: string;
+  brand: string;
+  image_url: string;
+  rating: number;
+  review_count: number;
+  is_featured: boolean;
+  stock_count: number;
+  min_order: number;
+  return_policy: string;
+  ingredients: string;
+  is_clean: boolean;
+  is_cruelty_free: boolean;
+  sort_order: number;
+}

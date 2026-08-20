@@ -1,2 +1,1 @@
-export const airtable = null;
-export function getAirtable() { return null; }
+export const airtable=null; export function getAirtable(){return null;}
