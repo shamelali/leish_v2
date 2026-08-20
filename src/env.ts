@@ -1,12 +1,9 @@
 export function validateEnv() {
   if (process.env.NEXT_PHASE === 'phase-production-build') return;
   if (process.env.SKIP_ENV_VALIDATION) return;
-  // Only validate at runtime, not during build
   const required = ['DATABASE_URL'];
   if (typeof window === 'undefined') {
-    // Server-only checks, skip during build
-    if (process.env.VERCEL_ENV === undefined && process.env.NODE_ENV === 'production' &&!process.env.DATABASE_URL) {
-      // During vercel build, DATABASE_URL may not be set yet - don't crash
+    if (process.env.VERCEL_ENV === undefined && process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
       return;
     }
   }
