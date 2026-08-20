@@ -29,3 +29,8 @@ function checkPostgresUrl(): void {
 
 /** Call at module init or in server startup. */
 checkPostgresUrl();
+
+/** S3 bucket encryption at rest — use SSE-KMS with alias leish/s3-key for PDPA compliance. */
+export const S3_BUCKET = "leish-files";
+export const S3_ENCRYPTION = "SSE-KMS";
+export const S3_KMS_KEY_ALIAS = "leish/s3-key";

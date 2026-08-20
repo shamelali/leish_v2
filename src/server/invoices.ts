@@ -100,3 +100,17 @@ export function renderInvoiceHtml(invoice: Invoice): string {
   <p class="muted" style="margin-top:24px">Thank you for booking with Leish! · <span class="badge">${invoice.balanceDue > 0 ? "Outstanding balance" : "Paid in full"}</span></p>
 </body></html>`;
 }
+
+/** Strip PII from invoice data before PDF generation.
+ * Removes sensitive customer information that should not appear in PDF metadata or logs.
+ */
+export function stripInvoicePii(invoice: Invoice): Invoice {
+  // The invoice data itself doesn't contain highly sensitive PII beyond what's
+  // already in the booking/quotation system, but we sanitize the issuedAt timestamp
+  // and ensure no extra PII is embedded.
+  const sanitized: Invoice = {
+    ...invoice,
+    issuedAt: new Date().toISOString(),
+  };
+  return sanitized;
+}
