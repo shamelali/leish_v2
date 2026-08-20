@@ -140,3 +140,8 @@ create trigger bookings_set_updated_at before update on public.bookings
   for each row execute procedure public.set_updated_at();
 create trigger profiles_set_updated_at before update on public.profiles
   for each row execute procedure public.set_updated_at();
+
+-- ── PDPA Malaysia compliance ────────────────────────────────────────────
+-- consent and retention tracking
+alter table public.users add column if not exists consent boolean not null default false;
+alter table public.users add column if not exists consent_timestamp text;

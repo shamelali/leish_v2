@@ -7,6 +7,8 @@ export const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address"),
   password: z.string().min(8, "Password must be at least 8 characters").max(128),
   role: z.enum(["customer", "artist", "studio"]),
+  consent: z.boolean().refine((val) => val === true, "You must consent to data collection"),
+  consentTimestamp: z.string().optional(),
 });
 
 export const loginSchema = z.object({

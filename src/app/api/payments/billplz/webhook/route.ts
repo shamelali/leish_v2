@@ -45,9 +45,13 @@ export async function POST(req: NextRequest) {
     raw_payload: payload,
   });
 
+  // Idempotency: Billplz can retry webhook delivery. Unique constraint on
+  // billplz_bill_id (23505) means duplicate inserts are safely ignored.
   if (logError && logError.code !== "23505") {
     console.error("[billplz/webhook] failed to log transaction", logError);
     return NextResponse.json({ error: "Logging failed." }, { status: 500 });
+  } else if (logError && logError.code === "23505") {
+    console.warn("[billplz/webhook] replay attempt ignored — bill ID already processed", { billId: payload.id });
   }
 
   if (isPaid && bookingId) {

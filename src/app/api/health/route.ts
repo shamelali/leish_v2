@@ -1,25 +1,37 @@
 import { NextResponse } from "next/server";
-import { getDb, isPostgres } from "@/server/db";
-import { tryRoute } from "@/server/http";
+import { getDb } from "@/server/db";
 
-/**
- * GET /api/health
- * Liveness + readiness probe for uptime monitors / Vercel Cron.
- * Pings the active database backend and reports which one is in use.
- */
-export const GET = tryRoute(
-  async function GET() {
-    const db = getDb();
-    const row = await db.prepare("SELECT 1 AS ok").get<{ ok: number }>();
+export async function GET() {
+  try {
+    const db = await getDb();
 
+    // Check database connectivity
+    const sqlite = isSqlite();
+    if (sqlite) {
+      await getDb().prepare("SELECT 1").run();
+    } else {
+      (await getDb()).query("SELECT 1");
+    }
+
+    // Check payments table exists
+    const payment = (await getDb()
+      .prepare("SELECT COUNT(*) as count FROM payments")
+      .get()) as { count: number };
+
+    return NextResponse.json({
+      status: "ok",
+      database: "connected",
+      paymentsTable: payment.count,
+    });
+  } catch (err) {
+    logger.error({ err }, "health check failed");
     return NextResponse.json(
-      {
-        status: row?.ok === 1 ? "ok" : "degraded",
-        database: isPostgres() ? "postgres" : "sqlite",
-        time: new Date().toISOString(),
-      },
-      { status: row?.ok === 1 ? 200 : 503 },
+      { status: "error", message: (err as Error).message },
+      { status: 503 }
     );
-  },
-  { route: "GET /api/health" },
-);
+  }
+}
+
+function isSqlite(): boolean {
+  return !process.env.DATABASE_URL;
+}

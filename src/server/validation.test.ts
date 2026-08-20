@@ -10,6 +10,7 @@ describe("registerSchema", () => {
       email: "AINA@Example.com ",
       password: "password123",
       role: "customer",
+      consent: true,
     });
     expect(result.success).toBe(true);
     if (result.success) {

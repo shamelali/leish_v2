@@ -4,6 +4,7 @@ import { verifyPassword } from "@/server/password";
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/server/session";
 import { loginSchema } from "@/server/validation";
 import { enforceRateLimit, enforceSameOrigin, jsonError, readJson } from "@/server/http";
+import { randomUUID } from "node:crypto";
 import { logger } from "@/server/logger";
 
 export async function POST(request: Request) {
@@ -31,14 +32,16 @@ export async function POST(request: Request) {
     return jsonError("Invalid email or password", 401);
   }
 
+  const jti = randomUUID();
   const token = await createSessionToken({
     sub: user.id,
     email: user.email,
     name: user.name,
     role: user.role,
+    jti,
   });
 
-  logger.info({ userId: user.id }, "login succeeded");
+  logger.info({ userId: user.id, jti }, "login succeeded");
 
   const response = NextResponse.json({ user: toPublicUser(user) });
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());

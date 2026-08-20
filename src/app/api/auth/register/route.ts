@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     return jsonError(parsed.error.issues[0]?.message ?? "Invalid input", 400);
   }
 
-  const { name, email, password, role } = parsed.data;
+  const { name, email, password, role, consent, consentTimestamp } = parsed.data;
   const db = await getDb();
 
   const existing = (await db.prepare("SELECT id FROM users WHERE email = ?").get(email)) as
@@ -39,16 +39,18 @@ export async function POST(request: Request) {
     role,
     password: hashPassword(password),
     email_verified: 0,
+    consent,
+    consent_timestamp: consentTimestamp ?? new Date().toISOString(),
     created_at: new Date().toISOString(),
   };
 
   await db
     .prepare(
-      "INSERT INTO users (id, email, name, role, password, email_verified, created_at) VALUES (@id, @email, @name, @role, @password, @email_verified, @created_at)",
+      "INSERT INTO users (id, email, name, role, password, email_verified, consent, consent_timestamp, created_at) VALUES (@id, @email, @name, @role, @password, @email_verified, @consent, @consent_timestamp, @created_at)",
     )
     .run(bind(user));
 
-  logger.info({ userId: user.id }, "user registered");
+  logger.info({ userId: user.id, consent }, "user registered");
 
   // Issue a verification token and queue the verification email.
   const verifyUrl = await createVerifyUrl(user.id);
@@ -58,11 +60,13 @@ export async function POST(request: Request) {
     text: `Hi ${name},\n\nWelcome to Leish! Please confirm your email address to activate your account:\n\n${verifyUrl}\n\nIf you didn't create an account, you can ignore this email.\n\n— The Leish! team`,
   });
 
+  const jti = randomUUID();
   const sessionToken = await createSessionToken({
     sub: user.id,
     email: user.email,
     name: user.name,
     role: user.role,
+    jti,
   });
 
   const response = NextResponse.json(

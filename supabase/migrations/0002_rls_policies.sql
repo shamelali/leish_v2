@@ -10,6 +10,12 @@ alter table public.availability_slots enable row level security;
 alter table public.bookings enable row level security;
 alter table public.payment_transactions enable row level security;
 
+alter table public.sessions enable row level security;
+create policy "sessions_select_admin" on public.sessions
+  for select using (public.is_admin());
+create policy "sessions_update_admin" on public.sessions
+  for update using (public.is_admin());
+
 -- Helper: is the current user an admin?
 create function public.is_admin()
 returns boolean language sql security definer set search_path = public as $$
