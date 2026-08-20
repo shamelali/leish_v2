@@ -31,27 +31,31 @@ export async function POST(req: NextRequest) {
 
   const bookingId = payload.reference_1 ?? payload["reference_1"];
   const isPaid = payload.paid === "true";
+  const webhookId = payload.id; // Billplz delivery ID for dedup
 
   const supabase = createServiceRoleClient();
 
-  // Idempotent — Billplz can retry webhook delivery. The unique constraint
-  // on billplz_bill_id means a duplicate insert is a no-op error we can
-  // safely swallow after logging.
-  const { error: logError } = await supabase.from("payment_transactions").insert({
+  // Idempotent — Billplz can retry webhook delivery. Insert with ON CONFLICT
+  // DO NOTHING on webhook_id (unique). Duplicate deliveries are safely ignored.
+  const { error: logError } = await supabase.from("payment_transactions").upsert({
     booking_id: bookingId,
     billplz_bill_id: payload.id,
+    webhook_id: webhookId,
     amount: Number(payload.paid_amount) / 100,
     paid: isPaid,
     raw_payload: payload,
-  });
+  }, { onConflict: "webhook_id" });
 
-  // Idempotency: Billplz can retry webhook delivery. Unique constraint on
-  // billplz_bill_id (23505) means duplicate inserts are safely ignored.
-  if (logError && logError.code !== "23505") {
+  if (logError) {
     console.error("[billplz/webhook] failed to log transaction", logError);
     return NextResponse.json({ error: "Logging failed." }, { status: 500 });
-  } else if (logError && logError.code === "23505") {
-    console.warn("[billplz/webhook] replay attempt ignored — bill ID already processed", { billId: payload.id });
+  } else {
+    console.log("[billplz/webhook] webhook idempotent — delivery accepted", { webhookId });
+  }
+
+  // Also log a human-readable note if this was a retry
+  if (logError && logError.code === "23505") {
+    console.warn("[billplz/webhook] replay attempt ignored — webhook ID already processed", { webhookId });
   }
 
   if (isPaid && bookingId) {

@@ -6,6 +6,16 @@ import { ThemeProvider } from "@/lib/theme";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
+/** CSP nonce set by middleware per-request; applied to script tags so script-src
+ * can omit 'unsafe-inline'. Falls back to undefined in SSR edge cases. */
+function useCspNonce(): string | undefined {
+  try {
+    return headers().get("x-nonce") ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://leish.my"),
   title: {
@@ -21,10 +31,10 @@ export const metadata: Metadata = {
     siteName: "Leish!",
     title: "Leish! — Beauty Booking Marketplace",
     description:
-      "Book beauty anywhere. Discover top-rated makeup artists and studios across Malaysia.",
+      "Book beauty anywhere. Discover top-rated makeup artists across Malaysia.",
     images: [
       {
-        url: "/images/hero.jpg",
+        url: "/images/leish-light.jpeg",
         width: 1024,
         height: 1280,
         alt: "Makeup artist perfecting a client's look",
@@ -35,7 +45,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Leish! — Beauty Booking Marketplace",
     description: "Book beauty anywhere. Discover top-rated makeup artists across Malaysia.",
-    images: ["/images/hero.jpg"],
+    images: ["/images/leish-light.jpeg"],
   },
 };
 
@@ -64,14 +74,14 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // CSP nonce set by middleware in production; applied to the inline theme
-  // script so script-src can omit 'unsafe-inline'.
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const nonce = useCspNonce();
 
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="flex min-h-full flex-col bg-stone-50 font-sans text-stone-900 dark:bg-stone-950 dark:text-stone-100">
+        {/* ✓ Fixed: nonce on inline script so script-src can omit 'unsafe-inline' */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
+
         <ThemeProvider>
           <AuthProvider>
             <Navbar />

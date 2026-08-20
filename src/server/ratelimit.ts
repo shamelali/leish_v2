@@ -134,3 +134,35 @@ export function getClientIp(request: Request): string {
   if (fwd) return fwd.split(",")[0]?.trim() ?? "unknown";
   return request.headers.get("cf-connecting-ip") ?? "unknown";
 }
+
+/** Lua script for atomic JTI blacklist SET NX (SET if Not eXists). */
+const JTI_ATOMIC_SCRIPT = `
+  local existing = redis.call("GET", KEYS[1])
+  if existing then
+    return 1  -- already blacklisted
+  end
+  redis.call("SET", KEYS[1], "1", "EX", tonumber(ARGV[1]))
+  return 0  -- newly blacklisted
+`;
+
+/** Trusted proxy depth — how many hops of X-Forwarded-For to trust. */
+export const TRUSTED_PROXY_DEPTH = 2;
+
+/** Extract client IP, respecting trusted proxy hops. */
+export function getTrustedClientIp(request: Request): string {
+  const fwd = request.headers.get("x-forwarded-for");
+  if (!fwd) {
+    return request.headers.get("cf-connecting-ip") ?? "unknown";
+  }
+  const ips = fwd.split(",").map((ip) => ip.trim());
+  // Use the second-to-last IP as the real client (last is the proxy)
+  const clientIp = ips[ips.length - 2] || ips[ips.length - 1];
+  return clientIp ?? "unknown";
+}
+
+/** Best-effort client IP extraction (x-forwarded-for, then cf-connecting-ip). */
+export function getClientIp(request: Request): string {
+  const fwd = request.headers.get("x-forwarded-for");
+  if (fwd) return fwd.split(",")[0]?.trim() ?? "unknown";
+  return request.headers.get("cf-connecting-ip") ?? "unknown";
+}

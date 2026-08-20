@@ -1,3 +1,11 @@
+-- Add webhook_id column for idempotent dedup
+alter table public.payment_transactions add column if not exists webhook_id text;
+
+-- Add unique constraint on webhook_id (Billplz webhook delivery ID)
+create unique index if not exists payment_transactions_webhook_id_idx on public.payment_transactions(webhook_id) where webhook_id is not null;
+
+-- Comment: webhook_id is the Billplz-delivered delivery identifier, distinct from billplz_bill_id.
+-- Ensures duplicate webhook deliveries (retries) are safely ignored.
 -- Leish v2 — core schema
 -- Scope: client-side booking loop only (MUAs, not studios). Studios are
 -- deliberately deferred — see docs/ARCHITECTURE.md for the v1 scope cut.

@@ -17,3 +17,15 @@ export function validateEnv() {
     throw new Error(`Missing required environment variable(s): ${missing.join(", ")}`);
   }
 }
+
+/** Fail-closed: in production, ensure POSTGRES_URL is set. */
+function checkPostgresUrl(): void {
+  if (process.env.NODE_ENV === "production" && !process.env.POSTGRES_URL) {
+    throw new Error(
+      "POSTGRES_URL is required in production. Set it in Vercel/Supabase env vars."
+    );
+  }
+}
+
+/** Call at module init or in server startup. */
+checkPostgresUrl();
