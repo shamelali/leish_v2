@@ -12,10 +12,14 @@ import { PG_SCHEMA } from "../src/server/db.ts";
  * (and verify) before the first request hits prod, per docs/DEPLOY.md.
  */
 
-const ADDITIVE_COLUMNS: Record<string, [string, string]> = {
-  // table: [column, ALTER statement] — mirrors the SQLite backfill in db.ts
-  users: ["email_verified", "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0"],
-  payments: ["provider_url", "ALTER TABLE payments ADD COLUMN provider_url TEXT"],
+const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
+  // table: [column, ALTER statement][] — mirrors the SQLite backfill in db.ts
+  users: [
+    ["email_verified", "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0"],
+    ["consent", "ALTER TABLE users ADD COLUMN consent INTEGER NOT NULL DEFAULT 0"],
+    ["consent_timestamp", "ALTER TABLE users ADD COLUMN consent_timestamp TEXT"],
+  ],
+  payments: [["provider_url", "ALTER TABLE payments ADD COLUMN provider_url TEXT"]],
 };
 
 async function columnExists(pool: Pool, table: string, column: string): Promise<boolean> {
@@ -31,7 +35,7 @@ async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) {
     console.error(
       "DATABASE_URL is not set.\n" +
-        "Usage: DATABASE_URL=\"postgresql://user:pass@host:5432/db?sslmode=require\" npm run db:migrate\n" +
+        'Usage: DATABASE_URL="postgresql://user:pass@host:5432/db?sslmode=require" npm run db:migrate\n' +
         "(Use the Supabase pooler connection string in production — see docs/DEPLOY.md.)",
     );
     process.exit(1);
@@ -48,24 +52,42 @@ async function main(): Promise<void> {
     await pool.query(PG_SCHEMA);
 
     // Backfill columns on databases created before they were added.
-    for (const [table, [column, ddl]] of Object.entries(ADDITIVE_COLUMNS)) {
-      if (!(await columnExists(pool, table, column))) {
-        console.log(`[migrate] + ${table}.${column}`);
-        await pool.query(ddl);
+    for (const [table, columns] of Object.entries(ADDITIVE_COLUMNS)) {
+      for (const [column, ddl] of columns) {
+        if (!(await columnExists(pool, table, column))) {
+          console.log(`[migrate] + ${table}.${column}`);
+          await pool.query(ddl);
+        }
       }
     }
 
+    const EXPECTED_TABLES = [
+      "users",
+      "bookings",
+      "password_resets",
+      "email_verifications",
+      "email_outbox",
+      "artist_profiles",
+      "quotations",
+      "messages",
+      "payments",
+      "sessions",
+    ];
     const { rows } = await pool.query(
       `SELECT table_name FROM information_schema.tables
        WHERE table_schema = current_schema()
-         AND table_name IN ('users','bookings','password_resets','email_verifications',
-                            'email_outbox','artist_profiles','quotations','messages','payments')
+         AND table_name = ANY($1::text[])
        ORDER BY table_name`,
+      [EXPECTED_TABLES],
     );
     const tables = rows.map((r: { table_name: string }) => r.table_name);
-    console.log(`[migrate] ok — ${tables.length}/9 tables present: ${tables.join(", ")}`);
-    if (tables.length !== 9) {
-      console.error("[migrate] WARNING: expected 9 tables — investigate before deploying.");
+    console.log(
+      `[migrate] ok — ${tables.length}/${EXPECTED_TABLES.length} tables present: ${tables.join(", ")}`,
+    );
+    if (tables.length !== EXPECTED_TABLES.length) {
+      console.error(
+        `[migrate] WARNING: expected ${EXPECTED_TABLES.length} tables — investigate before deploying.`,
+      );
       process.exitCode = 1;
     }
   } finally {

@@ -1,39 +1,36 @@
 # Deploy checklist
 
-## 1. Database & Supabase
+## 1. Database
 
-The public booking loop persists through `src/server/db.ts`: PostgreSQL when
-`DATABASE_URL` is set (use the Supabase pooler connection string in prod),
-node:sqlite otherwise. The `/admin/**` pages additionally use the Supabase
-client for provider management.
+The app persists through a single db-facade (`src/server/db.ts`): PostgreSQL when
+`DATABASE_URL` is set (use a Neon/Supabase pooler connection string in prod),
+Node's built-in `node:sqlite` otherwise. There is no Supabase client dependency —
+users, bookings, quotations, payments and **sessions** all live in this store.
 
-- [ ] Create a new Supabase project (do not reuse the v1 Neon project — this is a clean start).
-- [ ] Set `DATABASE_URL` in Vercel to the Supabase pooler connection string (`sslmode=require`).
+- [ ] Provision a PostgreSQL database (Neon or Supabase pooler).
+- [ ] Set `DATABASE_URL` in Vercel to the pooler connection string (`sslmode=require`).
 - [ ] Run `npm run db:migrate` (scripts/migrate.ts) against production `DATABASE_URL`.
-- [ ] `npx supabase link --project-ref <ref>` and `npx supabase db push` — applies the
-      admin-side schema + RLS policies (`supabase/migrations/*`).
-- [ ] Confirm RLS is enabled on all tables (`supabase/migrations/0002_rls_policies.sql`
-      enables it, but verify in the dashboard).
-- [ ] Set `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (required by
-      `/admin/**` and `src/proxy.ts` — they fail loudly without them).
-- [ ] Create a Storage bucket for provider portfolio images; set public read policy for
-      active providers only if you add photo upload before launch.
+      It is idempotent (CREATE TABLE IF NOT EXISTS + additive column backfills) and
+      verifies all expected tables (including `sessions`) are present.
+- [ ] The app also applies the same schema lazily on first request, so migration is a
+      belt-and-braces step you can run before the first deploy.
 
 ## 2. Vercel
 
-- [ ] New Vercel project (do not reuse the old project ID — avoids inheriting stale env vars).
-- [ ] Set all vars from `.env.example` in the **Production** environment. Double-check
-      `NEXT_PUBLIC_URL=https://leish.my` — not localhost.
+- [ ] Set all required vars from `.env.example` in the **Production** environment:
+      `SESSION_SECRET` (required), `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL=https://leish.my`.
+- [ ] Set Billplz + email provider vars if launching payments/email (see sections 3–4).
+- [ ] Set `CRON_SECRET` so the scheduled jobs in `vercel.json` are authenticated.
 - [ ] Confirm no `NEXT_PUBLIC_*` var is marked "sensitive" (breaks the client bundle).
-- [ ] Connect the domain, confirm Cloudflare DNS points at Vercel correctly.
+- [ ] Connect the domain, confirm DNS points at Vercel correctly.
 - [ ] Turn off auto-deploy from any bot/agent commit path — human review required on `main`.
 
 ## 3. Billplz (single payment path — no second webhook route)
 
 The db-facade is the only payment path: `POST /api/bookings/[id]/pay-fee` creates
 the bill; the callback defaults to `{NEXT_PUBLIC_SITE_URL}/api/payments/webhook`
-(override with `BILLPLZ_CALLBACK_URL` if needed). The legacy
-`/api/payments/billplz/*` routes were removed on 2026-08-17.
+(override with `BILLPLZ_CALLBACK_URL` if needed). The legacy Supabase-based
+`/api/payments/billplz/*` routes have been removed — there is a single webhook.
 
 - [ ] Confirm production mode (not sandbox) API key.
 - [ ] Set webhook callback URL to `https://leish.my/api/payments/webhook` in the
@@ -42,19 +39,22 @@ the bill; the callback defaults to `{NEXT_PUBLIC_SITE_URL}/api/payments/webhook`
       Verify: bill created → webhook received → HMAC signature verified → `payments`
       row marked `paid` → `bookings.status` flips to `confirmed`.
 
-## 4. Brevo
+## 4. Email
 
-- [ ] Confirm sender domain is verified (SPF/DKIM) so mail doesn't land in spam.
-- [ ] Send one test transactional email via `/api/email/send` and confirm delivery.
-- [ ] Check the free-plan send cap against expected launch volume — this was flagged as a
-      near-term scaling constraint previously.
+Transactional email is sent via `src/server/email.ts`. The default provider is
+`dev` (writes to the `email_outbox` table, viewable at `/dev/emails` outside
+production). For real delivery set `EMAIL_PROVIDER=resend` (+ `RESEND_API_KEY`) or
+`EMAIL_PROVIDER=postmark` (+ `POSTMARK_SERVER_TOKEN`), plus `EMAIL_FROM`.
 
-## 5. Sentry
+- [ ] Confirm the sender domain is verified (SPF/DKIM) so mail doesn't land in spam.
+- [ ] Trigger a verification email via registration and confirm delivery.
+- [ ] Check the provider's plan send cap against expected launch volume.
 
-- [ ] New Sentry project (or reuse the org, new project) so v1 noise doesn't pollute triage.
-- [ ] Confirm errors from `src/app/api/payments/webhook/route.ts` and
-      `src/lib/email/brevo.ts` are actually reaching Sentry — these were previously
-      failing silently in places.
+## 5. Error reporting (optional)
+
+- [ ] Set `SENTRY_DSN` (preferred) or `ERROR_WEBHOOK_URL`; `reportError()` posts a
+      sanitized payload to whichever is configured.
+- [ ] Confirm errors from `src/app/api/payments/webhook/route.ts` reach your sink.
 
 ## 6. Pre-launch smoke test (do this manually, in order)
 

@@ -1,19 +1,22 @@
 import { NextResponse } from "next/server";
+import { authorizeCron } from "@/server/cron-auth";
 
+export const dynamic = "force-dynamic";
+
+/**
+ * GET /api/cron/retention
+ * Placeholder retention sweep. Vercel Cron (see vercel.json) invokes this
+ * daily with `Authorization: Bearer <CRON_SECRET>`. Heavy PII purging is
+ * performed out-of-band by scripts/retain-purge.mjs against PostgreSQL.
+ */
 export async function GET(req: Request) {
-  // Vercel Cron auth
-  const authHeader = req.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    // Allow Vercel cron without auth in production (Vercel handles it)
-    const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-    if (!isVercelCron) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-  }
+  const unauthorized = authorizeCron(req);
+  if (unauthorized) return unauthorized;
+
   return NextResponse.json({
     status: "ok",
-    message: "Retention cron would run here",
-    next: "Archive >7y data",
-    timestamp: new Date().toISOString()
+    message: "Retention sweep acknowledged",
+    next: "Archive/purge PII older than the retention window",
+    timestamp: new Date().toISOString(),
   });
 }

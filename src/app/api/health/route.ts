@@ -1,44 +1,37 @@
 import { NextResponse } from "next/server";
+import { getDb, isPostgres } from "@/server/db";
 
+export const dynamic = "force-dynamic";
+
+/**
+ * Liveness/readiness probe (used by the Docker HEALTHCHECK).
+ * Always returns 200 with a status of "ok" | "degraded" so orchestrators can
+ * distinguish "process up" from "dependency down" without a hard failure.
+ */
 export async function GET() {
   let dbStatus = "unknown";
-  let dbError = null;
+  let dbError: string | null = null;
 
   try {
-    // Try DB check but don't crash if it fails
-    const { Pool } = await import("pg");
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000,
-    });
-    const client = await pool.connect();
-    try {
-      await client.query("SELECT 1");
-      dbStatus = "ok";
-    } catch (e: any) {
-      dbStatus = "error";
-      dbError = e.message?.slice(0,100);
-    } finally {
-      client.release();
-      await pool.end();
-    }
-  } catch (e: any) {
+    const db = getDb();
+    await db.prepare("SELECT 1 AS ok").get();
+    dbStatus = "ok";
+  } catch (err) {
     dbStatus = "error";
-    dbError = e.message?.slice(0,100);
+    dbError = (err instanceof Error ? err.message : String(err)).slice(0, 100);
   }
 
-  // Always return 200, even if DB is down - don't throw 500
   return NextResponse.json({
-    status: dbStatus === "ok"? "ok" : "degraded",
+    status: dbStatus === "ok" ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
-    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0,7) || "77d0758",
+    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
     checks: {
-      session_secret:!!process.env.SESSION_SECRET,
-      database_url:!!process.env.DATABASE_URL,
+      session_secret: Boolean(process.env.SESSION_SECRET),
+      database_url: Boolean(process.env.DATABASE_URL),
+      database_backend: isPostgres() ? "postgres" : "sqlite",
       database: dbStatus,
       database_error: dbError,
-      redis:!!process.env.REDIS_URL,
-    }
+      redis: Boolean(process.env.UPSTASH_REST_URL),
+    },
   });
 }

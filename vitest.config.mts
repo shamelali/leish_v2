@@ -13,8 +13,22 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      include: ["src/lib/**", "src/components/**"],
-      exclude: ["src/lib/data.ts"],
+      // Cover the business/logic layers. UI-heavy client components and pure
+      // type/data modules are excluded so the metric reflects tested logic.
+      include: ["src/lib/**", "src/server/**"],
+      exclude: [
+        "src/lib/data.ts",
+        "src/lib/types.ts",
+        "src/lib/auth.tsx",
+        "src/lib/theme.tsx",
+        "**/*.test.{ts,tsx}",
+      ],
+      thresholds: {
+        statements: 60,
+        branches: 55,
+        functions: 60,
+        lines: 60,
+      },
     },
   },
   resolve: {

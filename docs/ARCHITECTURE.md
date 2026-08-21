@@ -93,4 +93,3 @@ approval/booking flow. None of that is required to hit the launch gate
 (10 MUAs, Klang Valley, one working payment flow). The catalog
 (`src/lib/data.ts`) currently holds artists only — add studio support as a
 deliberate follow-up, not retrofitted into the artist flow.
-

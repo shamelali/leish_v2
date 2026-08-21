@@ -154,6 +154,8 @@ export const PG_SCHEMA = `
     role          TEXT NOT NULL CHECK (role IN ('customer','artist','studio')),
     password      TEXT NOT NULL,
     email_verified INTEGER NOT NULL DEFAULT 0,
+    consent       INTEGER NOT NULL DEFAULT 0,
+    consent_timestamp TEXT,
     created_at    TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS bookings (
@@ -237,12 +239,20 @@ export const PG_SCHEMA = `
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS sessions (
+    jti        TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    revoked    INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
   CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id);
   CREATE INDEX IF NOT EXISTS idx_messages_booking ON messages(booking_id);
   CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   -- One active booking per artist/date/time slot (cancelled/completed don't block).
   CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_slot
     ON bookings(artist_id, date, time)
@@ -258,6 +268,8 @@ const SQLITE_SCHEMA = `
     name       TEXT NOT NULL,
     role       TEXT NOT NULL CHECK (role IN ('customer','artist','studio')),
     password   TEXT NOT NULL,
+    consent    INTEGER NOT NULL DEFAULT 0,
+    consent_timestamp TEXT,
     created_at TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS bookings (
@@ -337,12 +349,20 @@ const SQLITE_SCHEMA = `
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS sessions (
+    jti        TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    revoked    INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
   CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id);
   CREATE INDEX IF NOT EXISTS idx_messages_booking ON messages(booking_id);
   CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   -- One active booking per artist/date/time slot (cancelled/completed don't block).
   CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_slot
     ON bookings(artist_id, date, time)
@@ -355,6 +375,12 @@ function migrateSqlite(db: DatabaseSync) {
   const userCols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
   if (!userCols.some((c) => c.name === "email_verified")) {
     db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!userCols.some((c) => c.name === "consent")) {
+    db.exec("ALTER TABLE users ADD COLUMN consent INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!userCols.some((c) => c.name === "consent_timestamp")) {
+    db.exec("ALTER TABLE users ADD COLUMN consent_timestamp TEXT");
   }
   const paymentCols = db.prepare("PRAGMA table_info(payments)").all() as { name: string }[];
   if (!paymentCols.some((c) => c.name === "provider_url")) {
@@ -444,6 +470,8 @@ export interface UserRow {
   role: "customer" | "artist" | "studio";
   password: string;
   email_verified: number;
+  consent: number;
+  consent_timestamp: string | null;
   created_at: string;
 }
 

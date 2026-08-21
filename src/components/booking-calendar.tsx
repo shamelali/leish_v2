@@ -45,9 +45,7 @@ export default function BookingCalendar({
 }: BookingCalendarProps) {
   const router = useRouter();
 
-  const [selectedService, setSelectedService] = useState<string | null>(
-    services[0]?.name ?? null,
-  );
+  const [selectedService, setSelectedService] = useState<string | null>(services[0]?.name ?? null);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [eventType, setEventType] = useState<string>(eventTypes[0]?.label ?? "");
@@ -95,7 +93,10 @@ export default function BookingCalendar({
           router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
           return;
         }
-        if (data.code === "EMAIL_NOT_VERIFIED" || message.toLowerCase().includes("verify your email")) {
+        if (
+          data.code === "EMAIL_NOT_VERIFIED" ||
+          message.toLowerCase().includes("verify your email")
+        ) {
           setNeedsVerification(true);
           setError(message);
           return;
@@ -135,8 +136,8 @@ export default function BookingCalendar({
                 Booking request sent!
               </p>
               <p className="mt-1 text-sm text-green-700 dark:text-green-300">
-                {artistName} will review your request and send a quotation (valid 24 hours).
-                Pay the RM {BOOKING_FEE_RM} booking fee from your dashboard to secure the date.
+                {artistName} will review your request and send a quotation (valid 24 hours). Pay the
+                RM {BOOKING_FEE_RM} booking fee from your dashboard to secure the date.
               </p>
             </div>
           </div>

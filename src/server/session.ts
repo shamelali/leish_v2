@@ -1,6 +1,15 @@
 import { SignJWT, jwtVerify } from "jose";
 import type { Role } from "@/lib/types";
-import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getDb } from "@/server/db";
+import { logger } from "@/server/logger";
+
+/**
+ * Session management: a signed, httpOnly, same-site cookie holding a JWT.
+ * Each token carries a unique `jti` recorded in the `sessions` table so a
+ * session can be revoked server-side (e.g. on logout) before it naturally
+ * expires. Revocation state lives in the same db-facade (SQLite/Postgres) as
+ * the rest of the app — no external dependency required.
+ */
 
 const COOKIE_NAME = "leish_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
@@ -11,6 +20,7 @@ function getSecret(): Uint8Array {
     if (process.env.NODE_ENV === "production") {
       throw new Error("SESSION_SECRET is required in production");
     }
+    // Dev-only fallback so the demo works without configuration.
     return new TextEncoder().encode("dev-only-insecure-secret-change-me");
   }
   return new TextEncoder().encode(secret);
@@ -25,55 +35,69 @@ export interface SessionPayload {
 }
 
 export async function createSessionToken(payload: SessionPayload): Promise<string> {
-  const jti = payload.jti;
-  const { sub, email, name, role } = payload;
+  const { sub, email, name, role, jti } = payload;
 
-  const jwt = new SignJWT({ sub, email, name, role, jti })
+  const jwt = await new SignJWT({ email, name, role, jti })
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(payload.sub)
+    .setSubject(sub)
     .setIssuedAt()
-    .setExpirationTime(`${SESSION_TTL_SECONDS}s`);
+    .setExpirationTime(`${SESSION_TTL_SECONDS}s`)
+    .sign(getSecret());
 
-  // Store JTI in sessions table for revocation tracking
-  const supabase = createServiceRoleClient();
-  const { error } = await supabase.from("sessions").insert({
-    jti,
-    user_id: payload.sub,
-    expires_at: new Date(Date.now() + SESSION_TTL_SECONDS * 1000),
-  });
-
-  if (error) {
-    console.error("[session] failed to insert jti into sessions table", error);
+  // Record the JTI so the session can be revoked before its natural expiry.
+  try {
+    const db = getDb();
+    const now = new Date();
+    await db
+      .prepare(
+        "INSERT INTO sessions (jti, user_id, revoked, expires_at, created_at) VALUES (@jti, @user_id, 0, @expires_at, @created_at)",
+      )
+      .run({
+        jti,
+        user_id: sub,
+        expires_at: new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString(),
+        created_at: now.toISOString(),
+      });
+  } catch (err) {
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      "[session] failed to record jti",
+    );
   }
 
-  return jwt.sign(getSecret());
+  return jwt;
 }
 
 export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
 
-    if (!payload.sub || !payload.email || !payload.name || !payload.role || !payload.jti) return null;
-
-    // Check if JTI is revoked in sessions table
-    const supabase = createServiceRoleClient();
-    const { data, error } = await supabase
-      .from("sessions")
-      .select("revoked")
-      .eq("jti", payload.jti)
-      .single();
-
-    if (error || data?.revoked) {
-      // Token is revoked or not found in blacklist — invalidate it
+    if (!payload.sub || !payload.email || !payload.name || !payload.role || !payload.jti) {
       return null;
     }
 
+    // Reject tokens whose JTI has been explicitly revoked.
+    try {
+      const db = getDb();
+      const row = (await db
+        .prepare("SELECT revoked FROM sessions WHERE jti = ?")
+        .get(String(payload.jti))) as { revoked: number } | undefined;
+      if (row && row.revoked) return null;
+    } catch (err) {
+      // On a lookup failure, fail open on validity (the JWT signature and
+      // expiry still gate access) but log for visibility.
+      logger.error(
+        { err: err instanceof Error ? err.message : String(err) },
+        "[session] revocation lookup failed",
+      );
+    }
+
     return {
-      sub: payload.sub,
+      sub: String(payload.sub),
       email: String(payload.email),
       name: String(payload.name),
       role: payload.role as Role,
-      jti: payload.jti,
+      jti: String(payload.jti),
     };
   } catch {
     return null;
@@ -96,13 +120,13 @@ export function sessionCookieOptions() {
 
 /** Revoke a JTI (call on logout). */
 export async function revokeSession(jti: string): Promise<void> {
-  const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("sessions")
-    .update({ revoked: true })
-    .eq("jti", jti);
-
-  if (error) {
-    console.error("[session] failed to revoke JTI", error);
+  try {
+    const db = getDb();
+    await db.prepare("UPDATE sessions SET revoked = 1 WHERE jti = ?").run(jti);
+  } catch (err) {
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      "[session] failed to revoke jti",
+    );
   }
 }

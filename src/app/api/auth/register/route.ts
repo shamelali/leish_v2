@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     role,
     password: hashPassword(password),
     email_verified: 0,
-    consent,
+    consent: consent ? 1 : 0,
     consent_timestamp: consentTimestamp ?? new Date().toISOString(),
     created_at: new Date().toISOString(),
   };

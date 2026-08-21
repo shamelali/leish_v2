@@ -1,1 +1,25 @@
-export default function ContactPage(){return <div className="mx-auto max-w-3xl p-10"><h1 className="text-4xl font-bold">Contact</h1><div className="mt-8 grid sm:grid-cols-2 gap-4"><div className="border rounded-2xl p-6"><h3 className="font-semibold">General</h3><p className="text-sm mt-2">hello@leish.my<br/>Cyberjaya, Selangor</p></div><div className="border rounded-2xl p-6"><h3 className="font-semibold">DPO</h3><p className="text-sm mt-2">dpo@leish.my<br/>PDPA requests</p></div></div></div>}
+export default function ContactPage() {
+  return (
+    <div className="mx-auto max-w-3xl p-10">
+      <h1 className="text-4xl font-bold">Contact</h1>
+      <div className="mt-8 grid sm:grid-cols-2 gap-4">
+        <div className="border rounded-2xl p-6">
+          <h3 className="font-semibold">General</h3>
+          <p className="text-sm mt-2">
+            hello@leish.my
+            <br />
+            Cyberjaya, Selangor
+          </p>
+        </div>
+        <div className="border rounded-2xl p-6">
+          <h3 className="font-semibold">DPO</h3>
+          <p className="text-sm mt-2">
+            dpo@leish.my
+            <br />
+            PDPA requests
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

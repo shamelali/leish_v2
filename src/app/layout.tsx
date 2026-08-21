@@ -8,9 +8,9 @@ import { Footer } from "@/components/Footer";
 
 /** CSP nonce set by middleware per-request; applied to script tags so script-src
  * can omit 'unsafe-inline'. Falls back to undefined in SSR edge cases. */
-function useCspNonce(): string | undefined {
+async function getCspNonce(): Promise<string | undefined> {
   try {
-    return headers().get("x-nonce") ?? undefined;
+    return (await headers()).get("x-nonce") ?? undefined;
   } catch {
     return undefined;
   }
@@ -30,8 +30,7 @@ export const metadata: Metadata = {
     locale: "en_MY",
     siteName: "Leish!",
     title: "Leish! — Beauty Booking Marketplace",
-    description:
-      "Book beauty anywhere. Discover top-rated makeup artists across Malaysia.",
+    description: "Book beauty anywhere. Discover top-rated makeup artists across Malaysia.",
     images: [
       {
         url: "/images/leish-light.jpeg",
@@ -74,7 +73,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const nonce = useCspNonce();
+  const nonce = await getCspNonce();
 
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>

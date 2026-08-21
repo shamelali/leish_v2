@@ -41,16 +41,17 @@ modern Next.js application.
 
 - [Next.js 16](https://nextjs.org) (App Router) + React 19 + TypeScript
 - [Tailwind CSS 4](https://tailwindcss.com)
-- **Dual persistence** — PostgreSQL (`DATABASE_URL` set — use the Supabase
+- **Dual persistence** — PostgreSQL (`DATABASE_URL` set — use a Neon/Supabase
   pooler connection string in prod) or Node 22's built-in `node:sqlite` (no URL —
   local dev/tests). Same async API: `await getDb().prepare(sql).get/all/run()`.
   Schema applied automatically for SQLite; `npm run db:migrate` provisions
   PostgreSQL explicitly
 - [zod](https://zod.dev) request validation · [jose](https://github.com/panva/jose) session JWT
 - Catalog data (artists/studios) lives in `src/lib/data.ts`; users, bookings,
-  quotations and payments live in the db-facade store (SQLite or Postgres)
-- `/admin/**` pages and the proxy middleware use the Supabase client
-  (`NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` required for those)
+  quotations, payments and sessions live in the db-facade store (SQLite or Postgres)
+- **Sessions** — stateless HS256 JWT in an httpOnly, same-site cookie, with a
+  `jti` recorded in the `sessions` table so logout revokes the token server-side
+  before its 7-day expiry
 
 ## API routes
 

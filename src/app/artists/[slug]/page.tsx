@@ -26,9 +26,7 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
             Makeup Artists
           </Link>
           <span>/</span>
-          <span className="font-medium text-stone-900 dark:text-stone-200">
-            {artist.name}
-          </span>
+          <span className="font-medium text-stone-900 dark:text-stone-200">{artist.name}</span>
         </nav>
 
         <div className="grid gap-10 lg:grid-cols-3">

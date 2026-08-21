@@ -1,1 +1,19 @@
-export default function TermsPage(){return <div className="mx-auto max-w-3xl p-10"><h1 className="text-4xl font-bold">Terms of Service</h1><p className="text-sm text-stone-500 mt-2">Last updated: 20 Aug 2026 — Malaysia Law</p><div className="mt-8 space-y-6 text-sm leading-7"><p>Leish! is a beauty booking marketplace. By using leish.my you agree to these terms.</p><h2 className="font-semibold text-lg">Bookings & Payments</h2><p>Payments via Billplz. Commission displayed at checkout. Prices in MYR.</p><h2 className="font-semibold text-lg">Cancellation</h2><p>>48h 100% refund, 24-48h 50%, <24h no refund. Artist cancels = full refund.</p><h2 className="font-semibold text-lg">Governing Law</h2><p>Malaysia, PDPA 2010. Contact: hello@leish.my</p></div></div>}
+export default function TermsPage() {
+  return (
+    <div className="mx-auto max-w-3xl p-10">
+      <h1 className="text-4xl font-bold">Terms of Service</h1>
+      <p className="text-sm text-stone-500 mt-2">Last updated: 20 Aug 2026 — Malaysia Law</p>
+      <div className="mt-8 space-y-6 text-sm leading-7">
+        <p>Leish! is a beauty booking marketplace. By using leish.my you agree to these terms.</p>
+        <h2 className="font-semibold text-lg">Bookings & Payments</h2>
+        <p>Payments via Billplz. Commission displayed at checkout. Prices in MYR.</p>
+        <h2 className="font-semibold text-lg">Cancellation</h2>
+        <p>
+          {">"}48h 100% refund, 24-48h 50%, {"<"}24h no refund. Artist cancels = full refund.
+        </p>
+        <h2 className="font-semibold text-lg">Governing Law</h2>
+        <p>Malaysia, PDPA 2010. Contact: hello@leish.my</p>
+      </div>
+    </div>
+  );
+}
