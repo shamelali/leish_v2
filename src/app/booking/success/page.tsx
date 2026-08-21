@@ -38,7 +38,14 @@ export default async function BookingSuccessPage({
           "SELECT id, status, service, artist_name, date, time FROM bookings WHERE id = ? AND user_id = ?",
         )
         .get(bookingId, payload.sub)) as
-        | { id: string; status: string; service: string; artist_name: string; date: string; time: string }
+        | {
+            id: string;
+            status: string;
+            service: string;
+            artist_name: string;
+            date: string;
+            time: string;
+          }
         | undefined)
     : undefined;
 
@@ -66,8 +73,18 @@ export default async function BookingSuccessPage({
           ) : isConfirmed ? (
             <>
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100 dark:bg-green-950">
-                <svg className="h-8 w-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <svg
+                  className="h-8 w-8 text-green-600 dark:text-green-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
               </div>
               <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">
@@ -80,8 +97,18 @@ export default async function BookingSuccessPage({
           ) : (
             <>
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950">
-                <svg className="h-8 w-8 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="h-8 w-8 text-amber-600 dark:text-amber-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
               </div>
               <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">

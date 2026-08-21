@@ -1,3 +1,9 @@
-allowBuilds:
-  core-js: set this to true or false
-  unrs-resolver: set this to true or false
+# pnpm (v10+) disables dependency build scripts by default. No dependency needs
+# a postinstall build to run/build this app; the one transitive package that
+# ships a build script (unrs-resolver, via lint tooling) is intentionally
+# skipped. strictDepBuilds:false stops pnpm v11 from exiting non-zero with
+# ERR_PNPM_IGNORED_BUILDS, which would otherwise break CI / Vercel installs.
+strictDepBuilds: false
+ignoredBuiltDependencies:
+  - unrs-resolver
+onlyBuiltDependencies: []

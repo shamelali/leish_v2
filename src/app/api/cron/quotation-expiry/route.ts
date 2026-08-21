@@ -3,22 +3,24 @@ import { getDb, type BookingRow } from "@/server/db";
 import { findExpiredQuotations, markQuotationExpired } from "@/server/quotations";
 import { sendQuotationExpiredEmail } from "@/server/booking-emails";
 import { tryRoute } from "@/server/http";
+import { authorizeCron } from "@/server/cron-auth";
 import { logger } from "@/server/logger";
 
+export const dynamic = "force-dynamic";
+
 /**
- * POST /api/cron/quotation-expiry
+ * GET/POST /api/cron/quotation-expiry
  * Marks pending quotations past their 24h window as expired and emails the
- * clients. Guarded by the CRON_SECRET header so only the scheduler can run it.
+ * clients. Guarded by CRON_SECRET so only the scheduler can run it.
  *
- * Wire it in Vercel: Settings → Cron Jobs → POST /api/cron/quotation-expiry
- * (e.g. hourly) with header `x-cron-secret: <CRON_SECRET>`.
+ * Vercel Cron (configured in vercel.json) issues a GET with
+ * `Authorization: Bearer <CRON_SECRET>`; manual callers may use the
+ * `x-cron-secret` header instead.
  */
-export const POST = tryRoute(
-  async function POST(request: Request) {
-    const secret = process.env.CRON_SECRET;
-    if (secret && request.headers.get("x-cron-secret") !== secret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+const handler = tryRoute(
+  async function run(request: Request) {
+    const unauthorized = authorizeCron(request);
+    if (unauthorized) return unauthorized;
 
     const expired = await findExpiredQuotations();
     let marked = 0;
@@ -43,5 +45,8 @@ export const POST = tryRoute(
     logger.info({ found: expired.length, marked }, "quotation expiry sweep complete");
     return NextResponse.json({ found: expired.length, expired: marked });
   },
-  { route: "POST /api/cron/quotation-expiry" },
+  { route: "/api/cron/quotation-expiry" },
 );
+
+export const GET = handler;
+export const POST = handler;

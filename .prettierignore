@@ -1,0 +1,19 @@
+# Dependencies & build output
+node_modules
+.next
+out
+build
+dist
+
+# Generated artifacts
+coverage
+playwright-report
+test-results
+*.tsbuildinfo
+next-env.d.ts
+
+# Lockfiles (managed by the package manager)
+pnpm-lock.yaml
+
+# Data
+data

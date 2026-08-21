@@ -3,7 +3,10 @@ import { getDb, type BookingRow, type UserRow } from "@/server/db";
 import { getActiveQuotation } from "@/server/quotations";
 import { sendBalanceReminder } from "@/server/booking-emails";
 import { tryRoute } from "@/server/http";
+import { authorizeCron } from "@/server/cron-auth";
 import { logger } from "@/server/logger";
+
+export const dynamic = "force-dynamic";
 
 const BOOKING_FEE_SEN = 20_000;
 const BALANCE_DUE_DAYS_BEFORE = 3;
@@ -11,18 +14,16 @@ const REMINDER_WINDOW_DAYS = 4; // email when due within 4 days (or overdue < 2)
 const REMINDER_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // max one per 7 days
 
 /**
- * POST /api/cron/balance-reminders
+ * GET/POST /api/cron/balance-reminders
  * Automatically reminds clients whose remaining balance is due soon
  * (3 days before the event, per the business rule). One email per booking
  * per 7-day window (tracked by bookings.balance_reminder_at).
- * Guarded by the CRON_SECRET header like the other cron.
+ * Guarded by CRON_SECRET (Vercel Cron Bearer token or x-cron-secret header).
  */
-export const POST = tryRoute(
-  async function POST(request: Request) {
-    const secret = process.env.CRON_SECRET;
-    if (secret && request.headers.get("x-cron-secret") !== secret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+const handler = tryRoute(
+  async function run(request: Request) {
+    const unauthorized = authorizeCron(request);
+    if (unauthorized) return unauthorized;
 
     const db = getDb();
     const today = new Date();
@@ -91,5 +92,8 @@ export const POST = tryRoute(
     logger.info({ candidates: rows.length, reminded, skipped }, "balance reminder sweep complete");
     return NextResponse.json({ candidates: rows.length, reminded, skipped });
   },
-  { route: "POST /api/cron/balance-reminders" },
+  { route: "/api/cron/balance-reminders" },
 );
+
+export const GET = handler;
+export const POST = handler;
