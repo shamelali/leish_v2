@@ -1,40 +1,56 @@
-name: Leish v2 CI
+name: CI
 
+# Single quality gate for the repo. Kept intentionally lean so it stays cheap
+# on GitHub Free (Actions minutes are metered for private repos): it runs only
+# on PRs into main and on direct pushes to main, and cancels superseded runs.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+# Cancel an in-progress run when a new commit is pushed to the same ref, so we
+# don't pay for stale runs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
-      # Minimal env for test suite - SUPABASE_SERVICE_ROLE_KEY skipped for unit tests
-      NODE_ENV: test
-      # Required for typecheck but won't be set in CI test job
-      POSTGRES_URL: ""
+      CI: "true"
+      # The app uses node:sqlite in CI (no DATABASE_URL); skip prod env checks.
+      SKIP_ENV_VALIDATION: "1"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "22"
+          cache: "pnpm"
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: npx tsc --noEmit
+      - name: Format check
+        run: pnpm run format:check
 
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
 
-      - name: Run tests (vitest, no Supabase deps)
-        run: npx vitest run --reporter=verbose 2>&1 | head -100
+      - name: Typecheck
+        run: pnpm run typecheck
 
-      - name: Check test suite summary
-        run: |
-          echo "Test files passed: $(npx vitest run --reporter=verbose 2>&1 | grep -c 'Tests')" || true
+      - name: Test (coverage thresholds enforced in vitest.config.mts)
+        run: pnpm run test:coverage
+
+      - name: Build
+        run: pnpm run build
