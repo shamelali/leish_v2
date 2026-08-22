@@ -13,7 +13,9 @@ interface SettingRow {
 const DEFAULT_SETTINGS: Record<string, string> = {
   site_name: "Leish!",
   contact_email: "hello@leish.my",
-  booking_fee_sen: "20000",
+  booking_fee_sen: "5000",
+  commission_rate_bps: "1000",
+  commission_waiver_sen: "10000",
   session_ttl_days: "7",
 };
 

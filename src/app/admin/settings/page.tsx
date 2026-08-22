@@ -10,8 +10,19 @@ const SETTING_LABELS: Record<string, { label: string; description: string }> = {
   site_name: { label: "Site Name", description: "The display name of the platform" },
   contact_email: { label: "Contact Email", description: "Public support email address" },
   booking_fee_sen: {
-    label: "Booking Fee (sen)",
-    description: "Default booking fee in Malaysian sen (e.g., 20000 = RM 200)",
+    label: "Booking Deposit (sen)",
+    description:
+      "Flat non-refundable deposit securing the slot, in Malaysian sen (e.g., 5000 = RM 50)",
+  },
+  commission_rate_bps: {
+    label: "Commission Rate (bps)",
+    description:
+      "Platform commission in basis points of the quote total, deducted from the artist payout (1000 = 10%). Clients always pay exactly the quoted price.",
+  },
+  commission_waiver_sen: {
+    label: "Commission Waiver (sen)",
+    description:
+      "Quote totals below this amount are commission-free (e.g., 10000 = waive commission under RM 100)",
   },
   session_ttl_days: {
     label: "Session TTL (days)",

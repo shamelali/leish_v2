@@ -85,3 +85,14 @@ export function quotationStatusVariant(status: string): BadgeVariant {
       return "default";
   }
 }
+
+export function payoutStatusVariant(status: string): BadgeVariant {
+  switch (status) {
+    case "settled":
+      return "success";
+    case "failed":
+      return "danger";
+    default:
+      return "warning";
+  }
+}
