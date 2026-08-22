@@ -1,14 +1,14 @@
 import type { BookingRow } from "./db";
 import { getActiveQuotation } from "./quotations";
-import { getPaymentForBooking } from "./payments";
+import { getPaymentsForBooking } from "./payments";
+import { getBookingFeeSen } from "./settings";
 
 /**
  * Invoice builder — derives a structured invoice from a booking:
- * quotation line items + the RM 200 booking fee. Rendered as HTML by the
- * /api/bookings/[id]/invoice route (openable/printable in the browser).
+ * quotation line items + the non-refundable booking deposit (default RM 50).
+ * Rendered as HTML by the /api/bookings/[id]/invoice route
+ * (openable/printable in the browser).
  */
-
-export const BOOKING_FEE_SEN = 20_000;
 
 export interface InvoiceLine {
   label: string;
@@ -25,7 +25,8 @@ export interface Invoice {
   eventType: string | null;
   venue: string | null;
   lines: InvoiceLine[];
-  bookingFee: number;
+  /** Non-refundable booking deposit (sen). */
+  depositSen: number;
   total: number;
   paid: number;
   balanceDue: number;
@@ -46,9 +47,12 @@ export async function buildInvoice(booking: BookingRow): Promise<Invoice | null>
   for (const e of extras) lines.push({ label: e.label, amount: e.amount });
 
   const total = quotation.total;
-  const payment = await getPaymentForBooking(booking.id);
-  const paid = payment?.status === "paid" ? payment.amount : 0;
-  const balanceDue = Math.max(0, total - BOOKING_FEE_SEN);
+  const payments = await getPaymentsForBooking(booking.id);
+  const paid = payments
+    .filter((p) => p.status === "paid")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const balanceDue = Math.max(0, total - paid);
+  const depositSen = await getBookingFeeSen();
 
   return {
     number: `INV-${booking.id.slice(0, 8).toUpperCase()}`,
@@ -60,7 +64,7 @@ export async function buildInvoice(booking: BookingRow): Promise<Invoice | null>
     eventType: booking.event_type,
     venue: booking.venue,
     lines,
-    bookingFee: BOOKING_FEE_SEN,
+    depositSen,
     total,
     paid,
     balanceDue,
@@ -92,7 +96,7 @@ export function renderInvoiceHtml(invoice: Invoice): string {
   <table>
     <tr><th>Item</th><th style="text-align:right">Amount</th></tr>
     ${lines}
-    <tr><td>Booking fee (non-refundable)</td><td style="text-align:right">${fmt(invoice.bookingFee)}</td></tr>
+    <tr><td>Booking deposit (non-refundable)</td><td style="text-align:right">${fmt(invoice.depositSen)}</td></tr>
     <tr class="total"><td>Total</td><td style="text-align:right">${fmt(invoice.total)}</td></tr>
     <tr><td>Paid</td><td style="text-align:right">${fmt(invoice.paid)}</td></tr>
     <tr><td><strong>Balance due</strong></td><td style="text-align:right"><strong>${fmt(invoice.balanceDue)}</strong></td></tr>

@@ -58,7 +58,7 @@ describe("booking fee payments (dev provider)", () => {
     await getDb().prepare("DELETE FROM users").run();
   });
 
-  it("charges the flat RM 200 booking fee", async () => {
+  it("charges the flat booking deposit (default RM 50)", async () => {
     const bookingId = await createTestUserAndBooking();
     const payment = await createBookingPayment(bookingId, "deposit", FEE);
 

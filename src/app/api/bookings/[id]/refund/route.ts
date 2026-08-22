@@ -7,10 +7,14 @@ import { logger } from "@/server/logger";
 
 /**
  * POST /api/bookings/[id]/refund
- * Refund the paid balance payment when a confirmed booking is cancelled.
- * The booking deposit is non-refundable and is never touched here.
+ * Refund the paid balance payment when a confirmed booking is cancelled
+ * MORE than 3 days before the event. The booking deposit is non-refundable,
+ * and inside the 3-day window the full balance is kept by the artist
+ * (late-cancellation protection).
  * Owner only.
  */
+const BALANCE_REFUND_CUTOFF_DAYS = 3;
+
 export const POST = statefulRoute(
   async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -38,6 +42,21 @@ export const POST = statefulRoute(
     if (!balancePayment || balancePayment.status !== "paid") {
       return jsonError("No paid balance to refund for this booking", 409);
     }
+
+    // Late-cancellation protection: inside the 3-day window the balance is
+    // non-refundable (the artist reserved the slot).
+    if (booking.date) {
+      const cutoff = new Date(
+        new Date(`${booking.date}T00:00:00`).getTime() - BALANCE_REFUND_CUTOFF_DAYS * 86_400_000,
+      );
+      if (Date.now() >= cutoff.getTime()) {
+        return jsonError(
+          `The refund window closed 3 days before the event (${booking.date}). The balance is non-refundable for late cancellations.`,
+          409,
+        );
+      }
+    }
+
     const balanceAmount = balancePayment.amount;
 
     const payment = await refundBalancePayment(balancePayment);

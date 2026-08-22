@@ -6,7 +6,8 @@ import { getDb, type BookingRow } from "./db";
 import { hashPassword } from "./password";
 import { createQuotation } from "./quotations";
 import { createBookingPayment } from "./payments";
-import { buildInvoice, renderInvoiceHtml, stripInvoicePii, BOOKING_FEE_SEN } from "./invoices";
+import { buildInvoice, renderInvoiceHtml, stripInvoicePii } from "./invoices";
+import { DEFAULT_BOOKING_FEE_SEN } from "./settings";
 
 async function createTestBookingWithQuotation() {
   const userId = randomUUID();
@@ -77,8 +78,8 @@ describe("invoices", () => {
       expect(invoice!.service).toBe("Solemnization Makeup");
       expect(invoice!.lines).toHaveLength(5); // base + travel + early call + accommodation + extra
       expect(invoice!.total).toBe(55000); // 30000+5000+3000+2000+15000
-      expect(invoice!.bookingFee).toBe(BOOKING_FEE_SEN);
-      expect(invoice!.balanceDue).toBe(35000); // 55000 - 20000
+      expect(invoice!.depositSen).toBe(DEFAULT_BOOKING_FEE_SEN);
+      expect(invoice!.balanceDue).toBe(55000); // total − paid (nothing paid yet)
     });
 
     it("returns null when no quotation exists", async () => {
@@ -120,7 +121,7 @@ describe("invoices", () => {
 
     it("includes paid amount when payment is confirmed", async () => {
       const { bookingId } = await createTestBookingWithQuotation();
-      await createBookingPayment(bookingId, "deposit", BOOKING_FEE_SEN);
+      await createBookingPayment(bookingId, "deposit", DEFAULT_BOOKING_FEE_SEN);
       // Mark as paid
       await getDb()
         .prepare("UPDATE payments SET status = 'paid' WHERE booking_id = ?")
@@ -130,7 +131,7 @@ describe("invoices", () => {
         .prepare("SELECT * FROM bookings WHERE id = ?")
         .get(bookingId)) as BookingRow;
       const invoice = await buildInvoice(booking);
-      expect(invoice!.paid).toBe(BOOKING_FEE_SEN);
+      expect(invoice!.paid).toBe(DEFAULT_BOOKING_FEE_SEN);
     });
 
     it("skips line items with zero amounts", async () => {
@@ -177,7 +178,7 @@ describe("invoices", () => {
         eventType: "Bridal",
         venue: null,
         lines: [{ label: "Base fee", amount: 200_00 }],
-        bookingFee: 200_00,
+        depositSen: 200_00,
         total: 200_00,
         paid: 200_00,
         balanceDue: 0,
@@ -200,7 +201,7 @@ describe("invoices", () => {
         eventType: "Bridal",
         venue: null,
         lines: [],
-        bookingFee: 20000,
+        depositSen: 20000,
         total: 20000,
         paid: 0,
         balanceDue: 0,

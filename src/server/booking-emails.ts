@@ -7,6 +7,8 @@ import {
   invoiceEmailHtml,
   quotationExpiredHtml,
   balanceReminderHtml,
+  balanceBillHtml,
+  payoutSettledHtml,
   bookingStatusChangedHtml,
 } from "./email-templates";
 
@@ -83,7 +85,7 @@ export async function sendQuotationEmail(params: {
       `  • Event: ${params.date} at ${params.time}`,
       `  • Total: RM ${total}`,
       ``,
-      `You have 24 hours to review and pay the RM 200 booking fee to secure your slot.`,
+      `You have 24 hours to review and pay the booking deposit to secure your slot.`,
       `The quotation expires at ${expires} if no action is taken.`,
       ``,
       `Review it here: ${dashboardUrl}`,
@@ -213,6 +215,82 @@ export async function sendBalanceReminder(params: {
   });
 }
 
+export async function sendBalanceBillEmail(params: {
+  bookingId: string;
+  ownerUserId: string;
+  artistName: string;
+  service: string;
+  date: string;
+  balanceAmount: number; // sen
+  payUrl: string;
+}) {
+  if (!(await isEmailEnabled(params.ownerUserId, "balance_reminder"))) return;
+  const email = await getOwnerEmail(params.ownerUserId);
+  if (!email) return;
+  await sendEmail({
+    to: email,
+    subject: `Your balance payment is ready — Leish!`,
+    text: [
+      `Hi,`,
+      ``,
+      `The remaining balance for your booking with ${params.artistName} is now payable:`,
+      `  • Service: ${params.service}`,
+      `  • Event date: ${params.date}`,
+      `  • Balance due: RM ${(params.balanceAmount / 100).toFixed(2)}`,
+      `  • Reference: #${params.bookingId.slice(0, 8)}`,
+      ``,
+      `Pay securely here: ${params.payUrl}`,
+      ``,
+      `— The Leish! team`,
+    ].join("\n"),
+    html: balanceBillHtml({
+      artistName: params.artistName,
+      service: params.service,
+      date: params.date,
+      balanceAmount: (params.balanceAmount / 100).toFixed(2),
+      bookingId: params.bookingId,
+      payUrl: params.payUrl,
+    }),
+  });
+}
+
+export async function notifyPayoutSettled(params: {
+  artistUserId: string;
+  service: string;
+  eventDate: string;
+  netSen: number;
+}) {
+  const artist = (await getDb()
+    .prepare("SELECT email FROM users WHERE id = ?")
+    .get(params.artistUserId)) as { email: string } | undefined;
+  if (!artist?.email) return;
+  // Artists have no per-preference key for payouts yet — reuse status_changed.
+  if (!(await isEmailEnabled(params.artistUserId, "status_changed"))) return;
+  const payoutsUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/dashboard/payouts`;
+  await sendEmail({
+    to: artist.email,
+    subject: `Your payout has been settled — Leish!`,
+    text: [
+      `Hi,`,
+      ``,
+      `Good news — your payout has been settled:`,
+      `  • Service: ${params.service}`,
+      `  • Event date: ${params.eventDate}`,
+      `  • Net amount: RM ${(params.netSen / 100).toFixed(2)}`,
+      ``,
+      `View your payouts: ${payoutsUrl}`,
+      ``,
+      `— The Leish! team`,
+    ].join("\n"),
+    html: payoutSettledHtml({
+      service: params.service,
+      eventDate: params.eventDate,
+      netAmount: (params.netSen / 100).toFixed(2),
+      payoutsUrl,
+    }),
+  });
+}
+
 export async function notifyBookingStatusChanged(params: {
   bookingId: string;
   ownerUserId: string;
@@ -229,7 +307,7 @@ export async function notifyBookingStatusChanged(params: {
   const headline: Record<BookingStatus, string> = {
     requested: "is awaiting the artist's response",
     accepted: "has been accepted — a quotation is waiting for your review",
-    confirmed: "has been confirmed 🎉 (booking fee paid)",
+    confirmed: "has been confirmed 🎉 (deposit paid)",
     completed: "has been completed — enjoy your look!",
     cancelled: "has been cancelled",
   };

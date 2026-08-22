@@ -133,7 +133,7 @@ d("booking lifecycle (customer flow)", () => {
 
     // 7. Customer pays booking fee (dev provider)
     const payment = await createBookingPayment(bkId, "deposit", 20000);
-    expect(payment.amount).toBe(20000); // RM 200
+    expect(payment.amount).toBe(20000);
     expect(payment.status).toBe("required");
     expect(payment.provider).toBe("dev");
 

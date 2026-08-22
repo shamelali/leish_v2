@@ -247,6 +247,58 @@ export function bookingStatusChangedHtml(params: {
   });
 }
 
+export function balanceBillHtml(params: {
+  artistName: string;
+  service: string;
+  date: string;
+  balanceAmount: string;
+  bookingId: string;
+  payUrl: string;
+}): string {
+  return layout({
+    title: "Your balance payment is ready",
+    content: `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Balance payment ready</h2>
+      <p style="margin:0 0 24px;font-size:14px;color:#374151;">
+        The remaining balance for your booking with <strong>${params.artistName}</strong> is now payable:
+      </p>
+      <div style="background-color:#f9fafb;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+        ${infoRow("Service", params.service)}
+        ${infoRow("Event date", params.date)}
+        ${infoRow("Balance due", `RM ${params.balanceAmount}`)}
+        ${infoRow("Reference", `#${params.bookingId.slice(0, 8)}`)}
+      </div>
+      ${ctaButton(params.payUrl, "Pay Balance")}
+      <p style="margin:16px 0 0;font-size:12px;color:#6b7280;">
+        If the button doesn't work, copy this link into your browser:<br>${params.payUrl}
+      </p>
+    `,
+  });
+}
+
+export function payoutSettledHtml(params: {
+  service: string;
+  eventDate: string;
+  netAmount: string;
+  payoutsUrl: string;
+}): string {
+  return layout({
+    title: "Payout settled",
+    content: `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Payout settled 🎉</h2>
+      <p style="margin:0 0 24px;font-size:14px;color:#374151;">
+        Your payout has been marked as settled:
+      </p>
+      <div style="background-color:#f9fafb;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+        ${infoRow("Service", params.service)}
+        ${infoRow("Event date", params.eventDate)}
+        ${infoRow("Net amount", `RM ${params.netAmount}`)}
+      </div>
+      ${ctaButton(params.payoutsUrl, "View Payouts")}
+    `,
+  });
+}
+
 export function verifyEmailHtml(params: { name: string; verifyUrl: string }): string {
   return layout({
     title: "Verify your email",

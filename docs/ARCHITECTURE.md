@@ -73,11 +73,18 @@ The public booking loop is protected by the session checks inside the
 `/api/*` route handlers (`src/server/session.ts`, per-route role checks), not
 by RLS.
 
-## Money logic lives in one place
+## Money logic lives in a few places
 
-- `src/server/payments.ts` — the only place the RM 200 booking fee
-  (`BOOKING_FEE_SEN`), Billplz bill creation, refund rules and webhook
-  signature verification live.
+- `src/server/settings.ts` — the business-model knobs: booking deposit
+  (`booking_fee_sen`, default RM 50), commission rate (`commission_rate_bps`,
+  default 10%, artist-side) and the commission waiver threshold. Includes the
+  pure `computeCommission()` helper.
+- `src/server/payments.ts` — Billplz bill creation (deposit + balance
+  payments, one per booking per type), refund rules and webhook signature
+  verification.
+- `src/server/payouts.ts` — artist settlement rows created when a balance is
+  paid: net = quote total − commission − deposit; settled manually via
+  `/admin/payouts`.
 - `src/server/quotations.ts` — the only place quotation totals (base +
   travel + early call + accommodation + extras) are computed, along with
   the 24h expiry window.

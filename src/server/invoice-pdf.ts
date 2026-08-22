@@ -79,7 +79,7 @@ export async function buildInvoicePdf(invoice: Invoice): Promise<Uint8Array> {
 
   // Line items
   const rows: Array<[string, number]> = invoice.lines.map((l) => [l.label, l.amount]);
-  rows.push(["Booking fee (non-refundable)", invoice.bookingFee]);
+  rows.push(["Booking deposit (non-refundable)", invoice.depositSen]);
   rows.push(["Total", invoice.total]);
   rows.push(["Paid", invoice.paid]);
   rows.push(["Balance due", invoice.balanceDue]);

@@ -7,8 +7,9 @@ import {
   activePaymentProvider,
 } from "@/server/payments";
 import { getBookingFeeSen } from "@/server/settings";
+import { sendBalanceBillEmail } from "@/server/booking-emails";
 import { getActiveQuotation } from "@/server/quotations";
-import { jsonError, statefulRoute } from "@/server/http";
+import { jsonError, statefulRoute, requestOrigin } from "@/server/http";
 import { logger } from "@/server/logger";
 
 /**
@@ -95,6 +96,19 @@ export const POST = statefulRoute(
       { bookingId: booking.id, amount: payment.amount },
       "booking balance bill created",
     );
+
+    // Email the client the payment link (falls back to the dashboard when no
+    // hosted bill URL exists — e.g. dev provider).
+    const payUrl = payment.provider_url ?? `${requestOrigin(request)}/dashboard?booking=${booking.id}`;
+    await sendBalanceBillEmail({
+      bookingId: booking.id,
+      ownerUserId: booking.user_id,
+      artistName: booking.artist_name,
+      service: booking.service,
+      date: booking.date,
+      balanceAmount,
+      payUrl,
+    });
 
     return NextResponse.json(
       {

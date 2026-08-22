@@ -40,7 +40,7 @@ const sampleInvoice: Invoice = {
     { label: "Base fee", amount: 88_000 },
     { label: "Travel", amount: 8_000 },
   ],
-  bookingFee: 20_000,
+  depositSen: 20_000,
   total: 116_000,
   paid: 20_000,
   balanceDue: 96_000,
@@ -68,6 +68,6 @@ describe("buildInvoicePdf", () => {
     expect(text).toContain("Balance due");
     expect(text).toContain("RM 960.00"); // balance 96_000 sen
     expect(text).toContain("Base fee");
-    expect(text).toContain("Booking fee (non-refundable)");
+    expect(text).toContain("Booking deposit (non-refundable)");
   });
 });
