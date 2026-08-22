@@ -8,6 +8,8 @@ import {
   listEntityReviews,
 } from "@/server/catalog";
 import { enforceSameOrigin, jsonError, readJson, tryRoute } from "@/server/http";
+import { rateLimit } from "@/server/ratelimit";
+import { logger } from "@/server/logger";
 import { z } from "zod";
 
 const reviewSchema = z.object({
@@ -51,6 +53,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
   const { user, error } = await requireUser(request);
   if (error) return error;
+
+  // Per-user throttle — review writes hit the ratings aggregate.
+  const limit = await rateLimit(`review:${user!.id}`, 5, 60 * 60 * 1000);
+  if (!limit.allowed) {
+    logger.warn({ userId: user!.id }, "review rate limit exceeded");
+    return NextResponse.json(
+      { error: "Too many review attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) } },
+    );
+  }
 
   const { id } = await ctx.params;
   const artist = await getArtistById(id);
