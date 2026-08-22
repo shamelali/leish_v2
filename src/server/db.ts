@@ -264,7 +264,6 @@ export const PG_SCHEMA = `
     updated_at   TEXT NOT NULL
   );
   -- One payment per booking per type (deposit + balance), never two of the same.
-  CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type);
   CREATE TABLE IF NOT EXISTS payouts (
     id             TEXT PRIMARY KEY,
     artist_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -501,7 +500,6 @@ const SQLITE_SCHEMA = `
     updated_at   TEXT NOT NULL
   );
   -- One payment per booking per type (deposit + balance), never two of the same.
-  CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type);
   CREATE TABLE IF NOT EXISTS payouts (
     id             TEXT PRIMARY KEY,
     artist_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -664,9 +662,13 @@ function migrateSqlite(db: DatabaseSync) {
         SELECT id, booking_id, 'deposit', amount, currency, provider, status, provider_ref, provider_url, created_at, updated_at FROM payments;
       DROP TABLE payments;
       ALTER TABLE payments_new RENAME TO payments;
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type);
     `);
   }
+  // Unique (booking_id, type) — created here (not in SQLITE_SCHEMA) so legacy
+  // databases are rebuilt first and the column exists before indexing.
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type)",
+  );
   const bookingCols = db.prepare("PRAGMA table_info(bookings)").all() as { name: string }[];
   for (const [col, ddl] of [
     ["event_type", "ALTER TABLE bookings ADD COLUMN event_type TEXT"],

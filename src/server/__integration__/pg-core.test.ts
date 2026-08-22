@@ -456,7 +456,7 @@ d("payment constraints", () => {
     ).rejects.toThrow();
   });
 
-  it("enforces unique booking_id on payments", async () => {
+  it("enforces unique (booking_id, type) on payments", async () => {
     const db = getDb();
     const userId = id("pu1");
     const bkId = id("pub");
@@ -487,17 +487,24 @@ d("payment constraints", () => {
 
     await db
       .prepare(
-        "INSERT INTO payments (id, booking_id, amount, currency, provider, status, provider_ref, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO payments (id, booking_id, type, amount, currency, provider, status, provider_ref, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(id("p1"), bkId, 20000, "MYR", "dev", "required", "ref1", now, now);
+      .run(id("p1"), bkId, "deposit", 5000, "MYR", "dev", "required", "ref1", now, now);
 
-    // Second payment for same booking → unique violation
+    // A balance payment for the same booking is allowed (hybrid model).
+    await db
+      .prepare(
+        "INSERT INTO payments (id, booking_id, type, amount, currency, provider, status, provider_ref, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(id("p2"), bkId, "balance", 45000, "MYR", "dev", "required", "ref2", now, now);
+
+    // Second payment of the SAME type → unique violation
     await expect(
       db
         .prepare(
-          "INSERT INTO payments (id, booking_id, amount, currency, provider, status, provider_ref, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO payments (id, booking_id, type, amount, currency, provider, status, provider_ref, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
-        .run(id("p2"), bkId, 20000, "MYR", "dev", "required", "ref2", now, now),
+        .run(id("p3"), bkId, "deposit", 5000, "MYR", "dev", "required", "ref3", now, now),
     ).rejects.toThrow();
   });
 });
