@@ -20,7 +20,13 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
     ["consent", "ALTER TABLE users ADD COLUMN consent INTEGER NOT NULL DEFAULT 0"],
     ["consent_timestamp", "ALTER TABLE users ADD COLUMN consent_timestamp TEXT"],
   ],
-  payments: [["provider_url", "ALTER TABLE payments ADD COLUMN provider_url TEXT"]],
+  payments: [
+    ["provider_url", "ALTER TABLE payments ADD COLUMN provider_url TEXT"],
+    [
+      "type",
+      "ALTER TABLE payments ADD COLUMN type TEXT NOT NULL DEFAULT 'deposit' CHECK (type IN ('deposit','balance'))",
+    ],
+  ],
   email_outbox: [["html", "ALTER TABLE email_outbox ADD COLUMN html TEXT"]],
   email_preferences: [
     [
@@ -53,6 +59,30 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
     ["last_error", "ALTER TABLE email_retries ADD COLUMN last_error TEXT"],
   ],
 };
+
+/**
+ * Reconcile the payments table for the hybrid payment model:
+ * - Drop the legacy UNIQUE(booking_id) constraint (old inline column UNIQUE
+ *   creates a constraint named payments_booking_id_key) so a booking can hold
+ *   both a deposit and a balance payment.
+ * - Add the canonical unique index on (booking_id, type).
+ * No-op when already up to date.
+ */
+async function fixPaymentsUniqueness(pool: Pool): Promise<void> {
+  const { rows } = await pool.query(
+    `SELECT conname FROM pg_constraint
+     WHERE conrelid = 'payments'::regclass AND contype = 'u'`,
+  );
+  for (const row of rows as { conname: string }[]) {
+    if (row.conname === "payments_booking_id_key") {
+      console.log("[migrate] dropping legacy constraint payments_booking_id_key");
+      await pool.query("ALTER TABLE payments DROP CONSTRAINT payments_booking_id_key");
+    }
+  }
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type)",
+  );
+}
 
 /**
  * Reconcile the users.role CHECK constraint on databases created before the
@@ -119,6 +149,7 @@ async function main(): Promise<void> {
     console.log("[migrate] applying db-facade schema (idempotent)…");
     await pool.query(PG_SCHEMA);
     await pool.query(FIX_ROLE_CHECK);
+    await fixPaymentsUniqueness(pool);
 
     // Backfill columns on databases created before they were added.
     for (const [table, columns] of Object.entries(ADDITIVE_COLUMNS)) {
@@ -142,6 +173,7 @@ async function main(): Promise<void> {
       "quotations",
       "messages",
       "payments",
+      "payouts",
       "sessions",
       "admin_audit_log",
       "catalog_overrides",

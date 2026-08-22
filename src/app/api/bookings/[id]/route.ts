@@ -4,12 +4,12 @@ import { verifySessionToken } from "@/server/session";
 import { bookingActionSchema, applyBookingTransition } from "@/server/bookings";
 import { getClaimedArtistIds } from "@/server/artist-profiles";
 import { getPaymentForBooking } from "@/server/payments";
+import { getBookingFeeSen } from "@/server/settings";
 import { getActiveQuotation, serializeQuotation } from "@/server/quotations";
 import { notifyBookingStatusChanged, sendInvoiceEmail } from "@/server/booking-emails";
 import { jsonError, readJson, statefulRoute } from "@/server/http";
 import { logger } from "@/server/logger";
 
-const BOOKING_FEE_SEN = 20_000;
 const BALANCE_DUE_DAYS_BEFORE = 3;
 
 /**
@@ -89,8 +89,10 @@ export const PATCH = statefulRoute(
     );
 
     const quotation = await getActiveQuotation(booking.id);
-    const payment = await getPaymentForBooking(booking.id);
+    const payment = await getPaymentForBooking(booking.id, "deposit");
+    const balancePayment = await getPaymentForBooking(booking.id, "balance");
     const total = quotation?.status === "expired" ? null : (quotation?.total ?? null);
+    const bookingFeeSen = await getBookingFeeSen();
 
     return NextResponse.json({
       booking: {
@@ -115,14 +117,25 @@ export const PATCH = statefulRoute(
               .toISOString()
               .slice(0, 10)
           : null,
-        balanceAmount: total !== null ? Math.max(0, total - BOOKING_FEE_SEN) : null,
+        balanceAmount: total !== null ? Math.max(0, total - bookingFeeSen) : null,
         payment: payment
           ? {
               amount: payment.amount,
+              type: payment.type,
               status: payment.status,
               provider: payment.provider,
               reference: payment.provider_ref,
               url: payment.provider_url,
+            }
+          : null,
+        balancePayment: balancePayment
+          ? {
+              amount: balancePayment.amount,
+              type: balancePayment.type,
+              status: balancePayment.status,
+              provider: balancePayment.provider,
+              reference: balancePayment.provider_ref,
+              url: balancePayment.provider_url,
             }
           : null,
       },

@@ -251,7 +251,8 @@ export const PG_SCHEMA = `
   );
   CREATE TABLE IF NOT EXISTS payments (
     id           TEXT PRIMARY KEY,
-    booking_id   TEXT NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+    booking_id   TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    type         TEXT NOT NULL DEFAULT 'deposit' CHECK (type IN ('deposit','balance')),
     amount       INTEGER NOT NULL,
     currency     TEXT NOT NULL DEFAULT 'MYR',
     provider     TEXT NOT NULL DEFAULT 'dev',
@@ -261,6 +262,21 @@ export const PG_SCHEMA = `
     provider_url TEXT,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
+  );
+  -- One payment per booking per type (deposit + balance), never two of the same.
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type);
+  CREATE TABLE IF NOT EXISTS payouts (
+    id             TEXT PRIMARY KEY,
+    artist_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    booking_id     TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    gross_sen      INTEGER NOT NULL,
+    commission_sen INTEGER NOT NULL,
+    net_sen        INTEGER NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','settled','failed')),
+    settleable_at  TEXT,
+    settled_at     TEXT,
+    notes          TEXT,
+    created_at     TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS sessions (
     jti        TEXT PRIMARY KEY,
@@ -358,6 +374,8 @@ export const PG_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id);
   CREATE INDEX IF NOT EXISTS idx_messages_booking ON messages(booking_id);
   CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
+  CREATE INDEX IF NOT EXISTS idx_payouts_status ON payouts(status);
+  CREATE INDEX IF NOT EXISTS idx_payouts_artist ON payouts(artist_user_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON admin_audit_log(admin_user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_log_created ON admin_audit_log(created_at);
@@ -470,7 +488,8 @@ const SQLITE_SCHEMA = `
   );
   CREATE TABLE IF NOT EXISTS payments (
     id           TEXT PRIMARY KEY,
-    booking_id   TEXT NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+    booking_id   TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    type         TEXT NOT NULL DEFAULT 'deposit' CHECK (type IN ('deposit','balance')),
     amount       INTEGER NOT NULL,
     currency     TEXT NOT NULL DEFAULT 'MYR',
     provider     TEXT NOT NULL DEFAULT 'dev',
@@ -480,6 +499,21 @@ const SQLITE_SCHEMA = `
     provider_url TEXT,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
+  );
+  -- One payment per booking per type (deposit + balance), never two of the same.
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type);
+  CREATE TABLE IF NOT EXISTS payouts (
+    id             TEXT PRIMARY KEY,
+    artist_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    booking_id     TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    gross_sen      INTEGER NOT NULL,
+    commission_sen INTEGER NOT NULL,
+    net_sen        INTEGER NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','settled','failed')),
+    settleable_at  TEXT,
+    settled_at     TEXT,
+    notes          TEXT,
+    created_at     TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS sessions (
     jti        TEXT PRIMARY KEY,
@@ -577,6 +611,8 @@ const SQLITE_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id);
   CREATE INDEX IF NOT EXISTS idx_messages_booking ON messages(booking_id);
   CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
+  CREATE INDEX IF NOT EXISTS idx_payouts_status ON payouts(status);
+  CREATE INDEX IF NOT EXISTS idx_payouts_artist ON payouts(artist_user_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON admin_audit_log(admin_user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_log_created ON admin_audit_log(created_at);
@@ -603,6 +639,33 @@ function migrateSqlite(db: DatabaseSync) {
   const paymentCols = db.prepare("PRAGMA table_info(payments)").all() as { name: string }[];
   if (!paymentCols.some((c) => c.name === "provider_url")) {
     db.exec("ALTER TABLE payments ADD COLUMN provider_url TEXT");
+  }
+  // Legacy payments tables carry UNIQUE(booking_id) — the hybrid model needs
+  // one deposit AND one balance payment per booking. SQLite cannot drop a
+  // table-level constraint, so rebuild the table when the type column is
+  // missing (fresh databases already get the new shape from SQLITE_SCHEMA).
+  if (!paymentCols.some((c) => c.name === "type")) {
+    db.exec(`
+      CREATE TABLE payments_new (
+        id           TEXT PRIMARY KEY,
+        booking_id   TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+        type         TEXT NOT NULL DEFAULT 'deposit' CHECK (type IN ('deposit','balance')),
+        amount       INTEGER NOT NULL,
+        currency     TEXT NOT NULL DEFAULT 'MYR',
+        provider     TEXT NOT NULL DEFAULT 'dev',
+        status       TEXT NOT NULL DEFAULT 'required'
+                     CHECK (status IN ('required','paid','failed','refunded')),
+        provider_ref TEXT,
+        provider_url TEXT,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL
+      );
+      INSERT INTO payments_new (id, booking_id, type, amount, currency, provider, status, provider_ref, provider_url, created_at, updated_at)
+        SELECT id, booking_id, 'deposit', amount, currency, provider, status, provider_ref, provider_url, created_at, updated_at FROM payments;
+      DROP TABLE payments;
+      ALTER TABLE payments_new RENAME TO payments;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type);
+    `);
   }
   const bookingCols = db.prepare("PRAGMA table_info(bookings)").all() as { name: string }[];
   for (const [col, ddl] of [

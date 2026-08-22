@@ -12,10 +12,10 @@ import { jsonError, statefulRoute } from "@/server/http";
 import { logger } from "@/server/logger";
 
 /**
- * POST /api/bookings/[id]/pay-fee
- * Client pays the flat, non-refundable booking deposit (default RM 50,
- * Billplz bill). The booking becomes confirmed when the webhook reports the
- * payment. A quotation must exist and be within its 24h window.
+ * POST /api/bookings/[id]/pay-balance
+ * Client pays the remaining balance (quotation total − booking deposit) for a
+ * confirmed booking. On webhook confirmation the quotation is marked paid and
+ * the artist payout is created.
  */
 export const POST = statefulRoute(
   async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -34,40 +34,50 @@ export const POST = statefulRoute(
       BookingRow | undefined;
     if (!booking) return jsonError("Booking not found", 404);
     if (booking.user_id !== user.id) return jsonError("Only the booking owner can pay", 403);
-    if (booking.status !== "accepted") {
-      return jsonError("This booking is not waiting for a fee payment", 409);
+    if (booking.status !== "confirmed") {
+      return jsonError("The balance is payable only after the booking is confirmed", 409);
     }
 
     const quotation = await getActiveQuotation(booking.id);
-    if (!quotation) {
-      return jsonError("No quotation available for this booking", 409);
+    if (!quotation || quotation.status === "expired") {
+      return jsonError("No active quotation for this booking", 409);
     }
-    if (quotation.status === "expired") {
-      return jsonError("The quotation has expired — ask the artist for a new one", 410);
+    if (quotation.status === "paid") {
+      return jsonError("The balance has already been paid", 409);
     }
 
-    // One active deposit bill at a time.
-    const existing = await getPaymentForBooking(booking.id, "deposit");
-    if (existing && existing.status === "required") {
+    // The deposit must be settled before the balance becomes payable.
+    const deposit = await getPaymentForBooking(booking.id, "deposit");
+    if (!deposit || deposit.status !== "paid") {
+      return jsonError("The booking deposit must be paid first", 409);
+    }
+
+    const existingBalance = await getPaymentForBooking(booking.id, "balance");
+    if (existingBalance && existingBalance.status === "required") {
       return NextResponse.json({
         payment: {
-          amount: existing.amount,
-          type: existing.type,
-          status: existing.status,
-          provider: existing.provider,
-          reference: existing.provider_ref,
-          url: existing.provider_url,
+          amount: existingBalance.amount,
+          type: existingBalance.type,
+          status: existingBalance.status,
+          provider: existingBalance.provider,
+          reference: existingBalance.provider_ref,
+          url: existingBalance.provider_url,
         },
       });
     }
+    if (existingBalance && existingBalance.status === "paid") {
+      return jsonError("The balance has already been paid", 409);
+    }
 
     const bookingFeeSen = await getBookingFeeSen();
+    const balanceAmount = Math.max(0, quotation.total - bookingFeeSen);
+    if (balanceAmount <= 0) {
+      return jsonError("No outstanding balance for this booking", 409);
+    }
 
-    // Billplz is a network call — surface gateway outages as a clear retryable
-    // message instead of the generic 500 (details still go to logs/Sentry).
     let payment;
     try {
-      payment = await createBookingPayment(booking.id, "deposit", bookingFeeSen);
+      payment = await createBookingPayment(booking.id, "balance", balanceAmount);
     } catch (err) {
       if (activePaymentProvider() === "billplz") {
         logger.error(
@@ -81,7 +91,10 @@ export const POST = statefulRoute(
       }
       throw err;
     }
-    logger.info({ bookingId: booking.id, amount: payment.amount }, "booking deposit bill created");
+    logger.info(
+      { bookingId: booking.id, amount: payment.amount },
+      "booking balance bill created",
+    );
 
     return NextResponse.json(
       {
@@ -97,5 +110,5 @@ export const POST = statefulRoute(
       { status: 201 },
     );
   },
-  { route: "POST /api/bookings/[id]/pay-fee" },
+  { route: "POST /api/bookings/[id]/pay-balance" },
 );

@@ -9,10 +9,10 @@ import {
   findExpiredQuotations,
 } from "../quotations";
 import {
-  createBookingFeePayment,
+  createBookingPayment,
   getPaymentForBooking,
   markBillPaid,
-  refundBalance,
+  refundBalancePayment,
 } from "../payments";
 import { createSessionToken, verifySessionToken, revokeSession } from "../session";
 import { storeVerificationToken, validateVerificationToken } from "../verify-email";
@@ -132,7 +132,7 @@ d("booking lifecycle (customer flow)", () => {
     expect(activeQ!.id).toBe(quotation.id);
 
     // 7. Customer pays booking fee (dev provider)
-    const payment = await createBookingFeePayment(bkId);
+    const payment = await createBookingPayment(bkId, "deposit", 20000);
     expect(payment.amount).toBe(20000); // RM 200
     expect(payment.status).toBe("required");
     expect(payment.provider).toBe("dev");
@@ -241,18 +241,22 @@ d("payment refund", () => {
         new Date().toISOString(),
       );
 
-    // Create and pay
-    const payment = await createBookingFeePayment(bkId);
+    // Create and pay deposit, then create and pay a balance
+    const payment = await createBookingPayment(bkId, "deposit", 20000);
     await new Promise((r) => setTimeout(r, 150));
     await markBillPaid(payment.provider_ref!);
 
+    const balance = await createBookingPayment(bkId, "balance", 15000);
+    await new Promise((r) => setTimeout(r, 150));
+    await markBillPaid(balance.provider_ref!);
+
     // Refund
-    const refunded = await refundBalance(bkId, 15000);
-    expect(refunded).toBeTruthy();
-    expect(refunded!.status).toBe("refunded");
+    const paidBalance = await getPaymentForBooking(bkId, "balance");
+    const refunded = await refundBalancePayment(paidBalance!);
+    expect(refunded.status).toBe("refunded");
 
     // Verify final state
-    const final = await getPaymentForBooking(bkId);
+    const final = await getPaymentForBooking(bkId, "balance");
     expect(final!.status).toBe("refunded");
   });
 
@@ -278,10 +282,12 @@ d("payment refund", () => {
         new Date().toISOString(),
       );
 
-    await createBookingFeePayment(bkId); // status = required (not paid)
+    await createBookingPayment(bkId, "balance", 15000); // status = required (not paid)
 
-    const refunded = await refundBalance(bkId, 15000);
-    expect(refunded).toBeNull();
+    const balance = await getPaymentForBooking(bkId, "balance");
+    await expect(refundBalancePayment(balance!)).rejects.toThrow(
+      "Only paid balances can be refunded",
+    );
   });
 });
 

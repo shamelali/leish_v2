@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { getDb, type BookingRow } from "./db";
 import { hashPassword } from "./password";
 import { createQuotation } from "./quotations";
-import { createBookingFeePayment } from "./payments";
+import { createBookingPayment } from "./payments";
 import { buildInvoice, renderInvoiceHtml, stripInvoicePii, BOOKING_FEE_SEN } from "./invoices";
 
 async function createTestBookingWithQuotation() {
@@ -120,7 +120,7 @@ describe("invoices", () => {
 
     it("includes paid amount when payment is confirmed", async () => {
       const { bookingId } = await createTestBookingWithQuotation();
-      await createBookingFeePayment(bookingId);
+      await createBookingPayment(bookingId, "deposit", BOOKING_FEE_SEN);
       // Mark as paid
       await getDb()
         .prepare("UPDATE payments SET status = 'paid' WHERE booking_id = ?")

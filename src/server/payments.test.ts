@@ -5,15 +5,17 @@ import { createHmac, randomUUID } from "node:crypto";
 import { getDb } from "./db";
 import { hashPassword } from "./password";
 import {
-  BOOKING_FEE_SEN,
   activePaymentProvider,
-  createBookingFeePayment,
+  createBookingPayment,
   getBookingIdForBill,
   getPaymentForBooking,
   markBillPaid,
-  refundBalance,
+  refundBalancePayment,
   verifyBillplzSignature,
 } from "./payments";
+import { DEFAULT_BOOKING_FEE_SEN } from "./settings";
+
+const FEE = DEFAULT_BOOKING_FEE_SEN;
 
 async function createTestUserAndBooking() {
   const userId = randomUUID();
@@ -58,9 +60,9 @@ describe("booking fee payments (dev provider)", () => {
 
   it("charges the flat RM 200 booking fee", async () => {
     const bookingId = await createTestUserAndBooking();
-    const payment = await createBookingFeePayment(bookingId);
+    const payment = await createBookingPayment(bookingId, "deposit", FEE);
 
-    expect(payment.amount).toBe(BOOKING_FEE_SEN); // 20,000 sen = RM 200
+    expect(payment.amount).toBe(FEE); // default deposit (RM 50)
     expect(payment.currency).toBe("MYR");
     expect(payment.provider).toBe("dev");
     expect(payment.status).toBe("required");
@@ -69,16 +71,16 @@ describe("booking fee payments (dev provider)", () => {
 
   it("links the booking id back from the bill reference", async () => {
     const bookingId = await createTestUserAndBooking();
-    const payment = await createBookingFeePayment(bookingId);
+    const payment = await createBookingPayment(bookingId, "deposit", FEE);
     expect(await getBookingIdForBill(payment.provider_ref!)).toBe(bookingId);
   });
 
   it("is retrievable by booking id", async () => {
     const bookingId = await createTestUserAndBooking();
-    await createBookingFeePayment(bookingId);
+    await createBookingPayment(bookingId, "deposit", FEE);
     const found = await getPaymentForBooking(bookingId);
     expect(found?.booking_id).toBe(bookingId);
-    expect(found?.amount).toBe(BOOKING_FEE_SEN);
+    expect(found?.amount).toBe(FEE);
   });
 
   it("returns null when no payment exists", async () => {
@@ -155,7 +157,7 @@ describe("markBillPaid", () => {
 
   it("marks a payment as paid and returns true", async () => {
     const bookingId = await createTestUserAndBooking();
-    const payment = await createBookingFeePayment(bookingId);
+    const payment = await createBookingPayment(bookingId, "deposit", FEE);
     const changed = await markBillPaid(payment.provider_ref!);
     expect(changed).toBe(true);
     const updated = await getPaymentForBooking(bookingId);
@@ -174,32 +176,38 @@ describe("refundBalance (dev provider)", () => {
     await getDb().prepare("DELETE FROM users").run();
   });
 
-  it("refunds the balance for a paid booking", async () => {
+  it("refunds a paid balance payment", async () => {
     const bookingId = await createTestUserAndBooking();
-    const payment = await createBookingFeePayment(bookingId);
-    await markBillPaid(payment.provider_ref!);
-    const refunded = await refundBalance(bookingId, 30_000);
-    expect(refunded?.status).toBe("refunded");
+    const deposit = await createBookingPayment(bookingId, "deposit", FEE);
+    await markBillPaid(deposit.provider_ref!);
+    const balance = await createBookingPayment(bookingId, "balance", 30_000);
+    await markBillPaid(balance.provider_ref!);
+
+    const paidBalance = await getPaymentForBooking(bookingId, "balance");
+    const refunded = await refundBalancePayment(paidBalance!);
+    expect(refunded.status).toBe("refunded");
+
+    // The deposit stays untouched.
+    const depositAfter = await getPaymentForBooking(bookingId, "deposit");
+    expect(depositAfter?.status).toBe("paid");
   });
 
-  it("returns null when no payment exists", async () => {
-    const result = await refundBalance("nonexistent", 30_000);
-    expect(result).toBeNull();
+  it("throws when the balance has not been paid", async () => {
+    const bookingId = await createTestUserAndBooking();
+    await createBookingPayment(bookingId, "balance", 30_000); // status = required
+    const balance = await getPaymentForBooking(bookingId, "balance");
+    await expect(refundBalancePayment(balance!)).rejects.toThrow(
+      "Only paid balances can be refunded",
+    );
   });
 
-  it("returns payment without refunding when amount is zero or negative", async () => {
+  it("throws for deposit payments", async () => {
     const bookingId = await createTestUserAndBooking();
-    const payment = await createBookingFeePayment(bookingId);
-    await markBillPaid(payment.provider_ref!);
-    const result = await refundBalance(bookingId, 0);
-    expect(result?.status).toBe("paid"); // unchanged
-  });
-
-  it("returns null when payment is not yet paid", async () => {
-    const bookingId = await createTestUserAndBooking();
-    await createBookingFeePayment(bookingId);
-    const result = await refundBalance(bookingId, 30_000);
-    expect(result).toBeNull();
+    const deposit = await createBookingPayment(bookingId, "deposit", FEE);
+    await markBillPaid(deposit.provider_ref!);
+    await expect(refundBalancePayment(deposit)).rejects.toThrow(
+      "Only balance payments are refundable",
+    );
   });
 });
 
@@ -235,11 +243,11 @@ describe("billplz payment creation (mocked fetch)", () => {
       json: () => Promise.resolve(mockResponse),
     }) as typeof fetch;
     try {
-      const payment = await createBookingFeePayment(bookingId);
+      const payment = await createBookingPayment(bookingId, "deposit", FEE);
       expect(payment.provider).toBe("billplz");
       expect(payment.provider_ref).toBe("bill_abc123");
       expect(payment.provider_url).toBe("https://billplz.com/pay/abc123");
-      expect(payment.amount).toBe(BOOKING_FEE_SEN);
+      expect(payment.amount).toBe(FEE);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -255,7 +263,7 @@ describe("billplz payment creation (mocked fetch)", () => {
       json: () => Promise.resolve({ error: { message: "Invalid" } }),
     }) as typeof fetch;
     try {
-      await expect(createBookingFeePayment(bookingId)).rejects.toThrow("Failed to create payment");
+      await expect(createBookingPayment(bookingId, "deposit", FEE)).rejects.toThrow("Failed to create payment");
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -4,6 +4,7 @@ import { verifySessionToken } from "@/server/session";
 import { getClaimedArtistIds } from "@/server/artist-profiles";
 import { getActiveQuotation } from "@/server/quotations";
 import { sendBalanceReminder } from "@/server/booking-emails";
+import { getBookingFeeSen } from "@/server/settings";
 import { jsonError, statefulRoute } from "@/server/http";
 import { logger } from "@/server/logger";
 
@@ -42,8 +43,8 @@ export const POST = statefulRoute(
     if (!quotation || quotation.status === "expired") {
       return jsonError("No active quotation for this booking", 409);
     }
-    const BOOKING_FEE_SEN = 20_000;
-    const balanceAmount = Math.max(0, quotation.total - BOOKING_FEE_SEN);
+    const bookingFeeSen = await getBookingFeeSen();
+    const balanceAmount = Math.max(0, quotation.total - bookingFeeSen);
     const balanceDueDate = new Date(new Date(`${booking.date}T00:00:00`).getTime() - 3 * 86_400_000)
       .toISOString()
       .slice(0, 10);

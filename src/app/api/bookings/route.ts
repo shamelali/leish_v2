@@ -7,6 +7,7 @@ import { getArtistById } from "@/server/catalog";
 import { createVerifyUrl } from "@/server/verify-email";
 import { getClaimedArtistIds } from "@/server/artist-profiles";
 import { getPaymentForBooking } from "@/server/payments";
+import { getBookingFeeSen } from "@/server/settings";
 import { getActiveQuotation, serializeQuotation } from "@/server/quotations";
 import { notifyBookingCreated } from "@/server/booking-emails";
 import { jsonError, readJson, statefulRoute, tryRoute } from "@/server/http";
@@ -24,14 +25,15 @@ async function requireUser(request: Request) {
   return { user };
 }
 
-const BOOKING_FEE_SEN = 20_000; // RM 200 — mirrors src/server/payments.ts
 const BALANCE_DUE_DAYS_BEFORE = 3; // business rule
 
 async function serializeBooking(b: BookingRow) {
-  const payment = await getPaymentForBooking(b.id);
+  const payment = await getPaymentForBooking(b.id, "deposit");
+  const balancePayment = await getPaymentForBooking(b.id, "balance");
   const quotation = await getActiveQuotation(b.id);
-  // Balance = quotation total − booking fee, due 3 days before the event.
+  // Balance = quotation total − booking deposit, due 3 days before the event.
   const total = quotation?.status === "expired" ? null : (quotation?.total ?? null);
+  const bookingFeeSen = await getBookingFeeSen();
   const balanceDueDate = b.date
     ? new Date(new Date(`${b.date}T00:00:00`).getTime() - BALANCE_DUE_DAYS_BEFORE * 86_400_000)
         .toISOString()
@@ -54,14 +56,25 @@ async function serializeBooking(b: BookingRow) {
     quotation: quotation ? serializeQuotation(quotation) : null,
     totalPrice: total,
     balanceDueDate,
-    balanceAmount: total !== null ? Math.max(0, total - BOOKING_FEE_SEN) : null,
+    balanceAmount: total !== null ? Math.max(0, total - bookingFeeSen) : null,
     payment: payment
       ? {
           amount: payment.amount,
+          type: payment.type,
           status: payment.status,
           provider: payment.provider,
           reference: payment.provider_ref,
           url: payment.provider_url,
+        }
+      : null,
+    balancePayment: balancePayment
+      ? {
+          amount: balancePayment.amount,
+          type: balancePayment.type,
+          status: balancePayment.status,
+          provider: balancePayment.provider,
+          reference: balancePayment.provider_ref,
+          url: balancePayment.provider_url,
         }
       : null,
   };
