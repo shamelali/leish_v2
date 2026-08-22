@@ -15,7 +15,7 @@ import { z } from "zod";
  */
 
 export type BookingStatus = "requested" | "accepted" | "confirmed" | "completed" | "cancelled";
-export type BookingRole = "customer" | "artist" | "studio";
+export type BookingRole = "customer" | "artist" | "studio" | "admin";
 
 export const bookingActionSchema = z.enum(["accept", "reject", "complete", "cancel"]);
 

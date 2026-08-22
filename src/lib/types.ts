@@ -1,4 +1,4 @@
-export type Role = "customer" | "artist" | "studio";
+export type Role = "customer" | "artist" | "studio" | "admin";
 
 export type BridalEvent =
   "engagement" | "solemnization" | "reception" | "full-package" | "bridal-other";

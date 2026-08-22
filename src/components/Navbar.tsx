@@ -114,6 +114,11 @@ export function Navbar() {
                 <span className="hidden text-sm text-rose-50/90 lg:inline">
                   {ROLE_LABELS[user.role]} · {user.name}
                 </span>
+                {user.role === "admin" && (
+                  <Link href="/admin" className={ghostBtn}>
+                    Admin
+                  </Link>
+                )}
                 <Link href="/dashboard" className={ghostBtn}>
                   Dashboard
                 </Link>
@@ -216,6 +221,15 @@ export function Navbar() {
               <div className="mt-3 flex gap-3 border-t border-white/20 pt-4">
                 {user ? (
                   <>
+                    {user.role === "admin" && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setOpen(false)}
+                        className={cn(ghostBtn, "flex-1")}
+                      >
+                        Admin
+                      </Link>
+                    )}
                     <Link
                       href="/dashboard"
                       onClick={() => setOpen(false)}

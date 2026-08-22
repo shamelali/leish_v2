@@ -117,4 +117,5 @@ export const ROLE_LABELS: Record<Role, string> = {
   customer: "Client",
   artist: "Artist",
   studio: "Studio",
+  admin: "Admin",
 };
