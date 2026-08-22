@@ -84,8 +84,8 @@ export function Navbar() {
           <Image
             src="/images/logo.png"
             alt="Leish!"
-            width={917}
-            height={267}
+            width={1430}
+            height={690}
             priority
             className="h-9 w-auto sm:h-10"
           />
