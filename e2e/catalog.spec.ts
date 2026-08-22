@@ -10,9 +10,7 @@ import { test, expect } from "@playwright/test";
 
 test("browse page renders the seeded catalog", async ({ page }) => {
   await page.goto("/artists");
-  await expect(
-    page.getByRole("heading", { name: /Browse Makeup Artists/i }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Browse Makeup Artists/i })).toBeVisible();
 
   // Seeded artists appear as cards.
   await expect(page.getByRole("link", { name: /Aisha Azman/i }).first()).toBeVisible();
