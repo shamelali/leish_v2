@@ -146,6 +146,19 @@ async function main(): Promise<void> {
   });
 
   try {
+    // Backfill payments.type BEFORE PG_SCHEMA: the schema creates a unique
+    // index on (booking_id, type), which fails if the column doesn't exist
+    // yet on databases created before the hybrid payment model.
+    if (
+      (await columnExists(pool, "payments", "booking_id")) &&
+      !(await columnExists(pool, "payments", "type"))
+    ) {
+      console.log("[migrate] + payments.type (pre-schema backfill)");
+      await pool.query(
+        "ALTER TABLE payments ADD COLUMN type TEXT NOT NULL DEFAULT 'deposit' CHECK (type IN ('deposit','balance'))",
+      );
+    }
+
     console.log("[migrate] applying db-facade schema (idempotent)…");
     await pool.query(PG_SCHEMA);
     await pool.query(FIX_ROLE_CHECK);
