@@ -22,9 +22,31 @@ export interface EmailMessage {
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }
 
 export type EmailProvider = "dev" | "resend" | "postmark";
+
+export type EmailPreferenceKey =
+  | "booking_created"
+  | "quotation_sent"
+  | "invoice_sent"
+  | "quotation_expiry"
+  | "balance_reminder"
+  | "status_changed";
+
+/**
+ * Check if a user has a specific email preference enabled.
+ * Returns true if the preference is enabled or if no preference record exists
+ * (default: enabled).
+ */
+export async function isEmailEnabled(userId: string, key: EmailPreferenceKey): Promise<boolean> {
+  const row = (await getDb()
+    .prepare(`SELECT ${key} FROM email_preferences WHERE user_id = ?`)
+    .get(userId)) as Record<string, number> | undefined;
+  // Default to enabled if no record exists
+  return row ? row[key] === 1 : true;
+}
 
 export function activeEmailProvider(): EmailProvider {
   const configured = process.env.EMAIL_PROVIDER;
@@ -45,7 +67,12 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
       await devSend(message);
       return;
     }
-    await resendSend(message, apiKey);
+    try {
+      await resendSend(message, apiKey);
+    } catch (err) {
+      await queueRetry(message, err);
+      throw err;
+    }
     return;
   }
 
@@ -59,7 +86,12 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
       await devSend(message);
       return;
     }
-    await postmarkSend(message, serverToken);
+    try {
+      await postmarkSend(message, serverToken);
+    } catch (err) {
+      await queueRetry(message, err);
+      throw err;
+    }
     return;
   }
 
@@ -69,9 +101,9 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
 async function devSend(message: EmailMessage) {
   await getDb()
     .prepare(
-      "INSERT INTO email_outbox (id, to_email, subject, text, created_at) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO email_outbox (id, to_email, subject, text, html, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
-    .run(randomUUID(), message.to, message.subject, message.text, new Date().toISOString());
+    .run(randomUUID(), message.to, message.subject, message.text, message.html ?? null, new Date().toISOString());
   logger.info({ to: message.to, subject: message.subject }, "email queued (dev outbox)");
 }
 
@@ -88,6 +120,7 @@ async function postmarkSend(message: EmailMessage, serverToken: string) {
       To: message.to,
       Subject: message.subject,
       TextBody: message.text,
+      HtmlBody: message.html,
     }),
   });
 
@@ -111,6 +144,7 @@ async function resendSend(message: EmailMessage, apiKey: string) {
       to: [message.to],
       subject: message.subject,
       text: message.text,
+      html: message.html,
     }),
   });
 
@@ -120,4 +154,87 @@ async function resendSend(message: EmailMessage, apiKey: string) {
     throw new Error("Failed to send email");
   }
   logger.info({ to: message.to, subject: message.subject }, "email sent via resend");
+}
+
+/**
+ * Queue a failed email for retry.
+ * Exponential backoff: 1min, 5min, 25min (max 3 attempts).
+ */
+async function queueRetry(message: EmailMessage, error: unknown): Promise<void> {
+  const now = new Date();
+  const nextRetry = new Date(now.getTime() + 60_000); // 1 minute from now
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  await getDb()
+    .prepare(
+      `INSERT INTO email_retries (id, to_email, subject, text, html, attempts, max_attempts, next_retry, last_error, created_at)
+       VALUES (?, ?, ?, ?, ?, 0, 3, ?, ?, ?)`,
+    )
+    .run(
+      randomUUID(),
+      message.to,
+      message.subject,
+      message.text,
+      message.html ?? null,
+      nextRetry.toISOString(),
+      errorMessage,
+      now.toISOString(),
+    );
+  logger.warn({ to: message.to, subject: message.subject }, "email queued for retry");
+}
+
+/**
+ * Retry failed emails that are past their next_retry time.
+ * Called by cron job or on-demand.
+ */
+export async function retryFailedEmails(): Promise<{ retried: number; failed: number }> {
+  const now = new Date().toISOString();
+  const rows = (await getDb()
+    .prepare(
+      "SELECT * FROM email_retries WHERE next_retry <= ? AND attempts < max_attempts ORDER BY created_at LIMIT 10",
+    )
+    .all(now)) as Array<{
+    id: string;
+    to_email: string;
+    subject: string;
+    text: string;
+    html: string | null;
+    attempts: number;
+  }>;
+
+  let retried = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    const message: EmailMessage = {
+      to: row.to_email,
+      subject: row.subject,
+      text: row.text,
+      html: row.html ?? undefined,
+    };
+
+    try {
+      await sendEmail(message);
+      // Success — remove from retries
+      await getDb().prepare("DELETE FROM email_retries WHERE id = ?").run(row.id);
+      retried++;
+      logger.info({ id: row.id, to: row.to_email }, "retry succeeded");
+    } catch (err) {
+      // Increment attempts and schedule next retry with exponential backoff
+      const attempts = row.attempts + 1;
+      const backoffMs = Math.pow(5, attempts) * 60_000; // 5min, 25min, 125min
+      const nextRetry = new Date(Date.now() + backoffMs);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+
+      await getDb()
+        .prepare(
+          "UPDATE email_retries SET attempts = ?, next_retry = ?, last_error = ? WHERE id = ?",
+        )
+        .run(attempts, nextRetry.toISOString(), errorMessage, row.id);
+      failed++;
+      logger.warn({ id: row.id, attempts, nextRetry: nextRetry.toISOString() }, "retry failed");
+    }
+  }
+
+  return { retried, failed };
 }

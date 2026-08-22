@@ -48,9 +48,10 @@ dashboard URL is login-gated; verify its state from the Vercel console).
 9. **Billplz**: production API key; callback URL `https://leish.my/api/payments/webhook`;
    one real low-value (RM 1) end-to-end payment — bill → webhook → HMAC verified →
    `payments.paid` → booking `confirmed`. The webhook is the only path that confirms.
-10. **Brevo**: SPF/DKIM verified; test send via `/api/email/send`; check free-plan cap
-    vs launch volume.
-11. **Sentry**: new project; confirm errors from `webhook/route.ts` and `brevo.ts` arrive.
+10. **Email**: configure `EMAIL_PROVIDER=resend` (or `postmark`); set `RESEND_API_KEY`
+    (or `POSTMARK_SERVER_TOKEN`); verify SPF/DKIM; test send via `/dev/emails` (dev) or
+    trigger a real booking flow. Check free-plan cap vs launch volume.
+11. **Sentry**: new project; confirm errors from `webhook/route.ts` and `email.ts` arrive.
 
 ## Phase 3 — Pre-launch verification
 

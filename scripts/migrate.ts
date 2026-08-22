@@ -20,6 +20,19 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
     ["consent_timestamp", "ALTER TABLE users ADD COLUMN consent_timestamp TEXT"],
   ],
   payments: [["provider_url", "ALTER TABLE payments ADD COLUMN provider_url TEXT"]],
+  email_outbox: [["html", "ALTER TABLE email_outbox ADD COLUMN html TEXT"]],
+  email_preferences: [
+    ["booking_created", "ALTER TABLE email_preferences ADD COLUMN booking_created INTEGER NOT NULL DEFAULT 1"],
+    ["quotation_sent", "ALTER TABLE email_preferences ADD COLUMN quotation_sent INTEGER NOT NULL DEFAULT 1"],
+    ["invoice_sent", "ALTER TABLE email_preferences ADD COLUMN invoice_sent INTEGER NOT NULL DEFAULT 1"],
+    ["quotation_expiry", "ALTER TABLE email_preferences ADD COLUMN quotation_expiry INTEGER NOT NULL DEFAULT 1"],
+    ["balance_reminder", "ALTER TABLE email_preferences ADD COLUMN balance_reminder INTEGER NOT NULL DEFAULT 1"],
+    ["status_changed", "ALTER TABLE email_preferences ADD COLUMN status_changed INTEGER NOT NULL DEFAULT 1"],
+  ],
+  email_retries: [
+    ["html", "ALTER TABLE email_retries ADD COLUMN html TEXT"],
+    ["last_error", "ALTER TABLE email_retries ADD COLUMN last_error TEXT"],
+  ],
 };
 
 async function columnExists(pool: Pool, table: string, column: string): Promise<boolean> {
@@ -67,6 +80,8 @@ async function main(): Promise<void> {
       "password_resets",
       "email_verifications",
       "email_outbox",
+      "email_preferences",
+      "email_retries",
       "artist_profiles",
       "quotations",
       "messages",

@@ -151,7 +151,7 @@ export const PG_SCHEMA = `
     id            TEXT PRIMARY KEY,
     email         TEXT NOT NULL UNIQUE,
     name          TEXT NOT NULL,
-    role          TEXT NOT NULL CHECK (role IN ('customer','artist','studio')),
+    role          TEXT NOT NULL CHECK (role IN ('customer','artist','studio','admin')),
     password      TEXT NOT NULL,
     email_verified INTEGER NOT NULL DEFAULT 0,
     consent       INTEGER NOT NULL DEFAULT 0,
@@ -197,7 +197,30 @@ export const PG_SCHEMA = `
     to_email   TEXT NOT NULL,
     subject    TEXT NOT NULL,
     text       TEXT NOT NULL,
+    html       TEXT,
     created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS email_preferences (
+    user_id          TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    booking_created  INTEGER NOT NULL DEFAULT 1,
+    quotation_sent   INTEGER NOT NULL DEFAULT 1,
+    invoice_sent     INTEGER NOT NULL DEFAULT 1,
+    quotation_expiry INTEGER NOT NULL DEFAULT 1,
+    balance_reminder INTEGER NOT NULL DEFAULT 1,
+    status_changed   INTEGER NOT NULL DEFAULT 1,
+    updated_at       TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS email_retries (
+    id           TEXT PRIMARY KEY,
+    to_email     TEXT NOT NULL,
+    subject      TEXT NOT NULL,
+    text         TEXT NOT NULL,
+    html         TEXT,
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    next_retry   TEXT NOT NULL,
+    last_error   TEXT,
+    created_at   TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS artist_profiles (
     user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -246,6 +269,32 @@ export const PG_SCHEMA = `
     expires_at TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id            TEXT PRIMARY KEY,
+    admin_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    action        TEXT NOT NULL,
+    target_table  TEXT NOT NULL,
+    target_id     TEXT,
+    details       TEXT NOT NULL DEFAULT '{}',
+    created_at    TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS catalog_overrides (
+    id          TEXT PRIMARY KEY,
+    entity_type TEXT NOT NULL CHECK (entity_type IN ('artist','studio')),
+    entity_id   TEXT NOT NULL,
+    field       TEXT NOT NULL,
+    value       TEXT NOT NULL,
+    updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    UNIQUE(entity_type, entity_id, field)
+  );
+  CREATE TABLE IF NOT EXISTS platform_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+    updated_at  TEXT NOT NULL
+  );
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
@@ -253,6 +302,9 @@ export const PG_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_messages_booking ON messages(booking_id);
   CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON admin_audit_log(admin_user_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_log_created ON admin_audit_log(created_at);
+  CREATE INDEX IF NOT EXISTS idx_catalog_overrides_entity ON catalog_overrides(entity_type, entity_id);
   -- One active booking per artist/date/time slot (cancelled/completed don't block).
   CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_slot
     ON bookings(artist_id, date, time)
@@ -266,7 +318,7 @@ const SQLITE_SCHEMA = `
     id         TEXT PRIMARY KEY,
     email      TEXT NOT NULL UNIQUE,
     name       TEXT NOT NULL,
-    role       TEXT NOT NULL CHECK (role IN ('customer','artist','studio')),
+    role       TEXT NOT NULL CHECK (role IN ('customer','artist','studio','admin')),
     password   TEXT NOT NULL,
     consent    INTEGER NOT NULL DEFAULT 0,
     consent_timestamp TEXT,
@@ -307,7 +359,30 @@ const SQLITE_SCHEMA = `
     to_email   TEXT NOT NULL,
     subject    TEXT NOT NULL,
     text       TEXT NOT NULL,
+    html       TEXT,
     created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS email_preferences (
+    user_id          TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    booking_created  INTEGER NOT NULL DEFAULT 1,
+    quotation_sent   INTEGER NOT NULL DEFAULT 1,
+    invoice_sent     INTEGER NOT NULL DEFAULT 1,
+    quotation_expiry INTEGER NOT NULL DEFAULT 1,
+    balance_reminder INTEGER NOT NULL DEFAULT 1,
+    status_changed   INTEGER NOT NULL DEFAULT 1,
+    updated_at       TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS email_retries (
+    id           TEXT PRIMARY KEY,
+    to_email     TEXT NOT NULL,
+    subject      TEXT NOT NULL,
+    text         TEXT NOT NULL,
+    html         TEXT,
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    next_retry   TEXT NOT NULL,
+    last_error   TEXT,
+    created_at   TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS artist_profiles (
     user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -356,6 +431,32 @@ const SQLITE_SCHEMA = `
     expires_at TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id            TEXT PRIMARY KEY,
+    admin_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    action        TEXT NOT NULL,
+    target_table  TEXT NOT NULL,
+    target_id     TEXT,
+    details       TEXT NOT NULL DEFAULT '{}',
+    created_at    TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS catalog_overrides (
+    id          TEXT PRIMARY KEY,
+    entity_type TEXT NOT NULL CHECK (entity_type IN ('artist','studio')),
+    entity_id   TEXT NOT NULL,
+    field       TEXT NOT NULL,
+    value       TEXT NOT NULL,
+    updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    UNIQUE(entity_type, entity_id, field)
+  );
+  CREATE TABLE IF NOT EXISTS platform_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+    updated_at  TEXT NOT NULL
+  );
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
@@ -363,6 +464,9 @@ const SQLITE_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_messages_booking ON messages(booking_id);
   CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON admin_audit_log(admin_user_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_log_created ON admin_audit_log(created_at);
+  CREATE INDEX IF NOT EXISTS idx_catalog_overrides_entity ON catalog_overrides(entity_type, entity_id);
   -- One active booking per artist/date/time slot (cancelled/completed don't block).
   CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_slot
     ON bookings(artist_id, date, time)
@@ -467,7 +571,7 @@ export interface UserRow {
   id: string;
   email: string;
   name: string;
-  role: "customer" | "artist" | "studio";
+  role: "customer" | "artist" | "studio" | "admin";
   password: string;
   email_verified: number;
   consent: number;

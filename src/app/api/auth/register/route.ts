@@ -8,6 +8,7 @@ import { enforceRateLimit, enforceSameOrigin, jsonError, readJson } from "@/serv
 import { logger } from "@/server/logger";
 import { sendEmail } from "@/server/email";
 import { createVerifyUrl } from "@/server/verify-email";
+import { verifyEmailHtml } from "@/server/email-templates";
 
 export async function POST(request: Request) {
   const originBlocked = enforceSameOrigin(request);
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
     to: email,
     subject: "Verify your Leish! account",
     text: `Hi ${name},\n\nWelcome to Leish! Please confirm your email address to activate your account:\n\n${verifyUrl}\n\nIf you didn't create an account, you can ignore this email.\n\n— The Leish! team`,
+    html: verifyEmailHtml({ name, verifyUrl }),
   });
 
   const jti = randomUUID();

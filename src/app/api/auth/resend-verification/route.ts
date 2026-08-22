@@ -3,6 +3,7 @@ import { getDb, type UserRow } from "@/server/db";
 import { logger } from "@/server/logger";
 import { sendEmail } from "@/server/email";
 import { createVerifyUrl } from "@/server/verify-email";
+import { verifyEmailHtml } from "@/server/email-templates";
 import { verifySessionToken } from "@/server/session";
 import { enforceRateLimit, enforceSameOrigin } from "@/server/http";
 
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
     to: user.email,
     subject: "Verify your Leish! account",
     text: `Hi ${user.name},\n\nPlease confirm your email address to activate your account:\n\n${verifyUrl}\n\n— The Leish! team`,
+    html: verifyEmailHtml({ name: user.name, verifyUrl }),
   });
 
   logger.info({ userId: user.id }, "verification email resent");

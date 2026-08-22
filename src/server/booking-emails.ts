@@ -1,6 +1,14 @@
 import { getDb, type UserRow } from "./db";
-import { sendEmail } from "./email";
+import { sendEmail, isEmailEnabled } from "./email";
 import type { BookingStatus } from "./bookings";
+import {
+  bookingCreatedHtml,
+  quotationEmailHtml,
+  invoiceEmailHtml,
+  quotationExpiredHtml,
+  balanceReminderHtml,
+  bookingStatusChangedHtml,
+} from "./email-templates";
 
 /**
  * Booking lifecycle notifications sent through the email service.
@@ -21,8 +29,10 @@ export async function notifyBookingCreated(params: {
   date: string;
   time: string;
 }) {
+  if (!(await isEmailEnabled(params.ownerUserId, "booking_created"))) return;
   const email = await getOwnerEmail(params.ownerUserId);
   if (!email) return;
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/dashboard?booking=${params.bookingId}`;
   await sendEmail({
     to: email,
     subject: "Booking request received — Leish!",
@@ -34,10 +44,15 @@ export async function notifyBookingCreated(params: {
       `  • Date: ${params.date} at ${params.time}`,
       `  • Reference: #${params.bookingId.slice(0, 8)}`,
       ``,
-      `The artist will confirm shortly. Track it in your dashboard.`,
+      `The artist will confirm shortly. Track it in your dashboard:`,
+      dashboardUrl,
       ``,
       `— The Leish! team`,
     ].join("\n"),
+    html: bookingCreatedHtml({
+      ...params,
+      dashboardUrl,
+    }),
   });
 }
 
@@ -51,11 +66,12 @@ export async function sendQuotationEmail(params: {
   totalSen: number;
   expiresAt: string;
 }) {
+  if (!(await isEmailEnabled(params.ownerUserId, "quotation_sent"))) return;
   const email = await getOwnerEmail(params.ownerUserId);
   if (!email) return;
   const total = (params.totalSen / 100).toFixed(2);
   const expires = new Date(params.expiresAt).toLocaleString("en-MY");
-  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/dashboard`;
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/dashboard?booking=${params.bookingId}`;
   await sendEmail({
     to: email,
     subject: `Your quotation from ${params.artistName} is ready — Leish!`,
@@ -74,6 +90,16 @@ export async function sendQuotationEmail(params: {
       ``,
       `— The Leish! team`,
     ].join("\n"),
+    html: quotationEmailHtml({
+      artistName: params.artistName,
+      service: params.service,
+      date: params.date,
+      time: params.time,
+      total,
+      expires,
+      bookingId: params.bookingId,
+      dashboardUrl,
+    }),
   });
 }
 
@@ -84,6 +110,7 @@ export async function sendInvoiceEmail(params: {
   service: string;
   date: string;
 }) {
+  if (!(await isEmailEnabled(params.ownerUserId, "invoice_sent"))) return;
   const email = await getOwnerEmail(params.ownerUserId);
   if (!email) return;
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -104,6 +131,11 @@ export async function sendInvoiceEmail(params: {
       `Thank you for booking with Leish!`,
       `— The Leish! team`,
     ].join("\n"),
+    html: invoiceEmailHtml({
+      ...params,
+      invoiceUrl,
+      invoicePdfUrl,
+    }),
   });
 }
 
@@ -113,9 +145,10 @@ export async function sendQuotationExpiredEmail(params: {
   artistName: string;
   service: string;
 }) {
+  if (!(await isEmailEnabled(params.ownerUserId, "quotation_expiry"))) return;
   const email = await getOwnerEmail(params.ownerUserId);
   if (!email) return;
-  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/dashboard`;
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/dashboard?booking=${params.bookingId}`;
   await sendEmail({
     to: email,
     subject: `Your quotation from ${params.artistName} has expired — Leish!`,
@@ -130,6 +163,11 @@ export async function sendQuotationExpiredEmail(params: {
       ``,
       `— The Leish! team`,
     ].join("\n"),
+    html: quotationExpiredHtml({
+      artistName: params.artistName,
+      service: params.service,
+      dashboardUrl,
+    }),
   });
 }
 
@@ -142,8 +180,10 @@ export async function sendBalanceReminder(params: {
   balanceAmount: number; // sen
   balanceDueDate: string; // ISO date
 }) {
+  if (!(await isEmailEnabled(params.ownerUserId, "balance_reminder"))) return;
   const email = await getOwnerEmail(params.ownerUserId);
   if (!email) return;
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/dashboard?booking=${params.bookingId}`;
   await sendEmail({
     to: email,
     subject: `Balance due soon — Leish!`,
@@ -156,10 +196,20 @@ export async function sendBalanceReminder(params: {
       `  • Balance due: RM ${(params.balanceAmount / 100).toFixed(2)} by ${params.balanceDueDate}`,
       `  • Reference: #${params.bookingId.slice(0, 8)}`,
       ``,
-      `Please complete the payment before the due date to secure your booking.`,
+      `Please complete the payment before the due date to secure your booking:`,
+      dashboardUrl,
       ``,
       `— The Leish! team`,
     ].join("\n"),
+    html: balanceReminderHtml({
+      artistName: params.artistName,
+      service: params.service,
+      date: params.date,
+      balanceAmount: (params.balanceAmount / 100).toFixed(2),
+      balanceDueDate: params.balanceDueDate,
+      bookingId: params.bookingId,
+      dashboardUrl,
+    }),
   });
 }
 
@@ -172,6 +222,7 @@ export async function notifyBookingStatusChanged(params: {
   time: string;
   status: BookingStatus;
 }) {
+  if (!(await isEmailEnabled(params.ownerUserId, "status_changed"))) return;
   const email = await getOwnerEmail(params.ownerUserId);
   if (!email) return;
 
@@ -183,6 +234,7 @@ export async function notifyBookingStatusChanged(params: {
     cancelled: "has been cancelled",
   };
 
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/dashboard?booking=${params.bookingId}`;
   await sendEmail({
     to: email,
     subject: `Booking ${params.status} — Leish!`,
@@ -192,7 +244,19 @@ export async function notifyBookingStatusChanged(params: {
       `Your booking with ${params.artistName} (${params.service}, ${params.date} at ${params.time}) ${headline[params.status]}.`,
       `  • Reference: #${params.bookingId.slice(0, 8)}`,
       ``,
+      `View in dashboard: ${dashboardUrl}`,
+      ``,
       `— The Leish! team`,
     ].join("\n"),
+    html: bookingStatusChangedHtml({
+      artistName: params.artistName,
+      service: params.service,
+      date: params.date,
+      time: params.time,
+      status: params.status,
+      headline: headline[params.status],
+      bookingId: params.bookingId,
+      dashboardUrl,
+    }),
   });
 }

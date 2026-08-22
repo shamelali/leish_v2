@@ -125,7 +125,10 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - `SESSION_SECRET` — 32-byte base64 generated via `openssl rand -base64 32`
 - `DATABASE_URL` — PostgreSQL connection string (Neon/Supabase pooler)
 - `BILLPLZ_API_KEY`, `BILLPLZ_COLLECTION_ID`, `BILLPLZ_X_SIGNATURE_KEY`
-- `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` (optional but recommended)
+- `EMAIL_PROVIDER` — `dev` | `resend` | `postmark` (default: `dev`)
+- `RESEND_API_KEY` — required when `EMAIL_PROVIDER=resend`
+- `POSTMARK_SERVER_TOKEN` — required when `EMAIL_PROVIDER=postmark`
+- `EMAIL_FROM` — sender address (default: `Leish! <no-reply@leish.my>`)
 - `LOG_LEVEL` — `info` | `debug` | `warn` | `error`
 - `PG_MAX` / `PG_CONNECTION_TIMEOUT_MS` / `PG_IDLE_TIMEOUT_MS` (optional pool tuning)
 
