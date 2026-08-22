@@ -121,13 +121,19 @@ export default function AdminQuotationsPage() {
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     Loading...
                   </td>
                 </tr>
               ) : quotations.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     No quotations found.
                   </td>
                 </tr>

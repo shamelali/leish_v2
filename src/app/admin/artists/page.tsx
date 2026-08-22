@@ -199,7 +199,10 @@ export default function AdminArtistsPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={8}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     No artists found.
                   </td>
                 </tr>
@@ -226,7 +229,9 @@ export default function AdminArtistsPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Name</label>
+                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                  Name
+                </label>
                 <input
                   type="text"
                   value={String(editForm.name ?? "")}
@@ -236,7 +241,9 @@ export default function AdminArtistsPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Tagline</label>
+                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                  Tagline
+                </label>
                 <input
                   type="text"
                   value={String(editForm.tagline ?? "")}
@@ -247,7 +254,9 @@ export default function AdminArtistsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">State</label>
+                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                    State
+                  </label>
                   <input
                     type="text"
                     value={String(editForm.state ?? "")}
@@ -256,7 +265,9 @@ export default function AdminArtistsPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Area</label>
+                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                    Area
+                  </label>
                   <input
                     type="text"
                     value={String(editForm.area ?? "")}
@@ -268,11 +279,15 @@ export default function AdminArtistsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Price From (sen)</label>
+                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                    Price From (sen)
+                  </label>
                   <input
                     type="number"
                     value={String(editForm.priceFrom ?? "")}
-                    onChange={(e) => setEditForm((f) => ({ ...f, priceFrom: Number(e.target.value) }))}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, priceFrom: Number(e.target.value) }))
+                    }
                     className="w-full rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-sm text-stone-900 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
                   />
                 </div>
@@ -291,7 +306,9 @@ export default function AdminArtistsPage() {
 
               {/* Services (read-only display) */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Services</label>
+                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                  Services
+                </label>
                 <div className="rounded-lg border border-stone-200 dark:border-stone-700">
                   {selected.services.map((s, i) => (
                     <div
@@ -313,7 +330,9 @@ export default function AdminArtistsPage() {
                   Claimed By ({selected.claimedBy.length})
                 </label>
                 {selected.claimedBy.length === 0 ? (
-                  <p className="text-sm text-stone-400 dark:text-stone-500">No user has claimed this artist profile.</p>
+                  <p className="text-sm text-stone-400 dark:text-stone-500">
+                    No user has claimed this artist profile.
+                  </p>
                 ) : (
                   <div className="rounded-lg border border-stone-200 dark:border-stone-700">
                     {selected.claimedBy.map((u) => (
@@ -322,8 +341,12 @@ export default function AdminArtistsPage() {
                         className="flex items-center justify-between px-3 py-2 text-sm even:bg-stone-50 dark:even:bg-stone-800/50"
                       >
                         <div>
-                          <span className="font-medium text-stone-900 dark:text-stone-100">{u.user_name}</span>
-                          <span className="ml-2 text-stone-500 dark:text-stone-400">{u.user_email}</span>
+                          <span className="font-medium text-stone-900 dark:text-stone-100">
+                            {u.user_name}
+                          </span>
+                          <span className="ml-2 text-stone-500 dark:text-stone-400">
+                            {u.user_email}
+                          </span>
                         </div>
                         <span className="text-xs text-stone-400 dark:text-stone-500">
                           Claimed {new Date(u.claimed_at).toLocaleDateString("en-MY")}

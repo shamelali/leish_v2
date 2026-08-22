@@ -121,13 +121,19 @@ export default function AdminMessagesPage() {
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={4}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     Loading...
                   </td>
                 </tr>
               ) : messages.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={4}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     No messages found.
                   </td>
                 </tr>
@@ -136,7 +142,9 @@ export default function AdminMessagesPage() {
                   <tr key={m.id} className="hover:bg-stone-50 dark:hover:bg-stone-800/50">
                     <td className="whitespace-nowrap px-6 py-3 text-stone-900 dark:text-stone-100">
                       <div className="font-medium">{m.sender_name}</div>
-                      <div className="text-xs text-stone-500 dark:text-stone-400">{m.sender_email}</div>
+                      <div className="text-xs text-stone-500 dark:text-stone-400">
+                        {m.sender_email}
+                      </div>
                     </td>
                     <td className="whitespace-nowrap px-6 py-3 text-stone-600 dark:text-stone-400">
                       <div>{m.artist_name}</div>

@@ -182,7 +182,10 @@ export default function AdminStudiosPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={8}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     No studios found.
                   </td>
                 </tr>
@@ -209,7 +212,9 @@ export default function AdminStudiosPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Name</label>
+                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                  Name
+                </label>
                 <input
                   type="text"
                   value={String(editForm.name ?? "")}
@@ -219,7 +224,9 @@ export default function AdminStudiosPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Tagline</label>
+                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                  Tagline
+                </label>
                 <input
                   type="text"
                   value={String(editForm.tagline ?? "")}
@@ -229,7 +236,9 @@ export default function AdminStudiosPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Description</label>
+                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                  Description
+                </label>
                 <textarea
                   rows={3}
                   value={String(editForm.description ?? "")}
@@ -240,7 +249,9 @@ export default function AdminStudiosPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">State</label>
+                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                    State
+                  </label>
                   <input
                     type="text"
                     value={String(editForm.state ?? "")}
@@ -249,7 +260,9 @@ export default function AdminStudiosPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Area</label>
+                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                    Area
+                  </label>
                   <input
                     type="text"
                     value={String(editForm.area ?? "")}
@@ -260,7 +273,9 @@ export default function AdminStudiosPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Address</label>
+                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                  Address
+                </label>
                 <input
                   type="text"
                   value={String(editForm.address ?? "")}
@@ -271,16 +286,22 @@ export default function AdminStudiosPage() {
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Price From (sen)</label>
+                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                    Price From (sen)
+                  </label>
                   <input
                     type="number"
                     value={String(editForm.priceFrom ?? "")}
-                    onChange={(e) => setEditForm((f) => ({ ...f, priceFrom: Number(e.target.value) }))}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, priceFrom: Number(e.target.value) }))
+                    }
                     className="w-full rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-sm text-stone-900 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Hours</label>
+                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                    Hours
+                  </label>
                   <input
                     type="text"
                     value={String(editForm.hours ?? "")}
@@ -289,7 +310,9 @@ export default function AdminStudiosPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Phone</label>
+                  <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                    Phone
+                  </label>
                   <input
                     type="text"
                     value={String(editForm.phone ?? "")}
@@ -301,7 +324,9 @@ export default function AdminStudiosPage() {
 
               {/* Services (read-only display) */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">Services</label>
+                <label className="mb-1 block text-xs font-medium text-stone-500 dark:text-stone-400">
+                  Services
+                </label>
                 <div className="flex flex-wrap gap-2">
                   {selected.services.map((svc, i) => (
                     <span

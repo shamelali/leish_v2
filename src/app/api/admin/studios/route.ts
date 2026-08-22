@@ -10,10 +10,7 @@ interface OverrideRow {
   value: string;
 }
 
-function applyOverrides<T extends Record<string, unknown>>(
-  base: T,
-  overrides: OverrideRow[],
-): T {
+function applyOverrides<T extends Record<string, unknown>>(base: T, overrides: OverrideRow[]): T {
   const merged = { ...base };
   for (const o of overrides) {
     if (o.entity_id !== base.id) continue;
@@ -26,19 +23,22 @@ function applyOverrides<T extends Record<string, unknown>>(
   return merged;
 }
 
-export const GET = tryRoute(async function GET(request: Request) {
-  const { error } = await requireAdmin(request);
-  if (error) return error;
+export const GET = tryRoute(
+  async function GET(request: Request) {
+    const { error } = await requireAdmin(request);
+    if (error) return error;
 
-  const db = getDb();
+    const db = getDb();
 
-  const overrides = await db
-    .prepare(
-      `SELECT entity_id, field, value FROM catalog_overrides WHERE entity_type = 'studio'`,
-    )
-    .all<OverrideRow>();
+    const overrides = await db
+      .prepare(`SELECT entity_id, field, value FROM catalog_overrides WHERE entity_type = 'studio'`)
+      .all<OverrideRow>();
 
-  const studios = STUDIOS.map((s) => applyOverrides(s as unknown as Record<string, unknown>, overrides));
+    const studios = STUDIOS.map((s) =>
+      applyOverrides(s as unknown as Record<string, unknown>, overrides),
+    );
 
-  return NextResponse.json({ studios });
-}, { route: "GET /api/admin/studios" });
+    return NextResponse.json({ studios });
+  },
+  { route: "GET /api/admin/studios" },
+);

@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, bookingStatusVariant, paymentStatusVariant, quotationStatusVariant } from "@/components/admin/Badge";
+import {
+  Badge,
+  bookingStatusVariant,
+  paymentStatusVariant,
+  quotationStatusVariant,
+} from "@/components/admin/Badge";
 
 interface Booking {
   id: string;

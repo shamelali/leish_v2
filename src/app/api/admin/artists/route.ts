@@ -18,10 +18,7 @@ interface ArtistProfileRow {
   user_email: string;
 }
 
-function applyOverrides<T extends Record<string, unknown>>(
-  base: T,
-  overrides: OverrideRow[],
-): T {
+function applyOverrides<T extends Record<string, unknown>>(base: T, overrides: OverrideRow[]): T {
   const merged = { ...base };
   for (const o of overrides) {
     if (o.entity_id !== base.id) continue;
@@ -34,41 +31,44 @@ function applyOverrides<T extends Record<string, unknown>>(
   return merged;
 }
 
-export const GET = tryRoute(async function GET(request: Request) {
-  const { error } = await requireAdmin(request);
-  if (error) return error;
+export const GET = tryRoute(
+  async function GET(request: Request) {
+    const { error } = await requireAdmin(request);
+    if (error) return error;
 
-  const db = getDb();
+    const db = getDb();
 
-  const [overrides, profiles] = await Promise.all([
-    db
-      .prepare(
-        `SELECT entity_id, field, value FROM catalog_overrides WHERE entity_type = 'artist'`,
-      )
-      .all<OverrideRow>(),
-    db
-      .prepare(
-        `SELECT ap.user_id, ap.artist_id, ap.claimed_at, u.name AS user_name, u.email AS user_email
+    const [overrides, profiles] = await Promise.all([
+      db
+        .prepare(
+          `SELECT entity_id, field, value FROM catalog_overrides WHERE entity_type = 'artist'`,
+        )
+        .all<OverrideRow>(),
+      db
+        .prepare(
+          `SELECT ap.user_id, ap.artist_id, ap.claimed_at, u.name AS user_name, u.email AS user_email
          FROM artist_profiles ap
          JOIN users u ON u.id = ap.user_id`,
-      )
-      .all<ArtistProfileRow>(),
-  ]);
+        )
+        .all<ArtistProfileRow>(),
+    ]);
 
-  const profilesByArtist = new Map<string, ArtistProfileRow[]>();
-  for (const p of profiles) {
-    const list = profilesByArtist.get(p.artist_id) ?? [];
-    list.push(p);
-    profilesByArtist.set(p.artist_id, list);
-  }
+    const profilesByArtist = new Map<string, ArtistProfileRow[]>();
+    for (const p of profiles) {
+      const list = profilesByArtist.get(p.artist_id) ?? [];
+      list.push(p);
+      profilesByArtist.set(p.artist_id, list);
+    }
 
-  const artists = ARTISTS.map((a) => {
-    const merged = applyOverrides(a as unknown as Record<string, unknown>, overrides);
-    return {
-      ...merged,
-      claimedBy: profilesByArtist.get(a.id) ?? [],
-    };
-  });
+    const artists = ARTISTS.map((a) => {
+      const merged = applyOverrides(a as unknown as Record<string, unknown>, overrides);
+      return {
+        ...merged,
+        claimedBy: profilesByArtist.get(a.id) ?? [],
+      };
+    });
 
-  return NextResponse.json({ artists });
-}, { route: "GET /api/admin/artists" });
+    return NextResponse.json({ artists });
+  },
+  { route: "GET /api/admin/artists" },
+);

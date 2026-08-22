@@ -312,6 +312,43 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 ---
 
+## Admin Panel
+
+Full-featured admin panel at `/admin/*` for platform administration.
+
+### Access Control
+
+- `admin` is a first-class role (`customer | artist | studio | admin` in
+  `src/lib/types.ts`, enforced by CHECK constraints in both DB schemas)
+- `src/server/admin-auth.ts`: `requireAdmin(request)` guards every admin API
+  route (401 unauthenticated, 403 non-admin); `logAdminAction()` writes the audit trail
+- `src/app/admin/layout.tsx`: server-side guard — redirects non-admins before render
+- Seed the first admin (idempotent; upgrades existing users):
+  `ADMIN_EMAIL=... ADMIN_PASSWORD=... npx tsx scripts/seed-admin.ts`
+
+### Pages (`src/app/admin/`)
+
+Dashboard (metrics + recent activity), Users (full CRUD), Artists/Studios
+(catalog edits via `catalog_overrides` overrides table), Bookings (status
+override + notes), Payments, Quotations, Messages, Email Outbox, Audit Log,
+Settings (`platform_settings` table).
+
+### API Routes (`src/app/api/admin/`)
+
+All under `requireAdmin()`; mutations write to `admin_audit_log`
+(id, admin_user_id → users.id FK, action, target_table, target_id, details JSON).
+
+### Conventions
+
+- Admin pages are `"use client"` and fetch from `/api/admin/*`
+- Data fetching in effects uses `.then()` chains — do NOT call setState
+  synchronously in an effect body (`react-hooks/set-state-in-effect`)
+- `admin_audit_log.admin_user_id` has a real FK to `users(id)` — tests must
+  seed a user row before writing audit entries
+- Shared components in `src/components/admin/` (AdminSidebar, StatCard, Badge)
+
+---
+
 ## Common Patterns & Gotchas
 
 ### 1. `src/env.ts` Build Quirk

@@ -105,10 +105,7 @@ function UserForm({
               onChange={(e) => setForm({ ...form, email_verified: e.target.checked })}
               className="h-4 w-4 rounded border-stone-300 text-rose-500 focus:ring-rose-500"
             />
-            <label
-              htmlFor="email_verified"
-              className="text-sm text-stone-700 dark:text-stone-300"
-            >
+            <label htmlFor="email_verified" className="text-sm text-stone-700 dark:text-stone-300">
               Email verified
             </label>
           </div>
@@ -341,10 +338,7 @@ export default function AdminUsersPage() {
               )}
               {!loading &&
                 users.map((u) => (
-                  <tr
-                    key={u.id}
-                    className="hover:bg-stone-50 dark:hover:bg-stone-800/50"
-                  >
+                  <tr key={u.id} className="hover:bg-stone-50 dark:hover:bg-stone-800/50">
                     <td className="whitespace-nowrap px-6 py-3 text-stone-900 dark:text-stone-100">
                       {u.name}
                     </td>

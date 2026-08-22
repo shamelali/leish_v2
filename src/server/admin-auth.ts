@@ -14,14 +14,15 @@ export async function requireAdmin(request: Request) {
   }
 
   const user = (await getDb().prepare("SELECT * FROM users WHERE id = ?").get(payload.sub)) as
-    | UserRow
-    | undefined;
+    UserRow | undefined;
   if (!user) {
     return { error: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
   }
 
   if (user.role !== "admin") {
-    return { error: NextResponse.json({ error: "Forbidden — admin access required" }, { status: 403 }) };
+    return {
+      error: NextResponse.json({ error: "Forbidden — admin access required" }, { status: 403 }),
+    };
   }
 
   return { user };

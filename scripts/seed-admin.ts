@@ -20,7 +20,9 @@ async function main() {
 
   if (!email || !password) {
     console.error("Error: ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required.");
-    console.error('Example: ADMIN_EMAIL=admin@leish.my ADMIN_PASSWORD=changeme npx tsx scripts/seed-admin.ts');
+    console.error(
+      "Example: ADMIN_EMAIL=admin@leish.my ADMIN_PASSWORD=changeme npx tsx scripts/seed-admin.ts",
+    );
     process.exit(1);
   }
 
@@ -38,9 +40,7 @@ async function main() {
     if (existing.role === "admin") {
       console.log(`User ${email} is already an admin. No changes needed.`);
     } else {
-      await db
-        .prepare("UPDATE users SET role = 'admin' WHERE id = ?")
-        .run(existing.id);
+      await db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(existing.id);
       console.log(`User ${email} has been upgraded to admin (was: ${existing.role}).`);
     }
   } else {

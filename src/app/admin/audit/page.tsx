@@ -158,13 +158,19 @@ export default function AdminAuditPage() {
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={5}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     Loading...
                   </td>
                 </tr>
               ) : entries.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={5}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     No audit entries found.
                   </td>
                 </tr>
@@ -173,7 +179,9 @@ export default function AdminAuditPage() {
                   <tr key={e.id} className="hover:bg-stone-50 dark:hover:bg-stone-800/50">
                     <td className="whitespace-nowrap px-6 py-3 text-stone-900 dark:text-stone-100">
                       <div className="font-medium">{e.admin_name ?? "System"}</div>
-                      <div className="text-xs text-stone-500 dark:text-stone-400">{e.admin_email}</div>
+                      <div className="text-xs text-stone-500 dark:text-stone-400">
+                        {e.admin_email}
+                      </div>
                     </td>
                     <td className="whitespace-nowrap px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
                       {e.action}

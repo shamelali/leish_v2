@@ -8,11 +8,7 @@ export const metadata = {
   title: "Admin",
 };
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
   const token = cookieStore.get("leish_session")?.value;
   const payload = token ? await verifySessionToken(token) : null;
@@ -22,8 +18,7 @@ export default async function AdminLayout({
   }
 
   const user = (await getDb().prepare("SELECT * FROM users WHERE id = ?").get(payload.sub)) as
-    | UserRow
-    | undefined;
+    UserRow | undefined;
 
   if (!user || user.role !== "admin") {
     redirect("/?error=forbidden");
@@ -32,9 +27,7 @@ export default async function AdminLayout({
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
       <AdminSidebar />
-      <main className="flex-1 overflow-y-auto bg-stone-50 p-6 dark:bg-stone-950">
-        {children}
-      </main>
+      <main className="flex-1 overflow-y-auto bg-stone-50 p-6 dark:bg-stone-950">{children}</main>
     </div>
   );
 }

@@ -86,13 +86,19 @@ export default function AdminEmailsPage() {
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={5}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     Loading...
                   </td>
                 </tr>
               ) : emails.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={5}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     No emails in outbox.
                   </td>
                 </tr>

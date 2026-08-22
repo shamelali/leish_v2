@@ -41,7 +41,11 @@ function formatRM(sen: number) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-MY", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-MY", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export default function AdminDashboard() {
