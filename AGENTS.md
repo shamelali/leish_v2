@@ -21,13 +21,29 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 ## Architecture Patterns
 
-### 1. Data Layer (`src/lib/data.ts`)
+### 1. Data Layer — Catalog (`src/lib/data.ts` + `src/server/catalog.ts`)
 
-- Static artist/studio data with typed lookups (`getArtist()`, `getStudio()`)
-- Malaysia states/areas constants for filtering
-- Event categories (bridal / non-bridal)
+- `src/lib/data.ts` is **seed data + constants only** (`SEED_ARTISTS`,
+  `SEED_STUDIOS`, `MALAYSIA_STATES`, `AREAS_BY_STATE`, event lists) — never
+  import runtime catalog entities from it
+- **Runtime source of truth = DB tables** `artists` / `studios` / `reviews`
+- Repository: `src/server/catalog.ts` — `listArtists(filters)` (SQL pre-filter
+  on state/area/budget + pure `filterArtists()` for tags/query),
+  `getArtistById()`, `getArtistBySlug()`, studio equivalents,
+  `updateArtist()/updateStudio()` (whitelisted fields), review helpers
+  (`addEntityReview`, `findReviewableBooking`, `listEntityReviews`)
+- Seeding: `src/server/catalog-seed.ts` — idempotent; runs lazily before the
+  first catalog read AND explicitly via `npm run db:seed-catalog`; folds
+  legacy `catalog_overrides` rows into real columns and deletes them
+- Slugs equal the original static ids (e.g. `aisha-azman`) so existing links
+  and bookings keep working
+- Live reviews are gated on a COMPLETED, not-yet-reviewed booking
+  (`reviews.booking_id` UNIQUE); new ratings blend incrementally into the
+  seeded aggregate (`rating`/`review_count` columns)
+- Artist self-service profile edits: `PATCH /api/artist-profiles` scoped to
+  claimed profiles (`artist_profiles` table)
 
-### 2. Database Facade (`src/server/db.ts`)
+### 1b. Database Facade (`src/server/db.ts`)
 
 - **Two-backend facade**: PostgreSQL (`DATABASE_URL`) or node:sqlite
 - `getDb()` is synchronous — init is sync; pg schema migrates lazily on first query
@@ -62,12 +78,28 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - Cross-references `MALAYSIA_STATES`, `BRIDAL_EVENTS`, `NON_BRIDAL_EVENTS`
 - Types inferred via `z.infer`
 
-### 7. Payments (`src/lib/payments/billplz.ts`)
+### 2. Payments (`src/lib/payments/billplz.ts` + `src/server/payments.ts`)
 
 - Billplz API: `createBill()`, `verifyWebhookSignature()` (HMAC-SHA256)
 - Signature fields (ordered): `amount|collection_id|id|paid|paid_amount|state`
 - `BILLPLZ_X_SIGNATURE_KEY` required for webhook verification
 - `BILLPLZ_API_KEY`, `BILLPLZ_COLLECTION_ID`, `BILLPLZ_BASE_URL`, `BILLPLZ_X_SIGNATURE_KEY`
+
+### 2b. Hybrid Payment Model (`src/server/payments.ts`)
+
+- Two payment types per booking (`payments.type`, UNIQUE `(booking_id, type)`):
+  - `deposit` — flat non-refundable amount (settings: `booking_fee_sen`,
+    default RM 50), paid to confirm the booking
+  - `balance` — quotation total − deposit, due 3 days before the event
+- Commission is artist-side: client always pays exactly the quoted price.
+  Compute via `computeCommission(total, rateBps, waiverSen)` from
+  `src/server/settings.ts` (`commission_rate_bps` default 10%,
+  `commission_waiver_sen` default RM 100 — totals below the waiver are
+  commission-free)
+- Payouts (`src/server/payouts.ts`): per-booking settlement rows created when
+  a balance payment lands; statuses `pending | settled | failed`; admin
+  settle/fail via `/api/admin/payouts`
+- Webhook routes by payment type before mutating booking state
 
 ### 8. Email (`src/server/email.ts`)
 
@@ -84,27 +116,33 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 ### 10. API Routes (`src/app/api/`)
 
 - `/api/auth/*` — login/register/logout (token-based)
-- `/api/bookings/*` — booking flow
+- `/api/bookings/*` — booking flow (pay-fee = deposit, pay-balance)
 - `/api/quotations/*` — quotation generation
-- `/api/payments/*` — Billplz webhook handler
+- `/api/payments/*` — Billplz webhook handler (routes by payment type)
+- `/api/artists/*` — public catalog + reviews
+- `/api/catalog/*` — full-catalog reads for client components
+- `/api/artist-profiles` — claim + self-service profile edits
+- `/api/admin/*` — admin panel (all under `requireAdmin()`)
 - `/api/health` — health check (used by Docker HEALTHCHECK)
 
 ---
 
 ## Development Workflow
 
-| Command                 | Purpose                                   |
-| ----------------------- | ----------------------------------------- |
-| `npm run dev`           | Next.js dev mode (`NODE_ENV=development`) |
-| `npm run build`         | `next build` (sets `NODE_ENV=production`) |
-| `npm run start`         | `next start` (production server)          |
-| `npm run lint`          | ESLint (`eslint-config-next`)             |
-| `npm run typecheck`     | `tsc --noEmit`                            |
-| `npm test`              | Vitest suite (`jsdom` environment)        |
-| `npm run test:coverage` | Vitest + HTML coverage report             |
-| `npm run env:check`     | Validate required env vars                |
-| `npm run format`        | Prettier auto-fix                         |
-| `npm run format:check`  | Prettier check                            |
+| Command                   | Purpose                                   |
+| ------------------------- | ----------------------------------------- |
+| `npm run dev`             | Next.js dev mode (`NODE_ENV=development`) |
+| `npm run build`           | `next build` (sets `NODE_ENV=production`) |
+| `npm run start`           | `next start` (production server)          |
+| `npm run lint`            | ESLint (`eslint-config-next`)             |
+| `npm run typecheck`       | `tsc --noEmit`                            |
+| `npm test`                | Vitest suite (`jsdom` environment)        |
+| `npm run test:coverage`   | Vitest + HTML coverage report             |
+| `npm run env:check`       | Validate required env vars                |
+| `npm run db:migrate`      | Apply/verify PostgreSQL schema            |
+| `npm run db:seed-catalog` | Seed artists/studios/reviews tables       |
+| `npm run format`          | Prettier auto-fix                         |
+| `npm run format:check`    | Prettier check                            |
 
 **Git branching:** `main` only. PRs require passing:
 
@@ -152,7 +190,10 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 ### 3. Database Migrations
 
 - Run `npm run db:migrate` (scripts/migrate.ts) to apply/verify the PostgreSQL
-  schema against `DATABASE_URL` (idempotent; also backfills additive columns)
+  schema against `DATABASE_URL` (idempotent; also backfills additive columns
+  such as `payments.type`)
+- Run `npm run db:seed-catalog` to populate `artists` / `studios` / `reviews`
+  and fold legacy overrides (also happens lazily on first catalog read)
 - SQLite applies the schema automatically on first `getDb()` call
 - CI: `database.yml` runs `npm run db:migrate` when `db.ts`/`migrate.ts` change
 - Schema is defined in `src/server/db.ts` (`PG_SCHEMA` / `SQLITE_SCHEMA`) — keep
@@ -329,8 +370,10 @@ Full-featured admin panel at `/admin/*` for platform administration.
 ### Pages (`src/app/admin/`)
 
 Dashboard (metrics + recent activity), Users (full CRUD), Artists/Studios
-(catalog edits via `catalog_overrides` overrides table), Bookings (status
-override + notes), Payments, Quotations, Messages, Email Outbox, Audit Log,
+(direct DB column edits via `updateArtist()`/`updateStudio()` — the legacy
+`catalog_overrides` mechanism is folded away at seed time), Bookings (status
+override + notes), Payments, Payouts (settle/fail settlement rows),
+Quotations, Messages, Email Outbox, Audit Log,
 Settings (`platform_settings` table).
 
 ### API Routes (`src/app/api/admin/`)
@@ -345,7 +388,8 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
   synchronously in an effect body (`react-hooks/set-state-in-effect`)
 - `admin_audit_log.admin_user_id` has a real FK to `users(id)` — tests must
   seed a user row before writing audit entries
-- Shared components in `src/components/admin/` (AdminSidebar, StatCard, Badge)
+- Shared components in `src/components/admin/` (AdminShell sidebar + drawer,
+  StatCard, Badge)
 
 ---
 
@@ -416,6 +460,25 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
 - **`NEXT_PUBLIC_` prefix** — only expose non-secret vars to browser
 - **Vercel `NODE_ENV=production`** — `env.ts` `checkPostgresUrl()` runs; ensure `POSTGRES_URL` set
 
+### 11. Catalog & 404 Gotchas
+
+- **Never import catalog entities from `@/lib/data`** — it is seed-only;
+  use `src/server/catalog.ts` (async, DB-backed, auto-seeds on first read)
+- **No root `loading.tsx`**: a Suspense boundary above async pages streams a
+  HTTP 200 shell before the page resolves, so `notFound()` cannot set a real
+  404 status. Do not re-add a root-level loading boundary; scope any loading
+  UI to segments that don't call `notFound()`
+- **Catalog pages are `force-dynamic`** so admin edits appear immediately;
+  public APIs keep CDN caching (`s-maxage=300`)
+- **Slugs == legacy ids** (`aisha-azman`) — never regenerate slugs from names,
+  bookings and links reference them
+
+### 12. Multi-Agent / Concurrent Sessions
+
+- Multiple agents have worked this repo concurrently; before editing shared
+  files (`db.ts`, `payments.ts`, booking routes), check `git status` and file
+  mtimes for in-flight work from another session and pick non-overlapping work
+
 ---
 
 ## Directory Conventions
@@ -427,7 +490,7 @@ src/
   lib/
     actions/    → Server actions
     auth.tsx    → AuthProvider + ROLE_LABELS
-    data.ts     → Static data (artists, studios, states)
+    data.ts     → Seed data + constants (states, events) — seed-only
     email/      → Brevo send + templates
     payments/   → Billplz API + types
     supabase/   → Supabase client helpers
@@ -435,9 +498,13 @@ src/
     types.ts    → Shared types (Role, Artist, Studio, etc.)
     utils.ts    → cn(), formatRM(), pluralize()
   server/
+    catalog.ts  → DB-backed artists/studios/reviews repository
+    catalog-seed.ts → idempotent seeding + override folding
     db.ts       → DbFacade + PG_SCHEMA + SQLite schema
     errors.ts   → reportError + Sentry integration
     logger.ts   → pino logger + forwarding sink
+    payouts.ts  → per-booking settlement rows (pending/settled/failed)
+    settings.ts → typed platform_settings access + commission math
     session.ts  → JWT create/verify/revoke
     validation.ts → Zod schemas
     [other]*.ts → booking-emails, chat-bus, invoice-pdf, etc.
