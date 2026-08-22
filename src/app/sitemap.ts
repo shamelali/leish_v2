@@ -1,7 +1,9 @@
 import type { MetadataRoute } from "next";
-import { ARTISTS, STUDIOS } from "@/lib/data";
+import { listAllArtists, listAllStudios } from "@/server/catalog";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export const dynamic = "force-dynamic";
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://leish.my";
 
   const staticRoutes = ["", "/artists", "/studios", "/login", "/register", "/onboarding"].map(
@@ -13,14 +15,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
     }),
   );
 
-  const artistRoutes = ARTISTS.map((artist) => ({
+  const [artists, studios] = await Promise.all([listAllArtists(), listAllStudios()]);
+
+  const artistRoutes = artists.map((artist) => ({
     url: `${base}/artists/${artist.id}`,
     lastModified: new Date(),
     changeFrequency: "monthly" as const,
     priority: 0.6,
   }));
 
-  const studioRoutes = STUDIOS.map((studio) => ({
+  const studioRoutes = studios.map((studio) => ({
     url: `${base}/studios/${studio.id}`,
     lastModified: new Date(),
     changeFrequency: "monthly" as const,

@@ -2,13 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/server/db";
 import { requireAdmin } from "@/server/admin-auth";
 import { tryRoute } from "@/server/http";
-import { ARTISTS } from "@/lib/data";
-
-interface OverrideRow {
-  entity_id: string;
-  field: string;
-  value: string;
-}
+import { listAllArtists } from "@/server/catalog";
 
 interface ArtistProfileRow {
   user_id: string;
@@ -18,33 +12,14 @@ interface ArtistProfileRow {
   user_email: string;
 }
 
-function applyOverrides<T extends Record<string, unknown>>(base: T, overrides: OverrideRow[]): T {
-  const merged = { ...base };
-  for (const o of overrides) {
-    if (o.entity_id !== base.id) continue;
-    try {
-      (merged as Record<string, unknown>)[o.field] = JSON.parse(o.value);
-    } catch {
-      (merged as Record<string, unknown>)[o.field] = o.value;
-    }
-  }
-  return merged;
-}
-
 export const GET = tryRoute(
   async function GET(request: Request) {
     const { error } = await requireAdmin(request);
     if (error) return error;
 
-    const db = getDb();
-
-    const [overrides, profiles] = await Promise.all([
-      db
-        .prepare(
-          `SELECT entity_id, field, value FROM catalog_overrides WHERE entity_type = 'artist'`,
-        )
-        .all<OverrideRow>(),
-      db
+    const [artists, profiles] = await Promise.all([
+      listAllArtists(),
+      getDb()
         .prepare(
           `SELECT ap.user_id, ap.artist_id, ap.claimed_at, u.name AS user_name, u.email AS user_email
          FROM artist_profiles ap
@@ -60,15 +35,9 @@ export const GET = tryRoute(
       profilesByArtist.set(p.artist_id, list);
     }
 
-    const artists = ARTISTS.map((a) => {
-      const merged = applyOverrides(a as unknown as Record<string, unknown>, overrides);
-      return {
-        ...merged,
-        claimedBy: profilesByArtist.get(a.id) ?? [],
-      };
+    return NextResponse.json({
+      artists: artists.map((a) => ({ ...a, claimedBy: profilesByArtist.get(a.id) ?? [] })),
     });
-
-    return NextResponse.json({ artists });
   },
   { route: "GET /api/admin/artists" },
 );

@@ -17,6 +17,7 @@
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
+    "db:seed-catalog": "node --experimental-strip-types scripts/seed-catalog.ts",
     "test:pg": "vitest run --config vitest.pg.config.mts"
   },
   "dependencies": {

@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { getArtist } from "@/lib/data";
+import { getArtistById } from "./catalog";
 
 /**
  * Artist-profile claiming: links an artist/studio user account to one of
@@ -19,7 +19,7 @@ export async function claimArtistProfile(
   userId: string,
   artistId: string,
 ): Promise<ArtistProfileRow> {
-  if (!getArtist(artistId)) {
+  if (!(await getArtistById(artistId))) {
     throw new Error("ARTIST_NOT_FOUND");
   }
   const db = await getDb();

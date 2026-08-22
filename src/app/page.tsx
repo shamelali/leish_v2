@@ -1,11 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ARTISTS, CATEGORIES } from "@/lib/data";
+import { CATEGORIES } from "@/lib/data";
+import { listAllArtists } from "@/server/catalog";
 import { Button } from "@/components/Button";
 import { ArtistCard } from "@/components/ArtistCard";
 
-export default function HomePage() {
-  const featured = [...ARTISTS].sort((a, b) => b.rating - a.rating).slice(0, 3);
+// Catalog is DB-backed — render per-request so edits show up immediately.
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const artists = await listAllArtists();
+  const featured = [...artists].sort((a, b) => b.rating - a.rating).slice(0, 3);
 
   return (
     <div>
@@ -29,7 +34,7 @@ export default function HomePage() {
             </p>
             <div className="mt-8 flex items-center gap-3">
               <div className="flex -space-x-2">
-                {ARTISTS.slice(0, 4).map((a) => (
+                {artists.slice(0, 4).map((a) => (
                   <Image
                     key={a.id}
                     src={a.image}
@@ -134,7 +139,7 @@ export default function HomePage() {
       <section className="border-y border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900/50">
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-4 py-10 sm:px-6 md:grid-cols-4">
           {[
-            { value: String(ARTISTS.length), label: "Artists Onboarding" },
+            { value: String(artists.length), label: "Artists Onboarding" },
             { value: String(CATEGORIES.length * 3), label: "Beauty Categories" },
             { value: "KL & Selangor", label: "Service Area" },
             { value: "4.9★", label: "Average Rating" },

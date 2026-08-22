@@ -2,29 +2,28 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { STUDIOS, getStudio } from "@/lib/data";
+import { getStudioById } from "@/server/catalog";
 import { formatRM } from "@/lib/utils";
 import { RatingStars } from "@/components/RatingStars";
 import { Button } from "@/components/Button";
+
+// Catalog is DB-backed — render per-request.
+export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
-export function generateStaticParams() {
-  return STUDIOS.map((s) => ({ id: s.id }));
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const studio = getStudio(id);
+  const studio = await getStudioById(id);
   if (!studio) return { title: "Studio not found" };
   return { title: studio.name, description: studio.tagline };
 }
 
 export default async function StudioDetailPage({ params }: Props) {
   const { id } = await params;
-  const studio = getStudio(id);
+  const studio = await getStudioById(id);
   if (!studio) notFound();
 
   return (

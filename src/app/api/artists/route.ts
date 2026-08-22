@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { ARTISTS } from "@/lib/data";
-import { filterArtists, type ArtistFilters } from "@/lib/artists";
+import { listArtists } from "@/server/catalog";
+import { type ArtistFilters } from "@/lib/artists";
 import { artistsQuerySchema } from "@/server/validation";
 
 /**
  * Public catalog API with the same filtering used by the browse page.
  * Query params mirror the client filter state, validated with zod.
- * Pages still import the catalog directly for speed; this endpoint is the
- * contract for future consumers (mobile app, partner integrations).
+ * Backed by the DB catalog (seeded from src/lib/data.ts).
  */
 export async function GET(request: Request) {
   const params = Object.fromEntries(new URL(request.url).searchParams);
@@ -20,7 +19,7 @@ export async function GET(request: Request) {
   }
 
   const { query, state, area, bridal, nonBridal, budget } = parsed.data;
-  const filters: ArtistFilters = {
+  const filters: Partial<ArtistFilters> = {
     query,
     state: state ?? "",
     area: area ?? "",
@@ -31,7 +30,7 @@ export async function GET(request: Request) {
     budget: budget ?? 0,
   };
 
-  const artists = filterArtists(ARTISTS, filters).map((a) => ({
+  const artists = (await listArtists(filters)).map((a) => ({
     id: a.id,
     name: a.name,
     tagline: a.tagline,

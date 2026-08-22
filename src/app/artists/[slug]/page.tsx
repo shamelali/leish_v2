@@ -1,16 +1,22 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getArtist, BRIDAL_EVENTS, NON_BRIDAL_EVENTS } from "@/lib/data";
+import { BRIDAL_EVENTS, NON_BRIDAL_EVENTS } from "@/lib/data";
+import { getArtistBySlug, listEntityReviews } from "@/server/catalog";
+import { RatingStars } from "@/components/RatingStars";
 import BookingCalendar from "@/components/booking-calendar";
+
+// Catalog is DB-backed — render per-request.
+export const dynamic = "force-dynamic";
 
 export default async function ArtistProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
-  // Catalog-backed profile (src/lib/data.ts) — the same source the listing
-  // pages use, so artist pages need no external DB to render. Unknown slugs
-  // also get a true 404 from the proxy middleware (see src/proxy.ts).
-  const artist = getArtist(slug);
+  // DB-backed catalog profile (seeded from src/lib/data.ts). Slugs match the
+  // original catalog ids, so existing links/bookings keep working.
+  const artist = await getArtistBySlug(slug);
   if (!artist) notFound();
+
+  const reviews = await listEntityReviews("artist", artist.id);
 
   const eventTypes = [
     ...BRIDAL_EVENTS.filter((e) => artist.bridal.includes(e.id)),
@@ -134,6 +140,41 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
                 ))}
               </div>
             </div>
+
+            {/* Reviews */}
+            {reviews.length > 0 && (
+              <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900 sm:p-8">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-stone-900 dark:text-stone-100">Reviews</h2>
+                  <span className="text-sm text-stone-500 dark:text-stone-400">
+                    {artist.rating} · {artist.reviewCount} reviews
+                  </span>
+                </div>
+                <div className="mt-6 space-y-5">
+                  {reviews.map((review) => (
+                    <div
+                      key={review.id}
+                      className="rounded-xl border border-stone-100 p-4 dark:border-stone-800/80"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <RatingStars rating={review.rating} />
+                          <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                            {review.author}
+                          </span>
+                        </div>
+                        <span className="text-xs text-stone-400">
+                          {[review.event, review.date].filter(Boolean).join(" · ")}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-300">
+                        {review.text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Sidebar Booking Column */}

@@ -295,6 +295,63 @@ export const PG_SCHEMA = `
     updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
     updated_at  TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS artists (
+    id            TEXT PRIMARY KEY,
+    slug          TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    tagline       TEXT NOT NULL DEFAULT '',
+    bio           TEXT NOT NULL DEFAULT '',
+    image         TEXT NOT NULL DEFAULT '',
+    rating        REAL NOT NULL DEFAULT 0,
+    review_count  INTEGER NOT NULL DEFAULT 0,
+    state         TEXT NOT NULL DEFAULT '',
+    area          TEXT NOT NULL DEFAULT '',
+    price_from    INTEGER NOT NULL DEFAULT 0,
+    verified      INTEGER NOT NULL DEFAULT 0,
+    years_experience INTEGER NOT NULL DEFAULT 0,
+    specialties   TEXT NOT NULL DEFAULT '[]',
+    services      TEXT NOT NULL DEFAULT '[]',
+    bridal        TEXT NOT NULL DEFAULT '[]',
+    non_bridal    TEXT NOT NULL DEFAULT '[]',
+    availability  TEXT NOT NULL DEFAULT '[]',
+    portfolio     TEXT NOT NULL DEFAULT '[]',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS studios (
+    id            TEXT PRIMARY KEY,
+    slug          TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    tagline       TEXT NOT NULL DEFAULT '',
+    description   TEXT NOT NULL DEFAULT '',
+    image         TEXT NOT NULL DEFAULT '',
+    rating        REAL NOT NULL DEFAULT 0,
+    review_count  INTEGER NOT NULL DEFAULT 0,
+    state         TEXT NOT NULL DEFAULT '',
+    area          TEXT NOT NULL DEFAULT '',
+    address       TEXT NOT NULL DEFAULT '',
+    services      TEXT NOT NULL DEFAULT '[]',
+    price_from    INTEGER NOT NULL DEFAULT 0,
+    hours         TEXT NOT NULL DEFAULT '',
+    phone         TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS reviews (
+    id           TEXT PRIMARY KEY,
+    entity_type  TEXT NOT NULL CHECK (entity_type IN ('artist','studio')),
+    entity_id    TEXT NOT NULL,
+    booking_id   TEXT UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+    user_id      TEXT REFERENCES users(id) ON DELETE SET NULL,
+    author_name  TEXT NOT NULL,
+    rating       INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    event        TEXT,
+    text         TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_artists_state_area ON artists(state, area);
+  CREATE INDEX IF NOT EXISTS idx_studios_state_area ON studios(state, area);
+  CREATE INDEX IF NOT EXISTS idx_reviews_entity ON reviews(entity_type, entity_id);
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
@@ -457,6 +514,63 @@ const SQLITE_SCHEMA = `
     updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
     updated_at  TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS artists (
+    id            TEXT PRIMARY KEY,
+    slug          TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    tagline       TEXT NOT NULL DEFAULT '',
+    bio           TEXT NOT NULL DEFAULT '',
+    image         TEXT NOT NULL DEFAULT '',
+    rating        REAL NOT NULL DEFAULT 0,
+    review_count  INTEGER NOT NULL DEFAULT 0,
+    state         TEXT NOT NULL DEFAULT '',
+    area          TEXT NOT NULL DEFAULT '',
+    price_from    INTEGER NOT NULL DEFAULT 0,
+    verified      INTEGER NOT NULL DEFAULT 0,
+    years_experience INTEGER NOT NULL DEFAULT 0,
+    specialties   TEXT NOT NULL DEFAULT '[]',
+    services      TEXT NOT NULL DEFAULT '[]',
+    bridal        TEXT NOT NULL DEFAULT '[]',
+    non_bridal    TEXT NOT NULL DEFAULT '[]',
+    availability  TEXT NOT NULL DEFAULT '[]',
+    portfolio     TEXT NOT NULL DEFAULT '[]',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS studios (
+    id            TEXT PRIMARY KEY,
+    slug          TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    tagline       TEXT NOT NULL DEFAULT '',
+    description   TEXT NOT NULL DEFAULT '',
+    image         TEXT NOT NULL DEFAULT '',
+    rating        REAL NOT NULL DEFAULT 0,
+    review_count  INTEGER NOT NULL DEFAULT 0,
+    state         TEXT NOT NULL DEFAULT '',
+    area          TEXT NOT NULL DEFAULT '',
+    address       TEXT NOT NULL DEFAULT '',
+    services      TEXT NOT NULL DEFAULT '[]',
+    price_from    INTEGER NOT NULL DEFAULT 0,
+    hours         TEXT NOT NULL DEFAULT '',
+    phone         TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS reviews (
+    id           TEXT PRIMARY KEY,
+    entity_type  TEXT NOT NULL CHECK (entity_type IN ('artist','studio')),
+    entity_id    TEXT NOT NULL,
+    booking_id   TEXT UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+    user_id      TEXT REFERENCES users(id) ON DELETE SET NULL,
+    author_name  TEXT NOT NULL,
+    rating       INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    event        TEXT,
+    text         TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_artists_state_area ON artists(state, area);
+  CREATE INDEX IF NOT EXISTS idx_studios_state_area ON studios(state, area);
+  CREATE INDEX IF NOT EXISTS idx_reviews_entity ON reviews(entity_type, entity_id);
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);

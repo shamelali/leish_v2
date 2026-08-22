@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, ROLE_LABELS } from "@/lib/auth";
-import { ARTISTS } from "@/lib/data";
+import type { Artist } from "@/lib/types";
 import { formatRM } from "@/lib/utils";
 import { Button } from "@/components/Button";
 
@@ -85,6 +85,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [catalog, setCatalog] = useState<Artist[]>([]);
   const [verifyState, setVerifyState] = useState<"idle" | "sending" | "sent">("idle");
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [claimedProfile, setClaimedProfile] = useState<ClaimedProfile | null>(null);
@@ -117,6 +118,20 @@ export default function DashboardPage() {
       .finally(() => {
         if (!cancelled) setBookingsLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    fetch("/api/catalog/artists")
+      .then((res) => (res.ok ? res.json() : { artists: [] }))
+      .then((body) => {
+        if (!cancelled) setCatalog(body.artists ?? []);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -438,7 +453,7 @@ export default function DashboardPage() {
                 <option value="" disabled>
                   Select your artist profile…
                 </option>
-                {ARTISTS.map((a) => (
+                {catalog.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name} — {a.area}, {a.state}
                   </option>
@@ -556,7 +571,7 @@ export default function DashboardPage() {
         ) : (
           <div className="mt-4 space-y-4">
             {bookings.map((appt) => {
-              const artist = ARTISTS.find((a) => a.id === appt.artistId);
+              const artist = catalog.find((a) => a.id === appt.artistId);
               return (
                 <div
                   key={appt.id}

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { getDb, bind, toPublicUser, type BookingRow, type UserRow } from "@/server/db";
 import { verifySessionToken } from "@/server/session";
 import { bookingSchema } from "@/server/validation";
-import { getArtist } from "@/lib/data";
+import { getArtistById } from "@/server/catalog";
 import { createVerifyUrl } from "@/server/verify-email";
 import { getClaimedArtistIds } from "@/server/artist-profiles";
 import { getPaymentForBooking } from "@/server/payments";
@@ -155,7 +155,7 @@ export const POST = statefulRoute(
 
     // Price/duration are resolved server-side from the catalog — never trust
     // the client for pricing.
-    const artist = getArtist(artistId);
+    const artist = await getArtistById(artistId);
     if (!artist) return jsonError("Artist not found", 404);
     const serviceDef = artist.services.find((s) => s.name === service);
     if (!serviceDef) return jsonError("Service not available for this artist", 400);

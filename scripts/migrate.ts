@@ -146,6 +146,9 @@ async function main(): Promise<void> {
       "admin_audit_log",
       "catalog_overrides",
       "platform_settings",
+      "artists",
+      "studios",
+      "reviews",
     ];
     const { rows } = await pool.query(
       `SELECT table_name FROM information_schema.tables

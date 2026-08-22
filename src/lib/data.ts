@@ -121,7 +121,7 @@ export const CATEGORIES: Category[] = [
   },
 ];
 
-export const ARTISTS: Artist[] = [
+export const SEED_ARTISTS: Artist[] = [
   {
     id: "aisha-azman",
     name: "Aisha Azman",
@@ -414,7 +414,7 @@ export const ARTISTS: Artist[] = [
   },
 ];
 
-export const STUDIOS: Studio[] = [
+export const SEED_STUDIOS: Studio[] = [
   {
     id: "glow-room-cyberjaya",
     name: "The Glow Room",
@@ -502,11 +502,3 @@ export const STUDIOS: Studio[] = [
     phone: "04-261 4450",
   },
 ];
-
-export function getArtist(id: string): Artist | undefined {
-  return ARTISTS.find((a) => a.id === id);
-}
-
-export function getStudio(id: string): Studio | undefined {
-  return STUDIOS.find((s) => s.id === id);
-}
