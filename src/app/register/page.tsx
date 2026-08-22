@@ -21,6 +21,7 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -29,7 +30,7 @@ export default function RegisterPage() {
     setError("");
     setSubmitting(true);
     try {
-      await register({ name: name.trim(), email, password, role });
+      await register({ name: name.trim(), email, password, role, consent });
       router.push(role === "artist" ? "/onboarding?new=1" : "/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed. Please try again.");
@@ -131,6 +132,25 @@ export default function RegisterPage() {
             required
             className={inputCls}
           />
+        </div>
+        <div className="flex items-start gap-3">
+          <input
+            id="reg-consent"
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-stone-300 text-rose-600 focus:ring-rose-500 dark:border-stone-700"
+          />
+          <label htmlFor="reg-consent" className="text-sm text-stone-600 dark:text-stone-400">
+            I consent to the collection and processing of my personal data in accordance with the{" "}
+            <Link
+              href="/privacy"
+              className="font-medium text-rose-600 hover:text-rose-700 dark:text-rose-500"
+            >
+              Privacy Policy
+            </Link>
+            .
+          </label>
         </div>
         {error && (
           <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">

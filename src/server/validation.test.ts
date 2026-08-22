@@ -15,6 +15,20 @@ describe("registerSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.email).toBe("aina@example.com"); // lowercased + trimmed
+      expect(result.data.consent).toBe(true);
+    }
+  });
+
+  it("defaults consent to false when omitted", () => {
+    const result = registerSchema.safeParse({
+      name: "Aina Rahman",
+      email: "aina@example.com",
+      password: "password123",
+      role: "customer",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.consent).toBe(false);
     }
   });
 

@@ -15,7 +15,13 @@ interface AuthContextValue {
   /** True until the initial /api/auth/me check has resolved. */
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
-  register: (data: { name: string; email: string; password: string; role: Role }) => Promise<User>;
+  register: (data: {
+    name: string;
+    email: string;
+    password: string;
+    role: Role;
+    consent?: boolean;
+  }) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -66,7 +72,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const register = useCallback(
-    async (data: { name: string; email: string; password: string; role: Role }) => {
+    async (data: {
+      name: string;
+      email: string;
+      password: string;
+      role: Role;
+      consent?: boolean;
+    }) => {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

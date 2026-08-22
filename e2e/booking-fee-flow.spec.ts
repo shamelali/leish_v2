@@ -15,7 +15,13 @@ test("fee flow: register → create booking → artist accepts → quotation →
   // 1. Register as client
   const clientEmail = `e2e-${Date.now()}@example.com`;
   await request.post("/api/auth/register", {
-    data: { name: "E2E Client", email: clientEmail, password: "testpass123", role: "customer" },
+    data: {
+      name: "E2E Client",
+      email: clientEmail,
+      password: "testpass123",
+      role: "customer",
+      consent: true,
+    },
   });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Your Beauty, Perfected/i })).toBeVisible();
@@ -44,7 +50,13 @@ test("fee flow: register → create booking → artist accepts → quotation →
   // 4. Artist logs in and accepts the booking
   const artistEmail = `e2e-artist-${Date.now()}@example.com`;
   await request.post("/api/auth/register", {
-    data: { name: "E2E MUA", email: artistEmail, password: "testpass123", role: "artist" },
+    data: {
+      name: "E2E MUA",
+      email: artistEmail,
+      password: "testpass123",
+      role: "artist",
+      consent: true,
+    },
   });
   await request.post("/api/auth/login", {
     data: { email: artistEmail, password: "testpass123" },

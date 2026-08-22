@@ -43,7 +43,7 @@ test("unauthenticated bookings API returns 401", async ({ request }) => {
 test("registration works and booking is gated on email verification", async ({ request }) => {
   const email = `e2e-${Date.now()}@example.com`;
   const reg = await request.post("/api/auth/register", {
-    data: { name: "E2E Client", email, password: "testpass123", role: "customer" },
+    data: { name: "E2E Client", email, password: "testpass123", role: "customer", consent: true },
   });
   expect([200, 201]).toContain(reg.status());
 
@@ -65,7 +65,7 @@ test("registration works and booking is gated on email verification", async ({ r
 test("unverified artists cannot claim catalog profiles", async ({ request }) => {
   const email = `e2e-artist-${Date.now()}@example.com`;
   const reg = await request.post("/api/auth/register", {
-    data: { name: "E2E MUA", email, password: "testpass123", role: "artist" },
+    data: { name: "E2E MUA", email, password: "testpass123", role: "artist", consent: true },
   });
   expect([200, 201]).toContain(reg.status());
 
