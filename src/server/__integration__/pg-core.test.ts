@@ -107,7 +107,18 @@ d("booking constraints", () => {
         .prepare(
           "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
-        .run(id("bk"), userId, "a1", "Art", "S", 10000, "2026-12-01", "10:00", "bogus", now),
+        .run(
+          id("bk"),
+          userId,
+          id("art"),
+          "Art",
+          "S",
+          10000,
+          `2026-12-${String(Math.floor(Math.random() * 8) + 1).padStart(2, "0")}`,
+          `${String(Math.floor(Math.random() * 8) + 9).padStart(2, "0")}:00`,
+          "bogus",
+          now,
+        ),
     ).rejects.toThrow();
   });
 
@@ -116,6 +127,7 @@ d("booking constraints", () => {
     const userId = id("bs");
     const now = new Date().toISOString();
     const date = "2026-11-15";
+    const artistId = id("aslot");
 
     await db
       .prepare(
@@ -136,7 +148,7 @@ d("booking constraints", () => {
       .prepare(
         "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(id("s1"), userId, "artist-slot", "Art", "S", 10000, date, "10:00", "requested", now);
+      .run(id("s1"), userId, artistId, "Art", "S", 10000, date, "10:00", "requested", now);
 
     // Same artist/date/time with active status → duplicate
     await expect(
@@ -144,7 +156,7 @@ d("booking constraints", () => {
         .prepare(
           "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
-        .run(id("s2"), userId, "artist-slot", "Art", "S", 10000, date, "10:00", "accepted", now),
+        .run(id("s2"), userId, artistId, "Art", "S", 10000, date, "10:00", "accepted", now),
     ).rejects.toThrow();
 
     // Cancelled status → should succeed (not covered by partial index)
@@ -152,7 +164,7 @@ d("booking constraints", () => {
       .prepare(
         "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(id("s3"), userId, "artist-slot", "Art", "S", 10000, date, "10:00", "cancelled", now);
+      .run(id("s3"), userId, artistId, "Art", "S", 10000, date, "10:00", "cancelled", now);
   });
 
   it("balance_reminder_at column is readable and writable", async () => {
@@ -171,7 +183,18 @@ d("booking constraints", () => {
       .prepare(
         "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(bkId, userId, "a1", "A", "S", 10000, "2026-12-01", "10:00", "requested", now);
+      .run(
+        bkId,
+        userId,
+        id("art"),
+        "A",
+        "S",
+        10000,
+        `2026-12-${String(Math.floor(Math.random() * 8) + 1).padStart(2, "0")}`,
+        `${String(Math.floor(Math.random() * 8) + 9).padStart(2, "0")}:00`,
+        "requested",
+        now,
+      );
 
     const reminderTime = new Date(Date.now() + 86400000).toISOString();
     await db
@@ -204,7 +227,18 @@ d("cascade deletes", () => {
       .prepare(
         "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(bkId, userId, "a1", "A", "S", 10000, "2026-12-01", "10:00", "requested", now);
+      .run(
+        bkId,
+        userId,
+        id("art"),
+        "A",
+        "S",
+        10000,
+        `2026-12-${String(Math.floor(Math.random() * 8) + 1).padStart(2, "0")}`,
+        `${String(Math.floor(Math.random() * 8) + 9).padStart(2, "0")}:00`,
+        "requested",
+        now,
+      );
 
     await db.prepare("DELETE FROM users WHERE id = ?").run(userId);
 
@@ -237,7 +271,18 @@ d("cascade deletes", () => {
       .prepare(
         "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(bkId, userId, "a1", "A", "S", 10000, "2026-12-01", "10:00", "accepted", now);
+      .run(
+        bkId,
+        userId,
+        id("art"),
+        "A",
+        "S",
+        10000,
+        `2026-12-${String(Math.floor(Math.random() * 8) + 1).padStart(2, "0")}`,
+        `${String(Math.floor(Math.random() * 8) + 9).padStart(2, "0")}:00`,
+        "accepted",
+        now,
+      );
 
     // Insert quotation
     const qId = id("cdq");
@@ -297,7 +342,18 @@ d("quotation constraints", () => {
       .prepare(
         "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(bkId, userId, "a1", "A", "S", 10000, "2026-12-01", "10:00", "accepted", now);
+      .run(
+        bkId,
+        userId,
+        id("art"),
+        "A",
+        "S",
+        10000,
+        `2026-12-${String(Math.floor(Math.random() * 8) + 1).padStart(2, "0")}`,
+        `${String(Math.floor(Math.random() * 8) + 9).padStart(2, "0")}:00`,
+        "accepted",
+        now,
+      );
 
     const extras = JSON.stringify([
       { label: "Travel", amount: 5000 },
@@ -336,7 +392,18 @@ d("quotation constraints", () => {
       .prepare(
         "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(bkId, userId, "a1", "A", "S", 10000, "2026-12-01", "10:00", "accepted", now);
+      .run(
+        bkId,
+        userId,
+        id("art"),
+        "A",
+        "S",
+        10000,
+        `2026-12-${String(Math.floor(Math.random() * 8) + 1).padStart(2, "0")}`,
+        `${String(Math.floor(Math.random() * 8) + 9).padStart(2, "0")}:00`,
+        "accepted",
+        now,
+      );
 
     await expect(
       db
@@ -367,7 +434,18 @@ d("payment constraints", () => {
       .prepare(
         "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(bkId, userId, "a1", "A", "S", 10000, "2026-12-01", "10:00", "requested", now);
+      .run(
+        bkId,
+        userId,
+        id("art"),
+        "A",
+        "S",
+        10000,
+        `2026-12-${String(Math.floor(Math.random() * 8) + 1).padStart(2, "0")}`,
+        `${String(Math.floor(Math.random() * 8) + 9).padStart(2, "0")}:00`,
+        "requested",
+        now,
+      );
 
     await expect(
       db
@@ -394,7 +472,18 @@ d("payment constraints", () => {
       .prepare(
         "INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(bkId, userId, "a1", "A", "S", 10000, "2026-12-01", "10:00", "requested", now);
+      .run(
+        bkId,
+        userId,
+        id("art"),
+        "A",
+        "S",
+        10000,
+        `2026-12-${String(Math.floor(Math.random() * 8) + 1).padStart(2, "0")}`,
+        `${String(Math.floor(Math.random() * 8) + 9).padStart(2, "0")}:00`,
+        "requested",
+        now,
+      );
 
     await db
       .prepare(

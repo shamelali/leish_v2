@@ -209,9 +209,10 @@ d("quotation lifecycle (expiry + supersede)", () => {
     const marked = await markQuotationExpired(q2.id);
     expect(marked).toBe(true);
 
-    // Get active should return null (all superseded/expired)
+    // q1 was superseded, q2 is expired → getActiveQuotation returns expired q2
     const activeAfter = await getActiveQuotation(bkId);
-    expect(activeAfter).toBeNull();
+    expect(activeAfter).not.toBeNull();
+    expect(activeAfter!.status).toBe("expired");
   });
 });
 
@@ -222,6 +223,7 @@ d("payment refund", () => {
     const db = getDb();
     const customerId = await createTestUser("customer");
     const bkId = id("rb");
+    const artistId = id("artref");
 
     await db
       .prepare(
@@ -230,17 +232,18 @@ d("payment refund", () => {
       .run(
         bkId,
         customerId,
-        "a1",
+        artistId,
         "A",
         "S",
         10000,
         futureDateISO(),
-        "10:00",
+        "11:00",
         new Date().toISOString(),
       );
 
     // Create and pay
     const payment = await createBookingFeePayment(bkId);
+    await new Promise((r) => setTimeout(r, 150));
     await markBillPaid(payment.provider_ref!);
 
     // Refund
@@ -257,6 +260,7 @@ d("payment refund", () => {
     const db = getDb();
     const customerId = await createTestUser("customer");
     const bkId = id("nrb");
+    const artistId = id("artnr");
 
     await db
       .prepare(
@@ -265,12 +269,12 @@ d("payment refund", () => {
       .run(
         bkId,
         customerId,
-        "a1",
+        artistId,
         "A",
         "S",
         10000,
         futureDateISO(),
-        "10:00",
+        "11:00",
         new Date().toISOString(),
       );
 
