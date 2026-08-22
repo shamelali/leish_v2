@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { getDb, type BookingRow, type UserRow } from "@/server/db";
 import { getActiveQuotation } from "@/server/quotations";
 import { sendBalanceReminder } from "@/server/booking-emails";
+import { getBookingFeeSen } from "@/server/settings";
+import { getPaymentForBooking } from "@/server/payments";
 import { tryRoute } from "@/server/http";
 import { authorizeCron } from "@/server/cron-auth";
 import { logger } from "@/server/logger";
 
 export const dynamic = "force-dynamic";
 
-const BOOKING_FEE_SEN = 20_000;
 const BALANCE_DUE_DAYS_BEFORE = 3;
 const REMINDER_WINDOW_DAYS = 4; // email when due within 4 days (or overdue < 2)
 const REMINDER_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // max one per 7 days
@@ -26,6 +27,7 @@ const handler = tryRoute(
     if (unauthorized) return unauthorized;
 
     const db = getDb();
+    const bookingFeeSen = await getBookingFeeSen();
     const today = new Date();
     const dueWindowStart = new Date(today.getTime() - 2 * 86_400_000).toISOString().slice(0, 10);
     const dueWindowEnd = new Date(today.getTime() + REMINDER_WINDOW_DAYS * 86_400_000)
@@ -46,8 +48,14 @@ const handler = tryRoute(
         skipped += 1;
         continue;
       }
-      const balanceAmount = Math.max(0, quotation.total - BOOKING_FEE_SEN);
+      const balanceAmount = Math.max(0, quotation.total - bookingFeeSen);
       if (balanceAmount <= 0) {
+        skipped += 1;
+        continue;
+      }
+      // Skip bookings whose balance payment is already settled on-platform.
+      const balancePayment = await getPaymentForBooking(booking.id, "balance");
+      if (balancePayment && (balancePayment.status === "paid" || balancePayment.status === "refunded")) {
         skipped += 1;
         continue;
       }

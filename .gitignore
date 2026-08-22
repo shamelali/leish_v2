@@ -54,3 +54,4 @@ next-env.d.ts
 # Prevent git bundles from being committed
 *.bundle
 leish-v2.bundle
+.neon
