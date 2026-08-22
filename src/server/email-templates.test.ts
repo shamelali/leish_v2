@@ -28,7 +28,11 @@ describe("email templates", () => {
         invoiceUrl: "https://leish.my/invoices/1",
         invoicePdfUrl: "https://leish.my/invoices/1.pdf",
       }),
-      quotationExpiredHtml({ artistName: base.artistName, service: base.service, dashboardUrl: base.dashboardUrl }),
+      quotationExpiredHtml({
+        artistName: base.artistName,
+        service: base.service,
+        dashboardUrl: base.dashboardUrl,
+      }),
       balanceReminderHtml({ ...base, balanceAmount: "800", balanceDueDate: "2026-09-05" }),
       bookingStatusChangedHtml({ ...base, status: "confirmed", headline: "was confirmed" }),
       verifyEmailHtml({ name: "Aina", verifyUrl: "https://leish.my/verify?token=abc" }),
@@ -70,7 +74,11 @@ describe("email templates", () => {
   });
 
   it("balanceReminderHtml shows amount and due date", () => {
-    const html = balanceReminderHtml({ ...base, balanceAmount: "800", balanceDueDate: "2026-09-05" });
+    const html = balanceReminderHtml({
+      ...base,
+      balanceAmount: "800",
+      balanceDueDate: "2026-09-05",
+    });
     expect(html).toContain("RM 800 by 2026-09-05");
   });
 

@@ -247,10 +247,7 @@ export function bookingStatusChangedHtml(params: {
   });
 }
 
-export function verifyEmailHtml(params: {
-  name: string;
-  verifyUrl: string;
-}): string {
+export function verifyEmailHtml(params: { name: string; verifyUrl: string }): string {
   return layout({
     title: "Verify your email",
     content: `

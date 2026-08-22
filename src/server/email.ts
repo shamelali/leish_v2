@@ -103,7 +103,14 @@ async function devSend(message: EmailMessage) {
     .prepare(
       "INSERT INTO email_outbox (id, to_email, subject, text, html, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
-    .run(randomUUID(), message.to, message.subject, message.text, message.html ?? null, new Date().toISOString());
+    .run(
+      randomUUID(),
+      message.to,
+      message.subject,
+      message.text,
+      message.html ?? null,
+      new Date().toISOString(),
+    );
   logger.info({ to: message.to, subject: message.subject }, "email queued (dev outbox)");
 }
 
