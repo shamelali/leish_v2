@@ -41,7 +41,9 @@ export const GET = tryRoute(
          LIMIT @limit OFFSET @offset`,
         )
         .all({ ...params, limit, offset }),
-      db.prepare(`SELECT COUNT(*) AS total FROM messages m ${where}`).get<CountRow>(params),
+      db
+        .prepare(`SELECT COUNT(*) AS total FROM messages m ${where}`)
+        .get<CountRow>(...(conditions.length ? [params] : [])),
     ]);
 
     return NextResponse.json({

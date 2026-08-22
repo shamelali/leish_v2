@@ -21,7 +21,7 @@ export const GET = tryRoute(
     const params: Record<string, string | number> = {};
 
     if (search) {
-      conditions.push("(name ILIKE @search OR email ILIKE @search)");
+      conditions.push("(LOWER(name) LIKE LOWER(@search) OR LOWER(email) LIKE LOWER(@search))");
       params.search = `%${search}%`;
     }
     if (role && ["customer", "artist", "studio", "admin"].includes(role)) {
@@ -44,7 +44,9 @@ export const GET = tryRoute(
          LIMIT @limit OFFSET @offset`,
         )
         .all({ ...params, limit, offset }),
-      db.prepare(`SELECT COUNT(*) AS total FROM users ${where}`).get<CountRow>(params),
+      db
+        .prepare(`SELECT COUNT(*) AS total FROM users ${where}`)
+        .get<CountRow>(...(conditions.length ? [params] : [])),
     ]);
 
     return NextResponse.json({

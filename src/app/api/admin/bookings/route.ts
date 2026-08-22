@@ -20,7 +20,7 @@ export const GET = tryRoute(
     const params: Record<string, string | number> = {};
 
     if (search) {
-      conditions.push("(b.artist_name ILIKE @search OR b.id LIKE @searchId)");
+      conditions.push("(LOWER(b.artist_name) LIKE LOWER(@search) OR b.id LIKE @searchId)");
       params.search = `%${search}%`;
       params.searchId = `%${search}%`;
     }
@@ -37,7 +37,7 @@ export const GET = tryRoute(
 
     const countRow = await db
       .prepare(`SELECT COUNT(*) AS total FROM bookings b ${where}`)
-      .get<{ total: number }>(params);
+      .get<{ total: number }>(...(conditions.length ? [params] : []));
 
     const bookings = await db
       .prepare(

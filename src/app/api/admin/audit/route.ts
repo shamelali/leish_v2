@@ -19,7 +19,7 @@ export const GET = tryRoute(
     const params: Record<string, string | number> = {};
 
     if (action) {
-      conditions.push("a.action ILIKE @action");
+      conditions.push("LOWER(a.action) LIKE LOWER(@action)");
       params.action = `%${action}%`;
     }
     if (targetTable) {
@@ -46,7 +46,9 @@ export const GET = tryRoute(
          LIMIT @limit OFFSET @offset`,
         )
         .all({ ...params, limit, offset }),
-      db.prepare(`SELECT COUNT(*) AS total FROM admin_audit_log a ${where}`).get<CountRow>(params),
+      db
+        .prepare(`SELECT COUNT(*) AS total FROM admin_audit_log a ${where}`)
+        .get<CountRow>(...(conditions.length ? [params] : [])),
     ]);
 
     return NextResponse.json({

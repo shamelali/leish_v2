@@ -6,10 +6,11 @@ import { PG_SCHEMA } from "../src/server/db.ts";
  *
  *   DATABASE_URL="postgresql://...sslmode=require" npm run db:migrate
  *
- * Idempotent: CREATE TABLE IF NOT EXISTS + additive column checks, so it is
- * safe to re-run against an existing database. The app applies the same
- * PG_SCHEMA lazily on boot — this script exists so operators can provision
- * (and verify) before the first request hits prod, per docs/DEPLOY.md.
+ * Idempotent: CREATE TABLE IF NOT EXISTS + additive column checks + constraint
+ * reconciliation, so it is safe to re-run against an existing database. The
+ * app applies the same PG_SCHEMA lazily on boot — this script exists so
+ * operators can provision (and verify) before the first request hits prod,
+ * per docs/DEPLOY.md.
  */
 
 const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
@@ -22,18 +23,72 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
   payments: [["provider_url", "ALTER TABLE payments ADD COLUMN provider_url TEXT"]],
   email_outbox: [["html", "ALTER TABLE email_outbox ADD COLUMN html TEXT"]],
   email_preferences: [
-    ["booking_created", "ALTER TABLE email_preferences ADD COLUMN booking_created INTEGER NOT NULL DEFAULT 1"],
-    ["quotation_sent", "ALTER TABLE email_preferences ADD COLUMN quotation_sent INTEGER NOT NULL DEFAULT 1"],
-    ["invoice_sent", "ALTER TABLE email_preferences ADD COLUMN invoice_sent INTEGER NOT NULL DEFAULT 1"],
-    ["quotation_expiry", "ALTER TABLE email_preferences ADD COLUMN quotation_expiry INTEGER NOT NULL DEFAULT 1"],
-    ["balance_reminder", "ALTER TABLE email_preferences ADD COLUMN balance_reminder INTEGER NOT NULL DEFAULT 1"],
-    ["status_changed", "ALTER TABLE email_preferences ADD COLUMN status_changed INTEGER NOT NULL DEFAULT 1"],
+    [
+      "booking_created",
+      "ALTER TABLE email_preferences ADD COLUMN booking_created INTEGER NOT NULL DEFAULT 1",
+    ],
+    [
+      "quotation_sent",
+      "ALTER TABLE email_preferences ADD COLUMN quotation_sent INTEGER NOT NULL DEFAULT 1",
+    ],
+    [
+      "invoice_sent",
+      "ALTER TABLE email_preferences ADD COLUMN invoice_sent INTEGER NOT NULL DEFAULT 1",
+    ],
+    [
+      "quotation_expiry",
+      "ALTER TABLE email_preferences ADD COLUMN quotation_expiry INTEGER NOT NULL DEFAULT 1",
+    ],
+    [
+      "balance_reminder",
+      "ALTER TABLE email_preferences ADD COLUMN balance_reminder INTEGER NOT NULL DEFAULT 1",
+    ],
+    [
+      "status_changed",
+      "ALTER TABLE email_preferences ADD COLUMN status_changed INTEGER NOT NULL DEFAULT 1",
+    ],
   ],
   email_retries: [
     ["html", "ALTER TABLE email_retries ADD COLUMN html TEXT"],
     ["last_error", "ALTER TABLE email_retries ADD COLUMN last_error TEXT"],
   ],
 };
+
+/**
+ * Reconcile the users.role CHECK constraint on databases created before the
+ * 'admin' role existed. Drops any role CHECK lacking 'admin' and re-adds the
+ * canonical named constraint. No-op when already up to date.
+ */
+const FIX_ROLE_CHECK = `
+DO $fix$
+DECLARE
+  c record;
+BEGIN
+  FOR c IN
+    SELECT conname, pg_get_constraintdef(oid) AS def
+    FROM pg_constraint
+    WHERE conrelid = 'users'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%role%'
+  LOOP
+    IF c.def NOT ILIKE '%admin%' THEN
+      RAISE NOTICE '[migrate] dropping outdated constraint %', c.conname;
+      EXECUTE format('ALTER TABLE users DROP CONSTRAINT %I', c.conname);
+    END IF;
+  END LOOP;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'users'::regclass
+      AND conname = 'users_role_check'
+  ) THEN
+    ALTER TABLE users
+      ADD CONSTRAINT users_role_check
+      CHECK (role IN ('customer','artist','studio','admin'));
+  END IF;
+END
+$fix$;
+`;
 
 async function columnExists(pool: Pool, table: string, column: string): Promise<boolean> {
   const { rows } = await pool.query(
@@ -63,6 +118,7 @@ async function main(): Promise<void> {
   try {
     console.log("[migrate] applying db-facade schema (idempotent)…");
     await pool.query(PG_SCHEMA);
+    await pool.query(FIX_ROLE_CHECK);
 
     // Backfill columns on databases created before they were added.
     for (const [table, columns] of Object.entries(ADDITIVE_COLUMNS)) {
@@ -87,6 +143,9 @@ async function main(): Promise<void> {
       "messages",
       "payments",
       "sessions",
+      "admin_audit_log",
+      "catalog_overrides",
+      "platform_settings",
     ];
     const { rows } = await pool.query(
       `SELECT table_name FROM information_schema.tables
