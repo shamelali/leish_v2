@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { requireAdmin, logAdminAction } from "./admin-auth";
+import { requireAdmin, logAdminAction, isLastAdmin } from "./admin-auth";
 import { createSessionToken } from "./session";
 import { getDb } from "./db";
 
@@ -160,5 +160,62 @@ describe("logAdminAction", () => {
         created_at TEXT NOT NULL
       )`);
     }
+  });
+});
+
+describe("isLastAdmin", () => {
+  async function seed(role: string) {
+    const id = randomUUID();
+    await getDb()
+      .prepare(
+        "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, 'x:y', ?)",
+      )
+      .run(id, `${id}@t.local`, "T", role, new Date().toISOString());
+    return id;
+  }
+  async function remove(id: string) {
+    await getDb().prepare("DELETE FROM users WHERE id = ?").run(id);
+  }
+
+  it("flags a sole admin as the last admin", async () => {
+    const admin = await seed("admin");
+    // Remove any other admins so this one is the only one.
+    const others = (await getDb()
+      .prepare("SELECT id FROM users WHERE role='admin' AND id != ?")
+      .all(admin)) as { id: string }[];
+    for (const o of others) {
+      await getDb().prepare("UPDATE users SET role='customer' WHERE id=?").run(o.id);
+      await remove(o.id);
+    }
+    expect(await isLastAdmin(admin)).toBe(true);
+    await remove(admin);
+  });
+
+  it("does not flag when other admins remain or the user is not an admin", async () => {
+    const a1 = await seed("admin");
+    const a2 = await seed("admin");
+    expect(await isLastAdmin(a1)).toBe(false);
+
+    const customer = await seed("customer");
+    expect(await isLastAdmin(customer)).toBe(false);
+
+    await remove(a1);
+    await remove(a2);
+    await remove(customer);
+  });
+});
+
+describe("requireAdmin rate limiting", () => {
+  it("returns 429 once the per-IP budget is exhausted", async () => {
+    const ip = `10.0.0.${Math.floor(Math.random() * 250) + 2}`;
+    let lastStatus = 0;
+    // The budget is 300/min; fire just past it with unauthenticated requests.
+    for (let i = 0; i < 305; i++) {
+      const headers = new Headers({ "x-forwarded-for": ip });
+      const res = await requireAdmin(new Request("http://localhost/x", { headers }));
+      lastStatus = res.error?.status ?? 200;
+      if (lastStatus === 429) break;
+    }
+    expect(lastStatus).toBe(429);
   });
 });

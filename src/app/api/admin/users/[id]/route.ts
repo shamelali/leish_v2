@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb, toPublicUser, type UserRow } from "@/server/db";
-import { requireAdmin, logAdminAction } from "@/server/admin-auth";
+import { requireAdmin, logAdminAction, isLastAdmin } from "@/server/admin-auth";
 import { statefulRoute, tryRoute, readJson, jsonError } from "@/server/http";
 import { hashPassword } from "@/server/password";
 
@@ -44,9 +44,16 @@ export const PATCH = statefulRoute(
     if (!body.ok) return body.error;
     const { name, email, role, email_verified, password } = body.data;
 
-    if (role && !["customer", "artist", "studio", "admin"].includes(role)) {
-      return jsonError("Invalid role", 400);
+  if (role && !["customer", "artist", "studio", "admin"].includes(role)) {
+    return jsonError("Invalid role", 400);
+  }
+
+  // Lockout guard: never demote or delete the only remaining admin.
+  if (existing.role === "admin" && role !== undefined && role !== "admin") {
+    if (await isLastAdmin(id)) {
+      return jsonError("Cannot demote the last remaining admin", 409);
     }
+  }
 
     if (email && email !== existing.email) {
       const dup = await db
@@ -113,12 +120,20 @@ export const DELETE = statefulRoute(
     const { id } = await params;
     const db = getDb();
 
-    const existing = await db.prepare("SELECT id FROM users WHERE id = ?").get<{ id: string }>(id);
-    if (!existing) {
-      return jsonError("User not found", 404);
-    }
+  const existing = await db.prepare("SELECT id, role FROM users WHERE id = ?").get<{
+    id: string;
+    role: string;
+  }>(id);
+  if (!existing) {
+    return jsonError("User not found", 404);
+  }
 
-    await db.prepare("DELETE FROM users WHERE id = ?").run(id);
+  // Lockout guard: never delete the only remaining admin.
+  if (existing.role === "admin" && (await isLastAdmin(id))) {
+    return jsonError("Cannot delete the last remaining admin", 409);
+  }
+
+  await db.prepare("DELETE FROM users WHERE id = ?").run(id);
 
     await logAdminAction(admin.id, "delete_user", "users", id);
 
