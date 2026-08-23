@@ -78,7 +78,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="flex min-h-full flex-col bg-stone-50 font-sans text-stone-900 dark:bg-stone-950 dark:text-stone-100">
-        {/* ✓ Fixed: nonce on inline script so script-src can omit 'unsafe-inline' */}
+        {/* Theme bootstrap — nonce'd so script-src can omit 'unsafe-inline'. */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
 
         <ThemeProvider>

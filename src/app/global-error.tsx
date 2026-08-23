@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 
 /**
  * Root-level error boundary (Next.js renders this when the app/root layout
  * itself throws — the route-level error.tsx can't catch layout errors).
  * Sanitized: never exposes the error message to end users; reports via the
- * client error ingestion endpoint.
+ * client error ingestion endpoint. Self-contained by design — the root
+ * layout (Navbar/Footer/CSP nonce) is not rendered here, so a compact
+ * branded header stands in.
  */
 export default function GlobalError({
   error,
@@ -15,12 +18,53 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Report via effect instead of an inline script: this boundary renders
+  // without the root layout's CSP nonce, so inline scripts would be blocked.
+  useEffect(() => {
+    fetch("/api/errors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: error.message || "Root layout error",
+        url: window.location.pathname,
+        stack: error.stack || "",
+      }),
+    }).catch(() => {});
+  }, [error]);
   return (
     <html lang="en">
       <body>
+        {/* Minimal branded chrome — the root layout (Navbar/Footer) is not
+            rendered here by design, so provide a compact stand-in header. */}
+        <header
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            height: 64,
+            padding: "0 24px",
+            borderBottom: "1px solid #292524",
+          }}
+        >
+          <Link
+            href="/"
+            style={{
+              color: "#fb7185",
+              fontWeight: 700,
+              fontSize: 20,
+              textDecoration: "none",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Leish!
+          </Link>
+          <Link href="/" style={{ color: "#a8a29e", fontSize: 14, textDecoration: "none" }}>
+            Back to site
+          </Link>
+        </header>
         <div
           style={{
-            minHeight: "100vh",
+            minHeight: "calc(100vh - 64px)",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -71,11 +115,6 @@ export default function GlobalError({
               Back home
             </Link>
           </div>
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `fetch('/api/errors',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:${JSON.stringify(error.message || "Root layout error")},url:location.pathname,stack:${JSON.stringify(error.stack || "")}})}).catch(()=>{})`,
-            }}
-          />
         </div>
       </body>
     </html>
