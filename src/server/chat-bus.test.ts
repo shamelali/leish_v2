@@ -86,4 +86,83 @@ describe("chat bus (upstash backend)", () => {
     expect(init.headers.Authorization).toBe("Bearer tok");
     expect(JSON.parse(init.body as string).body).toBe("hi");
   });
+
+  it("streams subscribe responses and dispatches JSON lines to listeners", async () => {
+    // A streaming body that emits two JSON lines (newline-terminated) then closes.
+    const lines = [
+      JSON.stringify({ id: "m1", senderId: "u1", senderName: "A", body: "one", createdAt: "" }),
+      "",
+      JSON.stringify({ id: "m2", senderId: "u2", senderName: "B", body: "two", createdAt: "" }),
+    ].join("\n") + "\n";
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(lines));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn(async () => new Response(stream, { status: 200 }));
+
+    const bus = createUpstashBus({
+      url: "https://example.upstash.io/",
+      token: "tok",
+      fetchImpl: fetchMock,
+    })!;
+
+    const received: string[] = [];
+    bus.subscribe("b9", (m) => received.push(m.body));
+
+    await vi.waitFor(() => expect(received).toEqual(["one", "two"]));
+
+    // Subscribe URL used the encoded channel and bearer auth.
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { headers: Record<string, string> }];
+    expect(url).toBe("https://example.upstash.io/subscribe/chat%3Ab9");
+    expect(init.headers.Authorization).toBe("Bearer tok");
+  });
+
+  it("tolerates non-JSON heartbeat lines in the stream", async () => {
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            ": heartbeat\n" +
+              JSON.stringify({ id: "m", senderId: "s", senderName: "n", body: "ok", createdAt: "" }) +
+              "\n",
+          ),
+        );
+        controller.close();
+      },
+    });
+    const bus = createUpstashBus({
+      url: "https://example.upstash.io",
+      token: "tok",
+      fetchImpl: vi.fn(async () => new Response(stream, { status: 200 })),
+    })!;
+
+    const received: string[] = [];
+    bus.subscribe("b10", (m) => received.push(m.body));
+    await vi.waitFor(() => expect(received).toEqual(["ok"]));
+  });
+
+  it("stops the upstream stream after the last listener unsubscribes", async () => {
+    let abortSpy: AbortController | undefined;
+    const stream = new ReadableStream({
+      start() {
+        /* never emits — stays open */
+      },
+      cancel() {},
+    });
+    const fetchMock = vi.fn(async () => {
+      abortSpy = new AbortController();
+      return new Response(stream, { status: 200 });
+    });
+
+    const bus = createUpstashBus({ url: "https://x.io", token: "t", fetchImpl: fetchMock })!;
+    const unsub = bus.subscribe("b11", () => {});
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    unsub();
+    // Give microtasks a beat; nothing should throw and no extra fetch occurs.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    void abortSpy;
+  });
 });
