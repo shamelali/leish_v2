@@ -7,7 +7,10 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  // Sequential: several specs book the same catalog artist's slots, so
+  // parallel workers collide on the unique (artist, date, time) index.
+  fullyParallel: false,
+  workers: 1,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
@@ -23,6 +26,11 @@ export default defineConfig({
       // throwaway value here — it never leaves the test machine.
       SESSION_SECRET: "e2e-test-secret",
       PORT: "3100",
+      // Hard isolation: force the local in-memory SQLite backend so tests can
+      // NEVER touch a real database via an inherited DATABASE_URL (.env.local).
+      // Empty string is falsy, so src/server/db.ts falls back to SQLite.
+      DATABASE_URL: "",
+      LEISH_DB_PATH: ":memory:",
       // Lets the register route return devVerifyUrl so e2e specs can verify
       // their accounts (booking creation requires a verified email), and
       // raises auth rate limits so multi-registration flows don't 429.
@@ -30,7 +38,7 @@ export default defineConfig({
       E2E_TEST_MODE: "1",
     },
     url: "http://localhost:3100",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

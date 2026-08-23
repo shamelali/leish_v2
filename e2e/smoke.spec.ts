@@ -31,7 +31,7 @@ test("artists listing shows the catalog", async ({ page }) => {
 test("artist profile renders services and the booking form", async ({ page }) => {
   await page.goto(`/artists/${ARTIST_ID}`);
   await expect(page.getByRole("heading", { name: "Aisha Azman" })).toBeVisible();
-  await expect(page.getByText("Reception Makeup")).toBeVisible();
+  await expect(page.getByText("Reception Makeup").first()).toBeVisible();
   await expect(page.getByRole("button", { name: /Send Booking Request/i })).toBeVisible();
 });
 

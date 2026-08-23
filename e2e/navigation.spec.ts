@@ -26,7 +26,9 @@ test("artists listing links to artist profiles", async ({ page }) => {
 
 test("login page renders with form elements", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: /Sign in|Log in/i }).first()).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Welcome back|Sign in|Log in/i }).first(),
+  ).toBeVisible();
   await expect(page.getByLabel(/email/i).first()).toBeVisible();
   await expect(page.getByLabel(/password/i).first()).toBeVisible();
 });
@@ -39,7 +41,12 @@ test("register page renders with role selection", async ({ page }) => {
   await expect(page.getByLabel(/email/i).first()).toBeVisible();
 });
 
-test("unauthenticated dashboard redirects to login", async ({ page }) => {
+test("unauthenticated dashboard shows the sign-in prompt", async ({ page }) => {
+  // The dashboard is a client component — it renders its own login prompt
+  // (no server-side redirect).
   await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/login/);
+  await expect(page).toHaveURL(/\/dashboard/);
+  await expect(
+    page.getByRole("main").getByRole("link", { name: /log in/i }),
+  ).toBeVisible();
 });

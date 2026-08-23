@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-const ARTIST_ID = "aisha-azman";
+// Distinct artist per spec: booking-fee-flow claims aisha-azman first,
+// and catalog profiles can only be claimed by one user.
+const ARTIST_ID = "sofia-rahim";
 
 interface BookingView {
   id: string;
