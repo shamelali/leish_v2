@@ -12,13 +12,18 @@ export function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
-/** Enforce the rate limit for a request; returns a 429 response when hit. */
+/** Enforce the rate limit for a request; returns a 429 response when hit.
+ * Under E2E_TEST_MODE=1 (playwright webServer only) the configured limit is
+ * multiplied by 100 so API-driven end-to-end flows don't trip per-IP auth
+ * throttling; production behavior is unchanged.
+ */
 export async function enforceRateLimit(
   request: Request,
   options?: { limit?: number; windowMs?: number },
 ): Promise<NextResponse | null> {
   const key = `auth:${getClientIp(request)}`;
-  const result = await rateLimit(key, options?.limit, options?.windowMs);
+  const multiplier = process.env.E2E_TEST_MODE === "1" ? 100 : 1;
+  const result = await rateLimit(key, (options?.limit ?? 20) * multiplier, options?.windowMs);
   if (!result.allowed) {
     logger.warn({ ip: getClientIp(request) }, "rate limit exceeded");
     return NextResponse.json(

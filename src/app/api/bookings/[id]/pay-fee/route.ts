@@ -4,6 +4,8 @@ import { verifySessionToken } from "@/server/session";
 import {
   createBookingPayment,
   getPaymentForBooking,
+  handlePaymentPaid,
+  markBillPaid,
   activePaymentProvider,
 } from "@/server/payments";
 import { getBookingFeeSen } from "@/server/settings";
@@ -82,6 +84,27 @@ export const POST = statefulRoute(
       throw err;
     }
     logger.info({ bookingId: booking.id, amount: payment.amount }, "booking deposit bill created");
+
+    // Dev provider: nothing is charged, so settle instantly — this keeps demos
+    // and e2e flows working without a real Billplz webhook round-trip.
+    if (payment.provider === "dev") {
+      await markBillPaid(payment.provider_ref!);
+      const settled = await getPaymentForBooking(booking.id, "deposit");
+      if (settled) await handlePaymentPaid(settled);
+      return NextResponse.json(
+        {
+          payment: {
+            amount: payment.amount,
+            type: payment.type,
+            status: "paid",
+            provider: payment.provider,
+            reference: payment.provider_ref,
+            url: payment.provider_url,
+          },
+        },
+        { status: 201 },
+      );
+    }
 
     return NextResponse.json(
       {

@@ -219,6 +219,57 @@ export async function markBillPaid(billId: string): Promise<boolean> {
   return result.changes > 0;
 }
 
+/**
+ * Shared settlement side-effects, routed by payment type. Called by the
+ * Billplz webhook (real payments) and by the dev-provider auto-settlement
+ * in pay-fee / pay-balance (demos + e2e):
+ * - deposit → confirms an accepted booking (payment locks the slot)
+ * - balance → marks the quotation paid and creates the artist payout
+ */
+export async function handlePaymentPaid(payment: PaymentRecord): Promise<void> {
+  const { confirmOnFeePaid } = await import("./bookings");
+  const { getActiveQuotation } = await import("./quotations");
+  const { createPayoutForBooking } = await import("./payouts");
+
+  const booking = (await getDb()
+    .prepare("SELECT * FROM bookings WHERE id = ?")
+    .get(payment.booking_id)) as
+    | { status: string; artist_id: string; date: string | null }
+    | undefined;
+  if (!booking) {
+    logger.warn({ paymentId: payment.id }, "paid payment has no booking (ignored)");
+    return;
+  }
+
+  if (payment.type === "deposit") {
+    const transition = confirmOnFeePaid(booking.status as Parameters<typeof confirmOnFeePaid>[0]);
+    if (transition.ok) {
+      await getDb()
+        .prepare("UPDATE bookings SET status = ? WHERE id = ?")
+        .run(transition.status, payment.booking_id);
+      logger.info(
+        { bookingId: payment.booking_id, paymentId: payment.id },
+        "booking confirmed by deposit",
+      );
+    }
+    return;
+  }
+
+  // Balance paid → quotation fulfilled + artist payout created.
+  const quotation = await getActiveQuotation(payment.booking_id);
+  if (quotation && quotation.status !== "expired") {
+    await getDb()
+      .prepare("UPDATE quotations SET status = 'paid' WHERE id = ?")
+      .run(quotation.id);
+  }
+  await createPayoutForBooking(payment.booking_id, {
+    artistId: booking.artist_id,
+    eventDate: booking.date,
+    quoteTotalSen: quotation?.total ?? payment.amount,
+  });
+  logger.info({ bookingId: payment.booking_id, paymentId: payment.id }, "balance settled");
+}
+
 /** Full payment row for a Billplz bill id — routes webhook handling by type. */
 export async function getPaymentForBill(billId: string): Promise<PaymentRecord | null> {
   const row = (await getDb()

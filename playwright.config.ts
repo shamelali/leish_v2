@@ -23,6 +23,11 @@ export default defineConfig({
       // throwaway value here — it never leaves the test machine.
       SESSION_SECRET: "e2e-test-secret",
       PORT: "3100",
+      // Lets the register route return devVerifyUrl so e2e specs can verify
+      // their accounts (booking creation requires a verified email), and
+      // raises auth rate limits so multi-registration flows don't 429.
+      E2E_EXPOSE_VERIFY_URL: "1",
+      E2E_TEST_MODE: "1",
     },
     url: "http://localhost:3100",
     reuseExistingServer: !process.env.CI,

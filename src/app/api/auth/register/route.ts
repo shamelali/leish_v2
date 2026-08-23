@@ -75,8 +75,13 @@ export async function POST(request: Request) {
     {
       user: toPublicUser(user),
       // Dev convenience: no email provider in the sandbox, so surface the
-      // verification link directly (never included in production).
-      devVerifyUrl: process.env.NODE_ENV !== "production" ? verifyUrl : undefined,
+      // verification link directly (never in production — except when the
+      // explicit e2e flag opts in, as the playwright webServer does).
+      // Relative path so it resolves against whatever host/port serves the app.
+      devVerifyUrl:
+        process.env.NODE_ENV !== "production" || process.env.E2E_EXPOSE_VERIFY_URL === "1"
+          ? `/api/auth/verify-email?token=${verifyUrl.split("token=")[1]}`
+          : undefined,
     },
     { status: 201 },
   );
