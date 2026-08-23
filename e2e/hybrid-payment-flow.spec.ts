@@ -36,9 +36,12 @@ async function registerVerifiedUser(
   return { email };
 }
 
+/** Monotonic per-worker counter — guarantees distinct slots across parallel tests. */
+let slotCounter = Date.now() % 1000;
+
 /** Deterministic per-run slot so parallel tests/runs never collide or match stale bookings. */
 function uniqueSlot(daysFromNow: number): { dateISO: string; time: string } {
-  const n = Date.now();
+  const n = slotCounter++;
   const dateISO = new Date(Date.now() + daysFromNow * 86_400_000).toISOString().split("T")[0];
   const hh = String(9 + (n % 12)).padStart(2, "0");
   const mm = String(n % 60).padStart(2, "0");
@@ -54,34 +57,32 @@ async function setupConfirmedBooking(
   request: import("@playwright/test").APIRequestContext,
   opts: { daysFromNow: number; baseFeeSen: number },
 ): Promise<{ bookingId: string; clientEmail: string; artistEmail: string }> {
-  const { dateISO, time } = uniqueSlot(opts.daysFromNow);
   const client = await registerVerifiedUser(request, { name: "E2E Client", role: "customer" });
-  await request.post("/api/bookings", {
-    data: {
-      artistId: ARTIST_ID,
-      service: "Reception Makeup",
-      date: dateISO,
-      time,
-      eventType: "Reception",
-    },
-  });
+
+  // Create the booking, bumping the slot on the rare collision until accepted.
+  let bookingId: string | undefined;
+  let dateISO = "";
+  let time = "";
+  for (let attempt = 0; attempt < 5 && !bookingId; attempt++) {
+    ({ dateISO, time } = uniqueSlot(opts.daysFromNow));
+    const res = await request.post("/api/bookings", {
+      data: {
+        artistId: ARTIST_ID,
+        service: "Reception Makeup",
+        date: dateISO,
+        time,
+        eventType: "Reception",
+      },
+    });
+    if (res.status() === 201) {
+      bookingId = ((await res.json()) as { booking: { id: string } }).booking.id;
+    }
+  }
+  expect(bookingId).toBeDefined();
 
   const artist = await registerVerifiedUser(request, { name: "E2E MUA", role: "artist" });
   const claim = await request.post("/api/artist-profiles", { data: { artistId: ARTIST_ID } });
   expect([200, 201, 409]).toContain(claim.status()); // 409 = already claimed
-
-  const bookings = await (await request.get("/api/bookings")).json();
-  // Match on this test's exact slot — stale requested bookings from earlier
-  // runs may exist for the same artist.
-  interface SlotBooking extends BookingView {
-    date: string;
-    time: string;
-  }
-  const mine = (bookings.bookings as SlotBooking[]).find(
-    (b) => b.status === "requested" && b.date === dateISO && b.time === time,
-  );
-  expect(mine).toBeDefined();
-  const bookingId = mine!.id;
 
   expect(
     (await request.patch(`/api/bookings/${bookingId}`, { data: { action: "accept" } })).status(),
@@ -107,7 +108,7 @@ async function setupConfirmedBooking(
   const pay = await request.post(`/api/bookings/${bookingId}/pay-fee`, { data: {} });
   expect(pay.status()).toBe(201);
 
-  return { bookingId, clientEmail: client.email, artistEmail: artist.email };
+  return { bookingId: bookingId!, clientEmail: client.email, artistEmail: artist.email };
 }
 
 async function login(request: import("@playwright/test").APIRequestContext, email: string) {
@@ -131,10 +132,11 @@ test("hybrid flow: deposit confirms, balance pays, artist sees payout", async ({
 
   // Balance is payable after confirmation.
   const payBalance = await request.post(`/api/bookings/${bookingId}/pay-balance`, { data: {} });
-  expect(payBalance.status()).toBe(201);
   const balanceBody = await payBalance.json();
+  expect(payBalance.status()).toBe(201);
   expect(balanceBody.payment.amount).toBe(95_000);
   expect(balanceBody.payment.type).toBe("balance");
+  expect(balanceBody.payment.status).toBe("paid");
 
   // Double-pay is rejected.
   expect(

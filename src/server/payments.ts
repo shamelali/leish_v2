@@ -68,7 +68,11 @@ export async function createBookingPayment(
   return devPayment(bookingId, type, amountSen);
 }
 
-function devPayment(bookingId: string, type: PaymentType, amount: number): PaymentRecord {
+async function devPayment(
+  bookingId: string,
+  type: PaymentType,
+  amount: number,
+): Promise<PaymentRecord> {
   const record: PaymentRecord = {
     id: randomUUID(),
     booking_id: bookingId,
@@ -80,8 +84,13 @@ function devPayment(bookingId: string, type: PaymentType, amount: number): Payme
     provider_ref: `dev_${randomUUID().slice(0, 12)}`,
     provider_url: null,
   };
-  insertPayment(record);
-  logger.info({ bookingId, amount, type, provider: "dev" }, `${type} payment recorded (dev provider)`);
+  // Awaited — callers (e.g. the dev auto-settlement path) read/update the row
+  // immediately after this resolves, so the INSERT must be durable first.
+  await insertPayment(record);
+  logger.info(
+    { bookingId, amount, type, provider: "dev" },
+    `${type} payment recorded (dev provider)`,
+  );
   return record;
 }
 

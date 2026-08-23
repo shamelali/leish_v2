@@ -44,26 +44,31 @@ async function registerVerifiedUser(
 test("fee flow: register → verify → booking → accept → quotation → deposit → confirmed", async ({
   request,
 }) => {
-  // Deterministic per-run slot — stale bookings from earlier runs must not
-  // match the ambiguous "any requested booking" lookup below.
-  const n = Date.now();
-  const dateISO = new Date(Date.now() + 14 * 86_400_000).toISOString().split("T")[0];
-  const time = `${String(9 + (n % 12)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
-
   // 1. Register (and auto-verify) the client — session cookie is set.
   const client = await registerVerifiedUser(request, { name: "E2E Client", role: "customer" });
 
-  // 2. Create a booking.
-  const createRes = await request.post("/api/bookings", {
-    data: {
-      artistId: ARTIST_ID,
-      service: "Reception Makeup",
-      date: dateISO,
-      time,
-      eventType: "Reception",
-    },
-  });
-  expect(createRes.status()).toBe(201);
+  // 2. Create a booking, bumping the slot on a rare collision until accepted.
+  let bookingId: string | undefined;
+  let dateISO = "";
+  let time = "";
+  for (let attempt = 0; attempt < 5 && !bookingId; attempt++) {
+    const n = Date.now() + attempt;
+    dateISO = new Date(Date.now() + 14 * 86_400_000).toISOString().split("T")[0];
+    time = `${String(9 + (n % 12)).padStart(2, "0")}:${String((n * 7) % 60).padStart(2, "0")}`;
+    const res = await request.post("/api/bookings", {
+      data: {
+        artistId: ARTIST_ID,
+        service: "Reception Makeup",
+        date: dateISO,
+        time,
+        eventType: "Reception",
+      },
+    });
+    if (res.status() === 201) {
+      bookingId = ((await res.json()) as { booking: { id: string } }).booking.id;
+    }
+  }
+  expect(bookingId).toBeDefined();
 
   // 3. Artist registers, verifies, claims the profile.
   await registerVerifiedUser(request, { name: "E2E MUA", role: "artist" });
@@ -72,18 +77,7 @@ test("fee flow: register → verify → booking → accept → quotation → dep
   });
   expect([200, 201, 409]).toContain(claim.status()); // 409 = already claimed
 
-  // 4. Artist sees THIS test's requested booking and accepts it.
-  const bookings = await request.get("/api/bookings");
-  const bookingBody = await bookings.json();
-  interface SlotBooking extends BookingSummary {
-    date: string;
-    time: string;
-  }
-  const mine = (bookingBody.bookings as SlotBooking[]).find(
-    (b) => b.status === "requested" && b.date === dateISO && b.time === time,
-  );
-  expect(mine).toBeDefined();
-  const bookingId = mine!.id;
+  // 4. Artist accepts THIS test's booking.
   const accept = await request.patch(`/api/bookings/${bookingId}`, {
     data: { action: "accept" },
   });
