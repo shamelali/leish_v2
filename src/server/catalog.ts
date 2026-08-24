@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { getDb, bind } from "./db";
 import { ensureCatalogSeeded } from "./catalog-seed";
 import { filterArtists, type ArtistFilters } from "@/lib/artists";
@@ -313,6 +314,69 @@ async function applyUpdate(
     .prepare(`UPDATE ${table} SET ${sets.join(", ")}, updated_at = @now WHERE id = @id`)
     .run(bind(params));
   return result.changes > 0;
+}
+
+/**
+ * Create a brand-new catalog artist (admin onboarding of external MUAs).
+ * Slug is derived from the name and de-duplicated. Returns the full profile.
+ */
+export async function createArtist(input: {
+  name: string;
+  slug?: string;
+  tagline?: string;
+  bio?: string;
+  state?: string;
+  area?: string;
+  priceFrom?: number;
+  specialties?: string[];
+  services?: Service[];
+}): Promise<Artist | null> {
+  await ensureCatalogSeeded();
+  const db = getDb();
+
+  const base = slugifyName(input.slug || input.name);
+  let slug = base;
+  for (let i = 2; ; i++) {
+    const exists = await db.prepare("SELECT 1 FROM artists WHERE slug = ?").get(slug);
+    if (!exists) break;
+    slug = `${base}-${i}`;
+  }
+
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO artists (id, slug, name, tagline, bio, image, state, area, price_from,
+                            specialties, services, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      slug,
+      input.name.trim(),
+      input.tagline?.trim() ?? "",
+      input.bio?.trim() ?? "",
+      "", // image — admin uploads/links later
+      input.state ?? "",
+      input.area ?? "",
+      Math.max(0, Math.round(input.priceFrom ?? 0)),
+      JSON.stringify(input.specialties ?? []),
+      JSON.stringify(input.services ?? []),
+      now,
+      now,
+    );
+
+  return getArtistById(id);
+}
+
+function slugifyName(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "artist";
 }
 
 export async function updateArtist(

@@ -41,6 +41,15 @@ export default function AdminArtistsPage() {
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    state: "",
+    area: "",
+    priceFrom: "",
+    tagline: "",
+  });
+  const [createError, setCreateError] = useState("");
 
   useEffect(() => {
     fetch("/api/admin/artists")
@@ -103,16 +112,107 @@ export default function AdminArtistsPage() {
     );
   }
 
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setCreateError("");
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/artists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: createForm.name,
+          state: createForm.state,
+          area: createForm.area,
+          priceFrom: Number(createForm.priceFrom || 0),
+          tagline: createForm.tagline,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateError(data.error ?? "Failed to create artist");
+        return;
+      }
+      setArtists((prev) => [...prev, data.artist]);
+      setCreating(false);
+      setCreateForm({ name: "", state: "", area: "", priceFrom: "", tagline: "" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Artists Catalog
         </h1>
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          {artists.length} artists &mdash; static data with DB overrides.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            {artists.length} artists &mdash; catalog is DB-backed.
+          </p>
+          <button
+            onClick={() => setCreating(true)}
+            className="inline-flex h-9 items-center rounded-full bg-rose-600 px-4 text-sm font-medium text-white hover:bg-rose-500"
+          >
+            + Add Artist
+          </button>
+        </div>
       </div>
+
+      {creating && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form
+            onSubmit={handleCreate}
+            className="w-full max-w-md space-y-4 rounded-2xl border border-stone-200 bg-white p-6 shadow-xl dark:border-stone-700 dark:bg-stone-900"
+          >
+            <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-stone-100">
+              Add Artist
+            </h2>
+            {[
+              { key: "name" as const, label: "Name *", type: "text", required: true },
+              { key: "tagline" as const, label: "Tagline", type: "text", required: false },
+              { key: "state" as const, label: "State", type: "text", required: false },
+              { key: "area" as const, label: "Area", type: "text", required: false },
+              { key: "priceFrom" as const, label: "Price From (sen)", type: "number", required: false },
+            ].map((f) => (
+              <div key={f.key}>
+                <label className="mb-1 block text-sm font-medium text-stone-800 dark:text-stone-200">
+                  {f.label}
+                </label>
+                <input
+                  type={f.type}
+                  required={f.required}
+                  value={String(createForm[f.key])}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({ ...p, [f.key]: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-rose-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                />
+              </div>
+            ))}
+            {createError && (
+              <p className="text-sm text-rose-600 dark:text-rose-400">{createError}</p>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setCreating(false)}
+                className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-full bg-rose-600 px-5 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+              >
+                {saving ? "Creating…" : "Create Artist"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="rounded-xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
         <div className="border-b border-stone-200 px-6 py-4 dark:border-stone-800">
