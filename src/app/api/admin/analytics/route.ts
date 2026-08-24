@@ -95,19 +95,32 @@ export const GET = tryRoute(async function GET(request: Request) {
     artistsTotal,
   ] = totals;
 
+  // COUNT/SUM arrive as strings from PostgreSQL — normalize before use.
+  const n = (v: unknown): number => Number(v ?? 0);
+
   return NextResponse.json({
     totals: {
-      users: usersTotal?.n ?? 0,
-      bookings: bookingsTotal?.n ?? 0,
-      revenueSen: revenueTotal?.n ?? 0,
-      pendingPayoutsSen: payoutsPending?.n ?? 0,
-      completedBookings: completedTotal?.n ?? 0,
-      artists: artistsTotal?.n ?? 0,
+      users: Number(usersTotal?.n ?? 0),
+      bookings: Number(bookingsTotal?.n ?? 0),
+      revenueSen: Number(revenueTotal?.n ?? 0),
+      pendingPayoutsSen: Number(payoutsPending?.n ?? 0),
+      completedBookings: Number(completedTotal?.n ?? 0),
+      artists: Number(artistsTotal?.n ?? 0),
     },
-    bookingsByMonth: bookingsByMonth.reverse(),
-    signupsByMonth: signupsByMonth.reverse(),
-    revenueByMonth: revenueByMonth.map((r) => ({ month: r.month, sen: r.count })).reverse(),
-    bookingsByStatus,
-    topArtists,
+    bookingsByMonth: bookingsByMonth
+      .map((r) => ({ month: r.month, count: n(r.count) }))
+      .reverse(),
+    signupsByMonth: signupsByMonth
+      .map((r) => ({ month: r.month, count: n(r.count) }))
+      .reverse(),
+    revenueByMonth: revenueByMonth
+      .map((r) => ({ month: r.month, sen: n(r.count) }))
+      .reverse(),
+    bookingsByStatus: bookingsByStatus.map((r) => ({ status: r.status, count: n(r.count) })),
+    topArtists: topArtists.map((a) => ({
+      ...a,
+      bookings: n(a.bookings),
+      revenue_sen: n(a.revenue_sen),
+    })),
   });
 }, { route: "GET /api/admin/analytics" });

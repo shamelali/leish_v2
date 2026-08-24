@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb, type BookingRow } from "@/server/db";
 import { requireAdmin, logAdminAction } from "@/server/admin-auth";
-import { tryRoute, readJson, jsonError } from "@/server/http";
+import { jsonError, readJson, statefulRoute, tryRoute } from "@/server/http";
 
 interface PatchBody {
   status?: string;
@@ -41,7 +41,7 @@ export const GET = tryRoute(
   { route: "GET /api/admin/bookings/[id]" },
 );
 
-export const PATCH = tryRoute(
+export const PATCH = statefulRoute(
   async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, error } = await requireAdmin(request);
     if (error) return error;

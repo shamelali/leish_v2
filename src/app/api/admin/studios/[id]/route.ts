@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, logAdminAction } from "@/server/admin-auth";
-import { tryRoute, readJson, jsonError } from "@/server/http";
+import { jsonError, readJson, statefulRoute, tryRoute } from "@/server/http";
 import { getStudioById, updateStudio, listEntityReviews } from "@/server/catalog";
 
 export const GET = tryRoute(
@@ -18,7 +18,7 @@ export const GET = tryRoute(
   { route: "GET /api/admin/studios/[id]" },
 );
 
-export const PATCH = tryRoute(
+export const PATCH = statefulRoute(
   async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, error } = await requireAdmin(request);
     if (error) return error;

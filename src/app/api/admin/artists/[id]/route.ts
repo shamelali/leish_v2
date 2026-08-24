@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/server/db";
 import { requireAdmin, logAdminAction } from "@/server/admin-auth";
-import { tryRoute, readJson, jsonError } from "@/server/http";
+import { jsonError, readJson, statefulRoute, tryRoute } from "@/server/http";
 import { getArtistById, updateArtist, listEntityReviews } from "@/server/catalog";
 
 interface ArtistProfileRow {
@@ -38,7 +38,7 @@ export const GET = tryRoute(
   { route: "GET /api/admin/artists/[id]" },
 );
 
-export const PATCH = tryRoute(
+export const PATCH = statefulRoute(
   async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, error } = await requireAdmin(request);
     if (error) return error;
