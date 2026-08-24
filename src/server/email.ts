@@ -48,10 +48,10 @@ export async function isEmailEnabled(userId: string, key: EmailPreferenceKey): P
   return row ? row[key] === 1 : true;
 }
 
+import { getActiveEmailProvider } from "./integrations";
+
 export function activeEmailProvider(): EmailProvider {
-  const configured = process.env.EMAIL_PROVIDER;
-  if (configured === "resend" || configured === "postmark") return configured;
-  return "dev";
+  return getActiveEmailProvider();
 }
 
 export async function sendEmail(message: EmailMessage): Promise<void> {
