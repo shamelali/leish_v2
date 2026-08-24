@@ -29,6 +29,23 @@ export function TurnstileWidget({ onVerify }: { onVerify: (token: string | null)
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
+  function renderWidget() {
+    if (!SITE_KEY || !window.turnstile || !containerRef.current || widgetIdRef.current !== null)
+      return;
+    widgetIdRef.current = window.turnstile.render(containerRef.current, {
+      sitekey: SITE_KEY,
+      callback: (token) => {
+        setTurnstileToken(token);
+        onVerify(token);
+      },
+      "error-callback": () => {
+        setTurnstileToken(null);
+        onVerify(null);
+      },
+      theme: document.documentElement.classList.contains("dark") ? "dark" : "light",
+    });
+  }
+
   useEffect(() => {
     if (!SITE_KEY) return;
     // Script already loaded (e.g. second widget on the page): render now,
@@ -56,23 +73,6 @@ export function TurnstileWidget({ onVerify }: { onVerify: (token: string | null)
     document.head.appendChild(script);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- renderWidget is stable per mount
   }, []);
-
-  function renderWidget() {
-    if (!SITE_KEY || !window.turnstile || !containerRef.current || widgetIdRef.current !== null)
-      return;
-    widgetIdRef.current = window.turnstile.render(containerRef.current, {
-      sitekey: SITE_KEY,
-      callback: (token) => {
-        setTurnstileToken(token);
-        onVerify(token);
-      },
-      "error-callback": () => {
-        setTurnstileToken(null);
-        onVerify(null);
-      },
-      theme: document.documentElement.classList.contains("dark") ? "dark" : "light",
-    });
-  }
 
   if (!SITE_KEY) return null;
 
