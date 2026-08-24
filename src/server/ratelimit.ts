@@ -122,10 +122,9 @@ export function createRateLimiter(store: RateLimitStore): RateLimiter {
   return (key, limit = 20, windowMs = 60_000) => store.checkAndIncrement(key, limit, windowMs);
 }
 
-/** Default limiter: Upstash when configured, otherwise in-process memory. */
+/** Default limiter: ALWAYS memory (Upstash disabled for this deployment). */
 export const rateLimit: RateLimiter = (() => {
-  const store = createUpstashStore() ?? createMemoryStore();
-  return createRateLimiter(store);
+  return createRateLimiter(createMemoryStore());
 })();
 
 /** Best-effort client IP extraction (x-forwarded-for, then cf-connecting-ip). */

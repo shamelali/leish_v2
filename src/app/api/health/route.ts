@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { getDb, isPostgres } from "@/server/db";
+import {
+  getActiveEmailProvider,
+  isBillplzConfigured,
+  isTurnstileConfigured,
+  isSentryConfigured,
+  areWebhooksConfigured,
+} from "@/server/integrations";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +38,13 @@ export async function GET() {
       database_backend: isPostgres() ? "postgres" : "sqlite",
       database: dbStatus,
       database_error: dbError,
-      redis: Boolean(process.env.UPSTASH_REST_URL),
+      email: getActiveEmailProvider() !== 'dev',
+      billplz: isBillplzConfigured(),
+      turnstile: isTurnstileConfigured(),
+      sentry: isSentryConfigured(),
+      webhooks: areWebhooksConfigured(),
+      rate_limit: 'memory',
+      chat: 'memory',
     },
   });
 }
