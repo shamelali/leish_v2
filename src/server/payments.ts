@@ -41,7 +41,13 @@ export interface PaymentRecord {
   provider_url: string | null; // Billplz hosted payment page URL
 }
 
-const BILLPLZ_API = "https://www.billplz.com/api/v3";
+/**
+ * Billplz API base. Override with BILLPLZ_BASE_URL for the sandbox
+ * (https://www.billplz-sandbox.com/api/v3) — sandbox and live credentials
+ * must never be mixed across hosts.
+ */
+const BILLPLZ_API =
+  process.env.BILLPLZ_BASE_URL?.replace(/\/$/, "") ?? "https://www.billplz.com/api/v3";
 
 export function activePaymentProvider(): PaymentProvider {
   return process.env.BILLPLZ_API_KEY && process.env.BILLPLZ_COLLECTION_ID ? "billplz" : "dev";
