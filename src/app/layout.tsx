@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Leish! — Beauty Booking Marketplace",
     description: "Book beauty anywhere. Discover top-rated makeup artists across Malaysia.",
-    images: ["/images/leish-light.jpeg"],
+    images: ["/images/hero.jpg"],
   },
 };
 

@@ -708,13 +708,24 @@ export function getDb(): DbFacade {
       console.error("[db] pg pool error:", err.message);
     });
     pgPool = pool;
-    pgReady = pool.query(PG_SCHEMA).then(
-      () => undefined,
-      (err) => {
-        console.error("[db] pg schema migration failed:", err.message);
-        throw err;
-      },
-    );
+    pgReady = (async () => {
+      await pool.query(PG_SCHEMA);
+      // Applied separately so a missing payments.type on a legacy database
+      // cannot roll back the rest of PG_SCHEMA. migrate.ts also creates this.
+      try {
+        await pool.query(
+          "CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type)",
+        );
+      } catch (err) {
+        console.error(
+          "[db] payments unique index skipped:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    })().catch((err) => {
+      console.error("[db] pg schema migration failed:", err instanceof Error ? err.message : err);
+      throw err;
+    });
     facade = createPgFacade(pool, () => pgReady!);
     return facade;
   }

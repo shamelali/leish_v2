@@ -6,14 +6,17 @@ import { getDb } from "./db";
 import { hashPassword } from "./password";
 import {
   addEntityReview,
+  createArtist,
   findReviewableBooking,
   getArtistById,
   getArtistBySlug,
   getStudioById,
+  getStudioBySlug,
   listAllArtists,
   listAllStudios,
   listArtists,
   listEntityReviews,
+  resolveArtist,
   updateArtist,
 } from "./catalog";
 import { seedCatalog } from "./catalog-seed";
@@ -95,9 +98,31 @@ describe("catalog repository", () => {
 
     const bySlug = await getArtistBySlug("maya-tan");
     expect(bySlug?.id).toBe("maya-tan");
+    expect(bySlug?.slug).toBe("maya-tan");
 
     expect(await getArtistById("nope")).toBeNull();
     expect((await getStudioById("bangsar-beauty-bar"))?.name).toBe("Bangsar Beauty Bar");
+    expect((await getStudioBySlug("bangsar-beauty-bar"))?.id).toBe("bangsar-beauty-bar");
+  });
+
+  it("creates admin-onboarded artists with a UUID id and a separate slug", async () => {
+    await listAllArtists();
+    const suffix = randomUUID().slice(0, 8);
+    const created = await createArtist({
+      name: `Zara Onboarded ${suffix}`,
+      state: "Selangor",
+      area: "Cyberjaya",
+      priceFrom: 400,
+    });
+    expect(created).not.toBeNull();
+    expect(created!.slug).toBe(`zara-onboarded-${suffix}`);
+    expect(created!.id).not.toBe(created!.slug);
+    expect(created!.image).toBe("/images/hero.jpg");
+
+    // Profile pages look up by slug; bookings still use the UUID id.
+    expect((await getArtistBySlug(created!.slug!))?.id).toBe(created!.id);
+    expect((await resolveArtist(created!.slug!))?.id).toBe(created!.id);
+    expect((await resolveArtist(created!.id))?.slug).toBe(created!.slug);
   });
 
   it("filters artists by state, budget and query", async () => {

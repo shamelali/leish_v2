@@ -26,7 +26,7 @@ export function proxy(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data: https://*.supabase.co",
     "font-src 'self' data:",
-    `connect-src 'self' https://*.supabase.co${isDev ? " ws:" : ""}`,
+    `connect-src 'self' https://*.supabase.co https://challenges.cloudflare.com${isDev ? " ws:" : ""}`,
     // The Turnstile widget renders inside a cross-origin iframe.
     "frame-src https://challenges.cloudflare.com",
     "frame-ancestors 'none'",

@@ -32,6 +32,7 @@ export async function GET(request: Request) {
 
   const artists = (await listArtists(filters)).map((a) => ({
     id: a.id,
+    slug: a.slug ?? a.id,
     name: a.name,
     tagline: a.tagline,
     rating: a.rating,

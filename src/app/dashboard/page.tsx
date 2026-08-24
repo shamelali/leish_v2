@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, ROLE_LABELS } from "@/lib/auth";
 import type { Artist } from "@/lib/types";
-import { formatRM } from "@/lib/utils";
+import { catalogImageSrc, catalogPath, formatRM } from "@/lib/utils";
 import { Button } from "@/components/Button";
 
 interface ExtraItem {
@@ -580,7 +580,7 @@ export default function DashboardPage() {
                   <div className="flex flex-wrap items-center gap-4">
                     {artist && (
                       <Image
-                        src={artist.image}
+                        src={catalogImageSrc(artist.image)}
                         alt={artist.name}
                         width={56}
                         height={56}
@@ -986,7 +986,7 @@ export default function DashboardPage() {
                     )}
                     {artist && (
                       <Link
-                        href={`/artists/${artist.id}`}
+                        href={catalogPath("artists", artist)}
                         className="text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-500 dark:hover:text-rose-400"
                       >
                         View →

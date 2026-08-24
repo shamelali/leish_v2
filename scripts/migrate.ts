@@ -27,6 +27,12 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
       "ALTER TABLE payments ADD COLUMN type TEXT NOT NULL DEFAULT 'deposit' CHECK (type IN ('deposit','balance'))",
     ],
   ],
+  bookings: [
+    ["event_type", "ALTER TABLE bookings ADD COLUMN event_type TEXT"],
+    ["venue", "ALTER TABLE bookings ADD COLUMN venue TEXT"],
+    ["guest_count", "ALTER TABLE bookings ADD COLUMN guest_count INTEGER NOT NULL DEFAULT 0"],
+    ["balance_reminder_at", "ALTER TABLE bookings ADD COLUMN balance_reminder_at TEXT"],
+  ],
   email_outbox: [["html", "ALTER TABLE email_outbox ADD COLUMN html TEXT"]],
   email_preferences: [
     [

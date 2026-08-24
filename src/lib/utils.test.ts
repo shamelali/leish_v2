@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cn, formatRM, pluralize } from "./utils";
+import { catalogImageSrc, catalogPath, cn, formatRM, pluralize } from "./utils";
 
 describe("cn", () => {
   it("joins truthy classes and skips falsy values", () => {
@@ -32,5 +32,27 @@ describe("pluralize", () => {
   it("supports custom plural forms", () => {
     expect(pluralize(1, "studio", "studios")).toBe("studio");
     expect(pluralize(5, "studio", "studios")).toBe("studios");
+  });
+});
+
+describe("catalogPath", () => {
+  it("prefers slug over id", () => {
+    expect(catalogPath("artists", { id: "uuid-1", slug: "aisha-azman" })).toBe(
+      "/artists/aisha-azman",
+    );
+  });
+
+  it("falls back to id when slug is missing", () => {
+    expect(catalogPath("studios", { id: "glow-room-cyberjaya" })).toBe(
+      "/studios/glow-room-cyberjaya",
+    );
+  });
+});
+
+describe("catalogImageSrc", () => {
+  it("returns a fallback for empty or missing src", () => {
+    expect(catalogImageSrc("")).toBe("/images/hero.jpg");
+    expect(catalogImageSrc(null)).toBe("/images/hero.jpg");
+    expect(catalogImageSrc("/images/artist-1.jpg")).toBe("/images/artist-1.jpg");
   });
 });

@@ -4,8 +4,8 @@ import { verifySessionToken } from "@/server/session";
 import {
   addEntityReview,
   findReviewableBooking,
-  getArtistById,
   listEntityReviews,
+  resolveArtist,
 } from "@/server/catalog";
 import { enforceSameOrigin, jsonError, readJson, tryRoute } from "@/server/http";
 import { rateLimit } from "@/server/ratelimit";
@@ -36,7 +36,9 @@ async function requireUser(request: Request) {
 export const GET = tryRoute(
   async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-    const reviews = await listEntityReviews("artist", id);
+    const artist = await resolveArtist(id);
+    if (!artist) return jsonError("Artist not found", 404);
+    const reviews = await listEntityReviews("artist", artist.id);
     return NextResponse.json({ reviews });
   },
   { route: "GET /api/artists/[id]/reviews" },
@@ -65,7 +67,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   const { id } = await ctx.params;
-  const artist = await getArtistById(id);
+  const artist = await resolveArtist(id);
   if (!artist) return jsonError("Artist not found", 404);
 
   const body = await readJson<unknown>(request);
@@ -76,7 +78,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   // Trust gate: only clients with a completed, not-yet-reviewed booking.
-  const booking = await findReviewableBooking(user!.id, "artist", id);
+  const booking = await findReviewableBooking(user!.id, "artist", artist.id);
   if (!booking) {
     return jsonError("You can only review artists after a completed booking with them.", 403);
   }
@@ -84,7 +86,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   try {
     const review = await addEntityReview({
       entityType: "artist",
-      entityId: id,
+      entityId: artist.id,
       bookingId: booking.id,
       userId: user!.id,
       authorName: user!.name,

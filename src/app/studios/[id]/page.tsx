@@ -2,8 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getStudioById } from "@/server/catalog";
-import { formatRM } from "@/lib/utils";
+import { resolveStudio } from "@/server/catalog";
+import { catalogImageSrc, formatRM } from "@/lib/utils";
 import { RatingStars } from "@/components/RatingStars";
 import { Button } from "@/components/Button";
 
@@ -16,14 +16,14 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const studio = await getStudioById(id);
+  const studio = await resolveStudio(id);
   if (!studio) return { title: "Studio not found" };
   return { title: studio.name, description: studio.tagline };
 }
 
 export default async function StudioDetailPage({ params }: Props) {
   const { id } = await params;
-  const studio = await getStudioById(id);
+  const studio = await resolveStudio(id);
   if (!studio) notFound();
 
   return (
@@ -40,7 +40,7 @@ export default async function StudioDetailPage({ params }: Props) {
         <div>
           <div className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-stone-100 dark:bg-stone-800">
             <Image
-              src={studio.image}
+              src={catalogImageSrc(studio.image, "/images/studio-1.jpg")}
               alt={studio.name}
               fill
               priority

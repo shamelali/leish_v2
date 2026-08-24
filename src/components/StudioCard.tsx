@@ -1,18 +1,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Studio } from "@/lib/types";
-import { formatRM } from "@/lib/utils";
+import { catalogImageSrc, catalogPath, formatRM } from "@/lib/utils";
 import { RatingStars } from "./RatingStars";
 
 export function StudioCard({ studio }: { studio: Studio }) {
   return (
     <Link
-      href={`/studios/${studio.id}`}
+      href={catalogPath("studios", studio)}
       className="group flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white transition-shadow hover:shadow-lg hover:shadow-stone-200/60 dark:border-stone-800 dark:bg-stone-900 dark:hover:shadow-stone-950/60"
     >
       <div className="relative aspect-[16/10] overflow-hidden bg-stone-100 dark:bg-stone-800">
         <Image
-          src={studio.image}
+          src={catalogImageSrc(studio.image)}
           alt={studio.name}
           fill
           sizes="(max-width: 768px) 100vw, 50vw"

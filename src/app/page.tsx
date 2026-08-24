@@ -4,6 +4,7 @@ import { CATEGORIES } from "@/lib/data";
 import { listAllArtists } from "@/server/catalog";
 import { Button } from "@/components/Button";
 import { ArtistCard } from "@/components/ArtistCard";
+import { catalogImageSrc } from "@/lib/utils";
 
 // Catalog is DB-backed — render per-request so edits show up immediately.
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export default async function HomePage() {
                 {artists.slice(0, 4).map((a) => (
                   <Image
                     key={a.id}
-                    src={a.image}
+                    src={catalogImageSrc(a.image)}
                     alt={a.name}
                     width={36}
                     height={36}
