@@ -16,6 +16,17 @@ export async function POST(request: Request) {
   const body = await readJson<unknown>(request);
   if (!body.ok) return body.error;
 
+  // Human verification (no-op until TURNSTILE_SECRET_KEY is configured).
+  const { verifyTurnstileToken, clientIp } = await import("@/server/turnstile");
+  if (
+    !(await verifyTurnstileToken(
+      (body.data as { turnstileToken?: unknown })?.turnstileToken,
+      clientIp(request),
+    ))
+  ) {
+    return jsonError("Human verification failed. Please try again.", 400);
+  }
+
   const parsed = loginSchema.safeParse(body.data);
   if (!parsed.success) {
     return jsonError(parsed.error.issues[0]?.message ?? "Invalid input", 400);

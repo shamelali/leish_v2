@@ -19,13 +19,16 @@ export function proxy(request: NextRequest) {
   const csp = [
     "default-src 'self'",
     // 'strict-dynamic' lets nonce-trusted scripts load Next.js chunks; dev
-    // needs 'unsafe-eval' for React Refresh/HMR.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    // needs 'unsafe-eval' for React Refresh/HMR. Turnstile serves its
+    // challenge script from challenges.cloudflare.com.
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
     // Tailwind utilities plus the app's pervasive inline style attributes.
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data: https://*.supabase.co",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co" + (isDev ? " ws:" : ""),
+    `connect-src 'self' https://*.supabase.co${isDev ? " ws:" : ""}`,
+    // The Turnstile widget renders inside a cross-origin iframe.
+    "frame-src https://challenges.cloudflare.com",
     "frame-ancestors 'none'",
     "form-action 'self'",
     "base-uri 'self'",

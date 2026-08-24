@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/Button";
+import { TurnstileWidget } from "@/components/TurnstileWidget";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -102,6 +103,7 @@ export default function ForgotPasswordPage() {
               {error}
             </p>
           )}
+          <TurnstileWidget onVerify={() => {}} />
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? "Sending…" : "Send Reset Link"}
           </Button>

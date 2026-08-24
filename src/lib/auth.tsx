@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { Role, User } from "./types";
+import { getTurnstileToken } from "./turnstile-token";
 
 /**
  * API-backed auth context.
@@ -63,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, turnstileToken: getTurnstileToken() }),
     });
     if (!res.ok) throw new Error(await parseError(res));
     const body = await res.json();
@@ -82,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, turnstileToken: getTurnstileToken() }),
       });
       if (!res.ok) throw new Error(await parseError(res));
       const body = await res.json();

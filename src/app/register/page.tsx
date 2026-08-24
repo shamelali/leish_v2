@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import type { Role } from "@/lib/types";
 import { Button } from "@/components/Button";
+import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { cn } from "@/lib/utils";
 
 const ROLE_OPTIONS: { id: Role; label: string; hint: string; icon: string }[] = [
@@ -157,6 +158,7 @@ export default function RegisterPage() {
             {error}
           </p>
         )}
+        <TurnstileWidget onVerify={() => {}} />
         <Button type="submit" className="w-full" disabled={submitting}>
           {submitting ? "Creating account…" : "Sign Up Free"}
         </Button>

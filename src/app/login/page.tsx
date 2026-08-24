@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/Button";
+import { TurnstileWidget } from "@/components/TurnstileWidget";
 
 function LoginForm() {
   const router = useRouter();
@@ -102,6 +103,7 @@ function LoginForm() {
             {error}
           </p>
         )}
+        <TurnstileWidget onVerify={() => {}} />
         <Button type="submit" className="w-full" disabled={submitting}>
           {submitting ? "Logging in…" : "Log In"}
         </Button>
