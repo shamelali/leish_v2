@@ -96,6 +96,7 @@ function parseServices(value: string | undefined | null): Service[] {
 export function rowToArtist(row: ArtistRow): Artist {
   return {
     id: row.id,
+    slug: row.slug || row.id,
     name: row.name,
     tagline: row.tagline,
     bio: row.bio,
@@ -120,6 +121,7 @@ export function rowToArtist(row: ArtistRow): Artist {
 export function rowToStudio(row: StudioRow): Studio {
   return {
     id: row.id,
+    slug: row.slug || row.id,
     name: row.name,
     tagline: row.tagline,
     description: row.description,
@@ -222,6 +224,11 @@ export async function getArtistBySlug(slug: string): Promise<Artist | null> {
   return row ? rowToArtist(row) : null;
 }
 
+/** Resolve a public catalog artist by slug first, then by primary key. */
+export async function resolveArtist(idOrSlug: string): Promise<Artist | null> {
+  return (await getArtistBySlug(idOrSlug)) ?? (await getArtistById(idOrSlug));
+}
+
 // ── Studios ──────────────────────────────────────────────────────────────────
 
 const STUDIO_SELECT = `SELECT * FROM studios`;
@@ -239,6 +246,18 @@ export async function getStudioById(id: string): Promise<Studio | null> {
   const row = (await getDb().prepare(`${STUDIO_SELECT} WHERE id = ?`).get(id)) as unknown as
     StudioRow | undefined;
   return row ? rowToStudio(row) : null;
+}
+
+export async function getStudioBySlug(slug: string): Promise<Studio | null> {
+  await ensureCatalogSeeded();
+  const row = (await getDb().prepare(`${STUDIO_SELECT} WHERE slug = ?`).get(slug)) as unknown as
+    StudioRow | undefined;
+  return row ? rowToStudio(row) : null;
+}
+
+/** Resolve a public catalog studio by slug first, then by primary key. */
+export async function resolveStudio(idOrSlug: string): Promise<Studio | null> {
+  return (await getStudioBySlug(idOrSlug)) ?? (await getStudioById(idOrSlug));
 }
 
 // ── Updates (admin + artist self-service) ────────────────────────────────────
@@ -356,7 +375,9 @@ export async function createArtist(input: {
       input.name.trim(),
       input.tagline?.trim() ?? "",
       input.bio?.trim() ?? "",
-      "", // image — admin uploads/links later
+      // Empty src crashes next/image on listing cards — use a catalog placeholder
+      // until an admin attaches a real photo.
+      "/images/hero.jpg",
       input.state ?? "",
       input.area ?? "",
       Math.max(0, Math.round(input.priceFrom ?? 0)),
@@ -370,13 +391,15 @@ export async function createArtist(input: {
 }
 
 function slugifyName(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/[\s_]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || "artist";
+  return (
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/[\s_]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "artist"
+  );
 }
 
 export async function updateArtist(

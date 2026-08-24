@@ -131,9 +131,10 @@ async function billplzPayment(
       email: owner.email,
       mobile: "",
       amount: String(amountSen),
-      description: type === "deposit"
-        ? `Leish! booking deposit (${bookingId.slice(0, 8)})`
-        : `Leish! balance payment (${bookingId.slice(0, 8)})`,
+      description:
+        type === "deposit"
+          ? `Leish! booking deposit (${bookingId.slice(0, 8)})`
+          : `Leish! balance payment (${bookingId.slice(0, 8)})`,
       callback_url: callbackUrl,
       redirect_url: redirectUrl,
       reference_1: bookingId,
@@ -164,7 +165,8 @@ async function billplzPayment(
     provider_ref: body.id,
     provider_url: body.url ?? null,
   };
-  insertPayment(record);
+  // Must await: callers read the row immediately (webhook lookup, e2e).
+  await insertPayment(record);
   logger.info(
     { bookingId, billId: body.id, amount: amountSen, type },
     `billplz ${type} payment bill created`,
@@ -210,8 +212,7 @@ export async function getPaymentForBooking(
   const row = (await getDb()
     .prepare("SELECT * FROM payments WHERE booking_id = ? AND type = ?")
     .get(bookingId, type)) as
-    | (PaymentRecord & { created_at: string; updated_at: string })
-    | undefined;
+    (PaymentRecord & { created_at: string; updated_at: string }) | undefined;
   if (!row) return null;
   return {
     id: row.id,
@@ -249,8 +250,7 @@ export async function handlePaymentPaid(payment: PaymentRecord): Promise<void> {
   const booking = (await getDb()
     .prepare("SELECT * FROM bookings WHERE id = ?")
     .get(payment.booking_id)) as
-    | { status: string; artist_id: string; date: string | null }
-    | undefined;
+    { status: string; artist_id: string; date: string | null } | undefined;
   if (!booking) {
     logger.warn({ paymentId: payment.id }, "paid payment has no booking (ignored)");
     return;
@@ -273,9 +273,7 @@ export async function handlePaymentPaid(payment: PaymentRecord): Promise<void> {
   // Balance paid → quotation fulfilled + artist payout created.
   const quotation = await getActiveQuotation(payment.booking_id);
   if (quotation && quotation.status !== "expired") {
-    await getDb()
-      .prepare("UPDATE quotations SET status = 'paid' WHERE id = ?")
-      .run(quotation.id);
+    await getDb().prepare("UPDATE quotations SET status = 'paid' WHERE id = ?").run(quotation.id);
   }
   await createPayoutForBooking(payment.booking_id, {
     artistId: booking.artist_id,
@@ -289,9 +287,7 @@ export async function handlePaymentPaid(payment: PaymentRecord): Promise<void> {
 export async function getPaymentForBill(billId: string): Promise<PaymentRecord | null> {
   const row = (await getDb()
     .prepare("SELECT * FROM payments WHERE provider_ref = ?")
-    .get(billId)) as
-    | (PaymentRecord & { created_at: string; updated_at: string })
-    | undefined;
+    .get(billId)) as (PaymentRecord & { created_at: string; updated_at: string }) | undefined;
   if (!row) return null;
   return {
     id: row.id,
@@ -359,8 +355,7 @@ export async function refundBalancePayment(payment: PaymentRecord): Promise<Paym
   logger.info({ bookingId: payment.booking_id, amount: amountSen }, "balance refund recorded");
 
   const updated = (await getDb().prepare("SELECT * FROM payments WHERE id = ?").get(payment.id)) as
-    | (PaymentRecord & { created_at: string; updated_at: string })
-    | undefined;
+    (PaymentRecord & { created_at: string; updated_at: string }) | undefined;
   if (!updated) return { ...payment, status: "refunded" };
   return {
     id: updated.id,

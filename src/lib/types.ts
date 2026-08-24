@@ -23,6 +23,8 @@ export interface Review {
 
 export interface Artist {
   id: string;
+  /** URL key. Seeded artists keep slug === id; admin-created ones use a UUID id. */
+  slug?: string;
   name: string;
   tagline: string;
   bio: string;
@@ -45,6 +47,8 @@ export interface Artist {
 
 export interface Studio {
   id: string;
+  /** URL key. Seeded studios keep slug === id. */
+  slug?: string;
   name: string;
   tagline: string;
   description: string;

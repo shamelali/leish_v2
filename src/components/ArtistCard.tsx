@@ -1,17 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Artist } from "@/lib/types";
-import { formatRM } from "@/lib/utils";
+import { catalogImageSrc, catalogPath, formatRM } from "@/lib/utils";
 
 export function ArtistCard({ artist }: { artist: Artist }) {
   return (
     <Link
-      href={`/artists/${artist.id}`}
+      href={catalogPath("artists", artist)}
       className="group flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white transition-shadow hover:shadow-lg hover:shadow-stone-200/60 dark:border-stone-800 dark:bg-stone-900 dark:hover:shadow-stone-950/60"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-stone-100 dark:bg-stone-800">
         <Image
-          src={artist.image}
+          src={catalogImageSrc(artist.image)}
           alt={artist.name}
           fill
           sizes="(max-width: 768px) 100vw, 33vw"

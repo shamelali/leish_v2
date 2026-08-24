@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { BRIDAL_EVENTS, NON_BRIDAL_EVENTS } from "@/lib/data";
-import { getArtistBySlug, listEntityReviews } from "@/server/catalog";
+import { listEntityReviews, resolveArtist } from "@/server/catalog";
 import { getBookingFeeSen } from "@/server/settings";
 import { RatingStars } from "@/components/RatingStars";
 import BookingCalendar from "@/components/booking-calendar";
@@ -14,7 +14,9 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
 
   // DB-backed catalog profile (seeded from src/lib/data.ts). Slugs match the
   // original catalog ids, so existing links/bookings keep working.
-  const artist = await getArtistBySlug(slug);
+  // Slug first (pretty URLs), then id — seeded artists have slug === id,
+  // admin-created ones have a UUID id and a separate slug.
+  const artist = await resolveArtist(slug);
   if (!artist) notFound();
 
   const reviews = await listEntityReviews("artist", artist.id);

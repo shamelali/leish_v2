@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/Button";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
+import { getTurnstileToken } from "@/lib/turnstile-token";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -25,7 +26,7 @@ export default function ForgotPasswordPage() {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstileToken: getTurnstileToken() }),
       });
       const body = await res.json();
       if (!res.ok) {

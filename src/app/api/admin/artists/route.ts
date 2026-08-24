@@ -45,7 +45,7 @@ export const POST = statefulRoute(
 
     await logAdminAction(user.id, "artist.create", "artists", created.id, {
       name: created.name,
-      slug: created.id,
+      slug: created.slug ?? created.id,
     });
 
     return NextResponse.json({ artist: created }, { status: 201 });
