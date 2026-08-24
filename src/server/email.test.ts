@@ -69,6 +69,13 @@ describe("email service", () => {
       process.env.EMAIL_PROVIDER = "ses";
       expect(activeEmailProvider()).toBe("dev");
     });
+    it("auto-detects resend/postmark from credentials when EMAIL_PROVIDER is unset", () => {
+      process.env.RESEND_API_KEY = "test-key";
+      expect(activeEmailProvider()).toBe("resend");
+      delete process.env.RESEND_API_KEY;
+      process.env.POSTMARK_SERVER_TOKEN = "test-token";
+      expect(activeEmailProvider()).toBe("postmark");
+    });
   });
 
   describe("dev provider", () => {
