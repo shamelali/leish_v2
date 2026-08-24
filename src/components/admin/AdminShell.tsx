@@ -10,6 +10,7 @@ import {
   IconAudit,
   IconCalendar,
   IconCard,
+  IconChart,
   IconClose,
   IconCollapse,
   IconDashboard,
@@ -40,7 +41,10 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "Overview",
-    items: [{ href: "/admin", label: "Dashboard", icon: IconDashboard, exact: true }],
+    items: [
+      { href: "/admin", label: "Dashboard", icon: IconDashboard, exact: true },
+      { href: "/admin/analytics", label: "Analytics", icon: IconChart },
+    ],
   },
   {
     label: "Marketplace",

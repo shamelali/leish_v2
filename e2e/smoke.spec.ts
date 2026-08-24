@@ -40,13 +40,14 @@ test("unauthenticated bookings API returns 401", async ({ request }) => {
   expect(res.status()).toBe(401);
 });
 
-test("registration works and booking is gated on email verification", async ({ request }) => {
+test("unverified users can book but cannot pay", async ({ request }) => {
   const email = `e2e-${Date.now()}@example.com`;
   const reg = await request.post("/api/auth/register", {
     data: { name: "E2E Client", email, password: "testpass123", role: "customer", consent: true },
   });
   expect([200, 201]).toContain(reg.status());
 
+  // Booking requests are allowed pre-verification (keeps the flow fast);
   const book = await request.post("/api/bookings", {
     data: {
       artistId: ARTIST_ID,
@@ -57,9 +58,13 @@ test("registration works and booking is gated on email verification", async ({ r
       notes: "e2e smoke",
     },
   });
-  expect(book.status()).toBe(403);
-  const body = await book.json();
-  expect(body.code).toBe("EMAIL_NOT_VERIFIED");
+  expect(book.status()).toBe(201);
+  const bookingId = (await book.json()).booking.id as string;
+
+  // …but the deposit is gated on a verified address.
+  const pay = await request.post(`/api/bookings/${bookingId}/pay-fee`, { data: {} });
+  expect(pay.status()).toBe(403);
+  expect(String((await pay.json()).error)).toContain("verify your email");
 });
 
 test("unverified artists cannot claim catalog profiles", async ({ request }) => {

@@ -20,10 +20,16 @@ interface BookingCalendarProps {
   artistName: string;
   services: CatalogService[];
   eventTypes: EventTypeOption[];
+  /** Deposit (sen) from platform settings — shown in the pricing summary. */
+  bookingFeeSen?: number;
 }
 
-const BOOKING_FEE_RM = 200;
-
+/**
+ * Booking request flow (db-facade journey):
+ * browse → request → MUA accepts → quotation → deposit secures the date
+ * → balance before the event. This component only sends the request; the
+ * quotation and payment steps live in the dashboard.
+ */
 function todayISO(): string {
   const d = new Date();
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -31,18 +37,14 @@ function todayISO(): string {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
-/**
- * Booking request flow (db-facade journey):
- * browse → request → MUA accepts → quotation (24h) → pay RM 200 booking fee
- * → webhook confirms. This component only sends the request; the quotation
- * and payment steps live in the dashboard.
- */
 export default function BookingCalendar({
   artistId,
   artistName,
   services,
   eventTypes,
+  bookingFeeSen = 5_000,
 }: BookingCalendarProps) {
+  const bookingFeeRM = Math.round(bookingFeeSen / 100);
   const router = useRouter();
 
   const [selectedService, setSelectedService] = useState<string | null>(services[0]?.name ?? null);
@@ -137,7 +139,7 @@ export default function BookingCalendar({
               </p>
               <p className="mt-1 text-sm text-green-700 dark:text-green-300">
                 {artistName} will review your request and send a quotation (valid 24 hours). Pay the
-                RM {BOOKING_FEE_RM} booking fee from your dashboard to secure the date.
+                RM {bookingFeeRM} booking fee from your dashboard to secure the date.
               </p>
             </div>
           </div>
@@ -202,14 +204,14 @@ export default function BookingCalendar({
               min={todayISO()}
               onChange={(e) => setDate(e.target.value)}
               disabled={isSubmitting}
-              className="w-full rounded-xl border border-stone-300 bg-white p-3 text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:[color-scheme:dark] dark:focus:ring-rose-950"
+              className="w-full rounded-xl border border-stone-300 bg-white p-3 text-base sm:text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:[color-scheme:dark] dark:focus:ring-rose-950"
             />
             <input
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
               disabled={isSubmitting}
-              className="w-full rounded-xl border border-stone-300 bg-white p-3 text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:[color-scheme:dark] dark:focus:ring-rose-950"
+              className="w-full rounded-xl border border-stone-300 bg-white p-3 text-base sm:text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:[color-scheme:dark] dark:focus:ring-rose-950"
             />
           </div>
 
@@ -220,7 +222,7 @@ export default function BookingCalendar({
             value={eventType}
             onChange={(e) => setEventType(e.target.value)}
             disabled={isSubmitting}
-            className="w-full rounded-xl border border-stone-300 bg-white p-3 text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:ring-rose-950"
+            className="w-full rounded-xl border border-stone-300 bg-white p-3 text-base sm:text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:ring-rose-950"
           >
             {eventTypes.map((et) => (
               <option key={et.id} value={et.label}>
@@ -242,7 +244,7 @@ export default function BookingCalendar({
             rows={2}
             disabled={isSubmitting}
             maxLength={2000}
-            className="w-full rounded-xl border border-stone-300 bg-white p-3 text-sm text-stone-800 placeholder-stone-400 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:ring-rose-950"
+            className="w-full rounded-xl border border-stone-300 bg-white p-3 text-base sm:text-sm text-stone-800 placeholder-stone-400 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:ring-rose-950"
           />
         </div>
 
@@ -285,20 +287,22 @@ export default function BookingCalendar({
             </div>
             <div className="flex justify-between text-stone-600 dark:text-stone-400">
               <span>Booking fee (after quotation, secures your date)</span>
-              <span>RM {BOOKING_FEE_RM}</span>
+              <span>RM {bookingFeeRM}</span>
             </div>
             <div className="flex justify-between text-xs text-stone-500 border-t border-stone-200 dark:border-stone-700/60 pt-2">
               <span>Balance due 3 days before event</span>
-              <span>RM {Math.max(0, servicePrice - BOOKING_FEE_RM)}</span>
+              <span>RM {Math.max(0, servicePrice - bookingFeeRM)}</span>
             </div>
           </div>
         )}
 
-        {/* Submit CTA */}
+        {/* Submit CTA — sticks to the viewport bottom on mobile so the
+            primary action is always one thumb-tap away. */}
+        <div className="sticky bottom-0 -mx-6 -mb-6 bg-white/95 px-6 pb-4 pt-3 backdrop-blur rounded-b-2xl border-t border-stone-100 sm:static sm:mx-0 sm:mb-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none dark:border-stone-800 dark:bg-stone-900/95">
         <button
           type="submit"
           disabled={!selectedService || !date || !time || isSubmitting}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 px-4 font-semibold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 px-4 font-semibold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[48px]"
         >
           {isSubmitting ? (
             <>
@@ -319,6 +323,7 @@ export default function BookingCalendar({
             <span>Send Booking Request &rarr;</span>
           )}
         </button>
+        </div>
       </form>
     </div>
   );

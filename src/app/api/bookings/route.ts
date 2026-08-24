@@ -4,13 +4,13 @@ import { getDb, bind, toPublicUser, type BookingRow, type UserRow } from "@/serv
 import { verifySessionToken } from "@/server/session";
 import { bookingSchema } from "@/server/validation";
 import { getArtistById } from "@/server/catalog";
-import { createVerifyUrl } from "@/server/verify-email";
 import { getClaimedArtistIds } from "@/server/artist-profiles";
 import { getPaymentForBooking } from "@/server/payments";
 import { getBookingFeeSen } from "@/server/settings";
 import { getActiveQuotation, serializeQuotation } from "@/server/quotations";
 import { notifyBookingCreated } from "@/server/booking-emails";
 import { jsonError, readJson, statefulRoute, tryRoute } from "@/server/http";
+import { logger } from "@/server/logger";
 
 /** Require a valid session; returns { user } or a JSON error response. */
 async function requireUser(request: Request) {
@@ -142,18 +142,12 @@ export const POST = statefulRoute(
     if (error) return error;
 
     // Trust gate: unverified accounts cannot create bookings.
+    // Booking requests are allowed pre-verification to keep the flow under
+    // 90 seconds — the gate moves to payment (pay-fee/pay-balance), where a
+    // verified identity actually matters. Artists still see an unverified
+    // flag on the request.
     if (!user!.email_verified) {
-      return NextResponse.json(
-        {
-          error: "Please verify your email before booking.",
-          code: "EMAIL_NOT_VERIFIED",
-          // Dev convenience: no email provider in the sandbox, so surface the
-          // verification link directly (never included in production).
-          devVerifyUrl:
-            process.env.NODE_ENV !== "production" ? await createVerifyUrl(user!.id) : undefined,
-        },
-        { status: 403 },
-      );
+      logger.info({ userId: user!.id }, "booking created by unverified account (gate moved to payment)");
     }
 
     const body = await readJson<unknown>(request);

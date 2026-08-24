@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { BRIDAL_EVENTS, NON_BRIDAL_EVENTS } from "@/lib/data";
 import { getArtistBySlug, listEntityReviews } from "@/server/catalog";
+import { getBookingFeeSen } from "@/server/settings";
 import { RatingStars } from "@/components/RatingStars";
 import BookingCalendar from "@/components/booking-calendar";
 
@@ -17,6 +18,7 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
   if (!artist) notFound();
 
   const reviews = await listEntityReviews("artist", artist.id);
+  const bookingFeeSen = await getBookingFeeSen();
 
   const eventTypes = [
     ...BRIDAL_EVENTS.filter((e) => artist.bridal.includes(e.id)),
@@ -188,6 +190,7 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
                 artistName={artist.name}
                 services={artist.services}
                 eventTypes={eventTypes}
+                bookingFeeSen={bookingFeeSen}
               />
             </div>
           </div>

@@ -36,6 +36,13 @@ export const POST = statefulRoute(
       BookingRow | undefined;
     if (!booking) return jsonError("Booking not found", 404);
     if (booking.user_id !== user.id) return jsonError("Only the booking owner can pay", 403);
+
+    // Money moves only for verified accounts — this is the email-verification
+    // gate (moved here from booking creation to keep the request flow fast).
+    if (!user.email_verified) {
+      return jsonError("Please verify your email address before paying.", 403);
+    }
+
     if (booking.status !== "accepted") {
       return jsonError("This booking is not waiting for a fee payment", 409);
     }

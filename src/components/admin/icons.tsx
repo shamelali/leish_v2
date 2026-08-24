@@ -130,6 +130,18 @@ export function IconSettings(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconChart(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <path d="M3.5 20.5h17" />
+      <path d="M6.5 20.5v-7" />
+      <path d="M11.25 20.5V9" />
+      <path d="M16 20.5v-4.5" />
+      <path d="M20.75 20.5V4.5" />
+    </svg>
+  );
+}
+
 export function IconLogout(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base(props)}>
