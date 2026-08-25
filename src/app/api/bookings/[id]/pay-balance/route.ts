@@ -99,10 +99,7 @@ export const POST = statefulRoute(
       }
       throw err;
     }
-    logger.info(
-      { bookingId: booking.id, amount: payment.amount },
-      "booking balance bill created",
-    );
+    logger.info({ bookingId: booking.id, amount: payment.amount }, "booking balance bill created");
 
     // Dev provider: nothing is charged, so settle instantly (demos + e2e).
     if (payment.provider === "dev") {
@@ -126,7 +123,8 @@ export const POST = statefulRoute(
 
     // Email the client the payment link (falls back to the dashboard when no
     // hosted bill URL exists — e.g. dev provider).
-    const payUrl = payment.provider_url ?? `${requestOrigin(request)}/dashboard?booking=${booking.id}`;
+    const payUrl =
+      payment.provider_url ?? `${requestOrigin(request)}/dashboard?booking=${booking.id}`;
     await sendBalanceBillEmail({
       bookingId: booking.id,
       ownerUserId: booking.user_id,

@@ -113,7 +113,9 @@ export default function AdminPayoutsPage() {
         <span className="text-sm text-stone-500 dark:text-stone-400">
           {payouts.length} {payouts.length === 1 ? "payout" : "payouts"}
         </span>
-        {message && <span className="text-sm text-emerald-600 dark:text-emerald-400">{message}</span>}
+        {message && (
+          <span className="text-sm text-emerald-600 dark:text-emerald-400">{message}</span>
+        )}
       </div>
 
       <div className="rounded-xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
@@ -121,32 +123,45 @@ export default function AdminPayoutsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-stone-100 dark:border-stone-800">
-                {["Artist", "Service", "Event", "Gross", "Commission", "Net Payable", "Status", ""].map(
-                  (h, i) => (
-                    <th
-                      key={i}
-                      className={
-                        i >= 3 && i <= 5
-                          ? "px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-stone-500 dark:text-stone-400"
-                          : "px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-stone-500 dark:text-stone-400"
-                      }
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
+                {[
+                  "Artist",
+                  "Service",
+                  "Event",
+                  "Gross",
+                  "Commission",
+                  "Net Payable",
+                  "Status",
+                  "",
+                ].map((h, i) => (
+                  <th
+                    key={i}
+                    className={
+                      i >= 3 && i <= 5
+                        ? "px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-stone-500 dark:text-stone-400"
+                        : "px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-stone-500 dark:text-stone-400"
+                    }
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={8}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     Loading...
                   </td>
                 </tr>
               ) : payouts.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                  <td
+                    colSpan={8}
+                    className="px-6 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  >
                     No payouts found.
                   </td>
                 </tr>

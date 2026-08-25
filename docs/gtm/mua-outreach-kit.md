@@ -11,13 +11,13 @@ limited async capacity).
 
 Don't waste slots on the wrong 10:
 
-| Criterion | Bar |
-|---|---|
-| Original work | Posts own work regularly (not reposts) — 20+ portfolio-worthy photos on IG |
-| Follower band | 300–5,000 (nano/micro: likelier to say yes AND to show up and post) |
-| Location | Based in / regularly serving Klang Valley (KL, PJ, Subang, Shah Alam, Cyberjaya, Puchong) |
-| Recency | Active in last 30 days |
-| **Bonus** | Already does freelance/DM bookings — they feel the pain Leish solves |
+| Criterion     | Bar                                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| Original work | Posts own work regularly (not reposts) — 20+ portfolio-worthy photos on IG                |
+| Follower band | 300–5,000 (nano/micro: likelier to say yes AND to show up and post)                       |
+| Location      | Based in / regularly serving Klang Valley (KL, PJ, Subang, Shah Alam, Cyberjaya, Puchong) |
+| Recency       | Active in last 30 days                                                                    |
+| **Bonus**     | Already does freelance/DM bookings — they feel the pain Leish solves                      |
 
 ## Sourcing queries
 
@@ -47,11 +47,11 @@ Don't waste slots on the wrong 10:
 
 ## Objection handling
 
-| Objection | Response |
-|---|---|
-| "Is it free?" | Yes to join and list. Commission applies only on completed platform bookings — no upfront cost, no monthly fee. |
-| "I already have clients." | This adds *new* clients who don't already have your contact, plus upfront payment protects you from chasing money. |
-| "How do I get paid?" | Client pays through Billplz; your payout is recorded when the balance is paid and becomes settleable ~1 day after the event date. |
+| Objection                 | Response                                                                                                                          |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| "Is it free?"             | Yes to join and list. Commission applies only on completed platform bookings — no upfront cost, no monthly fee.                   |
+| "I already have clients." | This adds _new_ clients who don't already have your contact, plus upfront payment protects you from chasing money.                |
+| "How do I get paid?"      | Client pays through Billplz; your payout is recorded when the balance is paid and becomes settleable ~1 day after the event date. |
 
 ⚠️ **Accuracy notes (fix before sending):**
 
@@ -65,12 +65,12 @@ Don't waste slots on the wrong 10:
 
 ## Cadence
 
-| Day | Action |
-|---|---|
-| 1 | DM 15 candidates (~20–30% response rate expected with free-offer framing) |
-| 2–3 | Follow up non-responders once — warm, no pressure |
-| 3–5 | Onboard responders — **live walkthrough on a call**, don't just send a link |
-| repeat | Until 10 active profiles hit |
+| Day    | Action                                                                      |
+| ------ | --------------------------------------------------------------------------- |
+| 1      | DM 15 candidates (~20–30% response rate expected with free-offer framing)   |
+| 2–3    | Follow up non-responders once — warm, no pressure                           |
+| 3–5    | Onboard responders — **live walkthrough on a call**, don't just send a link |
+| repeat | Until 10 active profiles hit                                                |
 
 ## Onboarding checklist (per artist)
 

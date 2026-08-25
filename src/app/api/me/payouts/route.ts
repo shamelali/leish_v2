@@ -32,8 +32,7 @@ export const GET = tryRoute(
 
     const db = await getDb();
     const user = (await db.prepare("SELECT * FROM users WHERE id = ?").get(payload.sub)) as
-      | { id: string }
-      | undefined;
+      { id: string } | undefined;
     if (!user) return jsonError("Not authenticated", 401);
 
     const rows = (await db

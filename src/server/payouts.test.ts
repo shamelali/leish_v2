@@ -5,11 +5,7 @@ import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
 import { hashPassword } from "./password";
 import { clearSettingsCache } from "./settings";
-import {
-  createPayoutForBooking,
-  listPayouts,
-  updatePayoutStatus,
-} from "./payouts";
+import { createPayoutForBooking, listPayouts, updatePayoutStatus } from "./payouts";
 
 async function createTestUser(role: "customer" | "artist" = "artist"): Promise<string> {
   const userId = randomUUID();
@@ -17,7 +13,14 @@ async function createTestUser(role: "customer" | "artist" = "artist"): Promise<s
     .prepare(
       "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
-    .run(userId, `${userId}@test.local`, "Test User", role, hashPassword("pw"), new Date().toISOString());
+    .run(
+      userId,
+      `${userId}@test.local`,
+      "Test User",
+      role,
+      hashPassword("pw"),
+      new Date().toISOString(),
+    );
   return userId;
 }
 

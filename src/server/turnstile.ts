@@ -15,10 +15,7 @@ export function isTurnstileConfigured(): boolean {
   return Boolean(process.env.TURNSTILE_SECRET_KEY);
 }
 
-export async function verifyTurnstileToken(
-  token: unknown,
-  ip: string | null,
-): Promise<boolean> {
+export async function verifyTurnstileToken(token: unknown, ip: string | null): Promise<boolean> {
   const secret = process.env.TURNSTILE_SECRET_KEY;
   if (!secret) {
     logger.debug("turnstile skipped (TURNSTILE_SECRET_KEY not set)");
@@ -42,7 +39,10 @@ export async function verifyTurnstileToken(
   } catch (err) {
     // Fail closed on network errors — a bot-friendly outage is worse than a
     // brief human inconvenience.
-    logger.error({ err: err instanceof Error ? err.message : String(err) }, "turnstile siteverify error");
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      "turnstile siteverify error",
+    );
     return false;
   }
 }

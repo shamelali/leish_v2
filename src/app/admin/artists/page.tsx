@@ -174,7 +174,12 @@ export default function AdminArtistsPage() {
               { key: "tagline" as const, label: "Tagline", type: "text", required: false },
               { key: "state" as const, label: "State", type: "text", required: false },
               { key: "area" as const, label: "Area", type: "text", required: false },
-              { key: "priceFrom" as const, label: "Price From (sen)", type: "number", required: false },
+              {
+                key: "priceFrom" as const,
+                label: "Price From (sen)",
+                type: "number",
+                required: false,
+              },
             ].map((f) => (
               <div key={f.key}>
                 <label className="mb-1 block text-sm font-medium text-stone-800 dark:text-stone-200">
@@ -184,9 +189,7 @@ export default function AdminArtistsPage() {
                   type={f.type}
                   required={f.required}
                   value={String(createForm[f.key])}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({ ...p, [f.key]: e.target.value }))
-                  }
+                  onChange={(e) => setCreateForm((p) => ({ ...p, [f.key]: e.target.value }))}
                   className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-rose-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
                 />
               </div>

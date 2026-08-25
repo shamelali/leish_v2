@@ -48,9 +48,7 @@ export async function buildInvoice(booking: BookingRow): Promise<Invoice | null>
 
   const total = quotation.total;
   const payments = await getPaymentsForBooking(booking.id);
-  const paid = payments
-    .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + p.amount, 0);
+  const paid = payments.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0);
   const balanceDue = Math.max(0, total - paid);
   const depositSen = await getBookingFeeSen();
 

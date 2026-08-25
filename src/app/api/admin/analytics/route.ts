@@ -24,43 +24,42 @@ interface ArtistRevenueRow {
   revenue_sen: number;
 }
 
-export const GET = tryRoute(async function GET(request: Request) {
-  const { error } = await requireAdmin(request);
-  if (error) return error;
+export const GET = tryRoute(
+  async function GET(request: Request) {
+    const { error } = await requireAdmin(request);
+    if (error) return error;
 
-  const db = getDb();
+    const db = getDb();
 
-  const [bookingsByMonth, signupsByMonth, revenueByMonth, bookingsByStatus, topArtists, totals] =
-    await Promise.all([
-      db
-        .prepare(
-          `SELECT substr(created_at, 1, 7) AS month, COUNT(*) AS count
+    const [bookingsByMonth, signupsByMonth, revenueByMonth, bookingsByStatus, topArtists, totals] =
+      await Promise.all([
+        db
+          .prepare(
+            `SELECT substr(created_at, 1, 7) AS month, COUNT(*) AS count
            FROM bookings GROUP BY month ORDER BY month DESC LIMIT 12`,
-        )
-        .all<MonthRow>(),
-      db
-        .prepare(
-          `SELECT substr(created_at, 1, 7) AS month, COUNT(*) AS count
+          )
+          .all<MonthRow>(),
+        db
+          .prepare(
+            `SELECT substr(created_at, 1, 7) AS month, COUNT(*) AS count
            FROM users GROUP BY month ORDER BY month DESC LIMIT 12`,
-        )
-        .all<MonthRow>(),
-      db
-        .prepare(
-          `SELECT substr(p.updated_at, 1, 7) AS month,
+          )
+          .all<MonthRow>(),
+        db
+          .prepare(
+            `SELECT substr(p.updated_at, 1, 7) AS month,
                   COALESCE(SUM(p.amount), 0) AS count
            FROM payments p
            WHERE p.status = 'paid'
            GROUP BY month ORDER BY month DESC LIMIT 12`,
-        )
-        .all<MonthRow>(),
-      db
-        .prepare(
-          `SELECT status, COUNT(*) AS count FROM bookings GROUP BY status`,
-        )
-        .all<{ status: string; count: number }>(),
-      db
-        .prepare(
-          `SELECT b.artist_id, b.artist_name,
+          )
+          .all<MonthRow>(),
+        db
+          .prepare(`SELECT status, COUNT(*) AS count FROM bookings GROUP BY status`)
+          .all<{ status: string; count: number }>(),
+        db
+          .prepare(
+            `SELECT b.artist_id, b.artist_name,
                   COUNT(DISTINCT b.id) AS bookings,
                   COALESCE(SUM(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END), 0) AS revenue_sen
            FROM bookings b
@@ -68,59 +67,51 @@ export const GET = tryRoute(async function GET(request: Request) {
            GROUP BY b.artist_id, b.artist_name
            ORDER BY revenue_sen DESC, bookings DESC
            LIMIT 8`,
-        )
-        .all<ArtistRevenueRow>(),
-      Promise.all([
-        db.prepare("SELECT COUNT(*) AS n FROM users").get<{ n: number }>(),
-        db.prepare("SELECT COUNT(*) AS n FROM bookings").get<{ n: number }>(),
-        db
-          .prepare("SELECT COALESCE(SUM(amount), 0) AS n FROM payments WHERE status = 'paid'")
-          .get<{ n: number }>(),
-        db
-          .prepare("SELECT COALESCE(SUM(net_sen), 0) AS n FROM payouts WHERE status = 'pending'")
-          .get<{ n: number }>(),
-        db
-          .prepare("SELECT COUNT(*) AS n FROM bookings WHERE status = 'completed'")
-          .get<{ n: number }>(),
-        db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'artist'").get<{ n: number }>(),
-      ]),
-    ]);
+          )
+          .all<ArtistRevenueRow>(),
+        Promise.all([
+          db.prepare("SELECT COUNT(*) AS n FROM users").get<{ n: number }>(),
+          db.prepare("SELECT COUNT(*) AS n FROM bookings").get<{ n: number }>(),
+          db
+            .prepare("SELECT COALESCE(SUM(amount), 0) AS n FROM payments WHERE status = 'paid'")
+            .get<{ n: number }>(),
+          db
+            .prepare("SELECT COALESCE(SUM(net_sen), 0) AS n FROM payouts WHERE status = 'pending'")
+            .get<{ n: number }>(),
+          db
+            .prepare("SELECT COUNT(*) AS n FROM bookings WHERE status = 'completed'")
+            .get<{ n: number }>(),
+          db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'artist'").get<{ n: number }>(),
+        ]),
+      ]);
 
-  const [
-    usersTotal,
-    bookingsTotal,
-    revenueTotal,
-    payoutsPending,
-    completedTotal,
-    artistsTotal,
-  ] = totals;
+    const [usersTotal, bookingsTotal, revenueTotal, payoutsPending, completedTotal, artistsTotal] =
+      totals;
 
-  // COUNT/SUM arrive as strings from PostgreSQL — normalize before use.
-  const n = (v: unknown): number => Number(v ?? 0);
+    // COUNT/SUM arrive as strings from PostgreSQL — normalize before use.
+    const n = (v: unknown): number => Number(v ?? 0);
 
-  return NextResponse.json({
-    totals: {
-      users: Number(usersTotal?.n ?? 0),
-      bookings: Number(bookingsTotal?.n ?? 0),
-      revenueSen: Number(revenueTotal?.n ?? 0),
-      pendingPayoutsSen: Number(payoutsPending?.n ?? 0),
-      completedBookings: Number(completedTotal?.n ?? 0),
-      artists: Number(artistsTotal?.n ?? 0),
-    },
-    bookingsByMonth: bookingsByMonth
-      .map((r) => ({ month: r.month, count: n(r.count) }))
-      .reverse(),
-    signupsByMonth: signupsByMonth
-      .map((r) => ({ month: r.month, count: n(r.count) }))
-      .reverse(),
-    revenueByMonth: revenueByMonth
-      .map((r) => ({ month: r.month, sen: n(r.count) }))
-      .reverse(),
-    bookingsByStatus: bookingsByStatus.map((r) => ({ status: r.status, count: n(r.count) })),
-    topArtists: topArtists.map((a) => ({
-      ...a,
-      bookings: n(a.bookings),
-      revenue_sen: n(a.revenue_sen),
-    })),
-  });
-}, { route: "GET /api/admin/analytics" });
+    return NextResponse.json({
+      totals: {
+        users: Number(usersTotal?.n ?? 0),
+        bookings: Number(bookingsTotal?.n ?? 0),
+        revenueSen: Number(revenueTotal?.n ?? 0),
+        pendingPayoutsSen: Number(payoutsPending?.n ?? 0),
+        completedBookings: Number(completedTotal?.n ?? 0),
+        artists: Number(artistsTotal?.n ?? 0),
+      },
+      bookingsByMonth: bookingsByMonth
+        .map((r) => ({ month: r.month, count: n(r.count) }))
+        .reverse(),
+      signupsByMonth: signupsByMonth.map((r) => ({ month: r.month, count: n(r.count) })).reverse(),
+      revenueByMonth: revenueByMonth.map((r) => ({ month: r.month, sen: n(r.count) })).reverse(),
+      bookingsByStatus: bookingsByStatus.map((r) => ({ status: r.status, count: n(r.count) })),
+      topArtists: topArtists.map((a) => ({
+        ...a,
+        bookings: n(a.bookings),
+        revenue_sen: n(a.revenue_sen),
+      })),
+    });
+  },
+  { route: "GET /api/admin/analytics" },
+);

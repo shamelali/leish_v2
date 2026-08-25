@@ -61,14 +61,19 @@ describe("settings-backed getters", () => {
       .prepare(
         "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(userId, `${userId}@test.local`, "Settings Admin", "admin", hashPassword("pw"), new Date().toISOString());
+      .run(
+        userId,
+        `${userId}@test.local`,
+        "Settings Admin",
+        "admin",
+        hashPassword("pw"),
+        new Date().toISOString(),
+      );
   });
 
   afterEach(async () => {
     await getDb().prepare("DELETE FROM platform_settings").run();
-    await getDb()
-      .prepare("DELETE FROM users WHERE id = ?")
-      .run(userId);
+    await getDb().prepare("DELETE FROM users WHERE id = ?").run(userId);
     clearSettingsCache();
   });
 

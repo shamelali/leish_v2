@@ -41,15 +41,7 @@ function monthLabel(m: string) {
   return `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(mm) - 1]} ${y.slice(2)}`;
 }
 
-function Stat({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
       <p className="text-sm font-medium text-stone-500 dark:text-stone-400">{label}</p>
@@ -203,7 +195,10 @@ export default function AdminAnalyticsPage() {
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800">
                     <div
-                      className={cn("h-full rounded-full", statusColors[s.status] ?? "bg-stone-400")}
+                      className={cn(
+                        "h-full rounded-full",
+                        statusColors[s.status] ?? "bg-stone-400",
+                      )}
                       style={{ width: `${(s.count / total) * 100}%` }}
                     />
                   </div>

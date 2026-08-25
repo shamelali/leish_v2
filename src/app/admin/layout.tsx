@@ -8,11 +8,7 @@ export const metadata = {
   title: "Admin",
 };
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
   const token = cookieStore.get("leish_session")?.value;
   const payload = token ? await verifySessionToken(token) : null;
@@ -21,13 +17,11 @@ export default async function AdminLayout({
     redirect("/login?redirect=/admin");
   }
 
-  const user = (await getDb().prepare("SELECT * FROM users WHERE id = ?").get<UserRow>(payload.sub));
+  const user = await getDb().prepare("SELECT * FROM users WHERE id = ?").get<UserRow>(payload.sub);
 
   if (!user || user.role !== "admin") {
     redirect("/?error=forbidden");
   }
 
-  return (
-    <AdminShell user={{ name: user.name, email: user.email }}>{children}</AdminShell>
-  );
+  return <AdminShell user={{ name: user.name, email: user.email }}>{children}</AdminShell>;
 }

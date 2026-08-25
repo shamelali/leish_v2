@@ -55,7 +55,10 @@ const handler = tryRoute(
       }
       // Skip bookings whose balance payment is already settled on-platform.
       const balancePayment = await getPaymentForBooking(booking.id, "balance");
-      if (balancePayment && (balancePayment.status === "paid" || balancePayment.status === "refunded")) {
+      if (
+        balancePayment &&
+        (balancePayment.status === "paid" || balancePayment.status === "refunded")
+      ) {
         skipped += 1;
         continue;
       }

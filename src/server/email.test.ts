@@ -3,19 +3,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
-import {
-  activeEmailProvider,
-  isEmailEnabled,
-  retryFailedEmails,
-  sendEmail,
-} from "./email";
+import { activeEmailProvider, isEmailEnabled, retryFailedEmails, sendEmail } from "./email";
 
-const OUTBOX = "INSERT INTO email_outbox (id, to_email, subject, text, html, created_at) VALUES (?, ?, ?, ?, ?, ?)";
+const OUTBOX =
+  "INSERT INTO email_outbox (id, to_email, subject, text, html, created_at) VALUES (?, ?, ?, ?, ?, ?)";
 
 async function seedUserWithPrefs(prefs?: Partial<Record<string, number>>): Promise<string> {
   const userId = randomUUID();
   await getDb()
-    .prepare("INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, 'customer', 'x', ?)")
+    .prepare(
+      "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, 'customer', 'x', ?)",
+    )
     .run(userId, `${userId}@test.local`, "Email User", new Date().toISOString());
   if (prefs) {
     await getDb()
@@ -97,8 +95,7 @@ describe("email service", () => {
         process.env.EMAIL_PROVIDER = provider;
         await sendEmail({ to: "a@b.c", subject: "Fallback", text: "x" });
         const row = (await getDb().prepare("SELECT subject FROM email_outbox").get()) as
-          | { subject: string }
-          | undefined;
+          { subject: string } | undefined;
         expect(row?.subject).toBe("Fallback");
       },
     );
@@ -114,9 +111,11 @@ describe("email service", () => {
           "https://api.resend.com/emails",
           expect.objectContaining({ method: "POST" }),
         );
-        expect(await getDb().prepare("SELECT COUNT(*) AS c FROM email_outbox").get()).toMatchObject({
-          c: 0,
-        });
+        expect(await getDb().prepare("SELECT COUNT(*) AS c FROM email_outbox").get()).toMatchObject(
+          {
+            c: 0,
+          },
+        );
       } finally {
         globalThis.fetch = originalFetch;
       }

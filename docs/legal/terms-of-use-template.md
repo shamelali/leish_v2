@@ -32,7 +32,7 @@ responsible for activity under your account.
 ## 3. How Bookings Work
 
 3.1 **Request:** choose an artist/studio, service, date, time and event type,
-then send a booking request. The slot is *not* reserved yet.
+then send a booking request. The slot is _not_ reserved yet.
 
 3.2 **Acceptance & quotation:** the professional reviews your request and may
 accept, decline, or propose changes via a Quotation. Quotations are valid for
@@ -66,12 +66,12 @@ quotation.
 
 ## 5. Cancellations & Refunds
 
-| When you cancel | What happens |
-|---|---|
-| Before the professional accepts | Request simply lapses; nothing is charged |
+| When you cancel                                           | What happens                                                                                        |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Before the professional accepts                           | Request simply lapses; nothing is charged                                                           |
 | After confirmation, more than `[3 days]` before the event | Balance (if paid) refunded in full; deposit `[retained / refunded less RM X handling fee — CHOOSE]` |
-| Within `[3 days]` of the event, or no-show | Payments non-refundable |
-| Professional cancels or doesn't show | All amounts paid refunded to you `[in full]`; the professional faces account penalties |
+| Within `[3 days]` of the event, or no-show                | Payments non-refundable                                                                             |
+| Professional cancels or doesn't show                      | All amounts paid refunded to you `[in full]`; the professional faces account penalties              |
 
 Refunds are issued to your original payment method within `[5–10 BUSINESS
 DAYS]`, subject to gateway processing times.

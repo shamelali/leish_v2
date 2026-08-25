@@ -46,7 +46,5 @@ test("unauthenticated dashboard shows the sign-in prompt", async ({ page }) => {
   // (no server-side redirect).
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard/);
-  await expect(
-    page.getByRole("main").getByRole("link", { name: /log in/i }),
-  ).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: /log in/i })).toBeVisible();
 });

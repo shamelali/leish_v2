@@ -201,9 +201,9 @@ notices to the emails above (deemed received 1 business day after sending).
 
 **AGREED:**
 
-| | Party 1 — Leish! | Party 2 — Provider |
-|---|---|---|
-| Signature | | |
-| Name | `[NAME]` | `[NAME]` |
-| Title | `[TITLE]` | |
-| Date | | |
+|           | Party 1 — Leish! | Party 2 — Provider |
+| --------- | ---------------- | ------------------ |
+| Signature |                  |                    |
+| Name      | `[NAME]`         | `[NAME]`           |
+| Title     | `[TITLE]`        |                    |
+| Date      |                  |                    |

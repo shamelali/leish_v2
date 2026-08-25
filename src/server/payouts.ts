@@ -118,9 +118,9 @@ export async function createPayoutForBooking(
   return row;
 }
 
-export async function listPayouts(status?: string): Promise<
-  (PayoutRow & { artist_name: string | null; service: string; event_date: string })[]
-> {
+export async function listPayouts(
+  status?: string,
+): Promise<(PayoutRow & { artist_name: string | null; service: string; event_date: string })[]> {
   const rows = status
     ? await getDb()
         .prepare(
@@ -155,7 +155,8 @@ export async function updatePayoutStatus(
     )
     .run(status, status === "settled" ? new Date().toISOString() : null, notes ?? null, payoutId);
   if (result.changes === 0) return null;
-  return ((await getDb().prepare("SELECT * FROM payouts WHERE id = ?").get(payoutId)) as
-    | PayoutRow
-    | undefined) ?? null;
+  return (
+    ((await getDb().prepare("SELECT * FROM payouts WHERE id = ?").get(payoutId)) as
+      PayoutRow | undefined) ?? null
+  );
 }

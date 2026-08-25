@@ -135,19 +135,28 @@ export default function ArtistPayoutsPage() {
           <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
             {(loading || !user) && fetching ? (
               <tr>
-                <td colSpan={6} className="px-5 py-8 text-center text-stone-500 dark:text-stone-400">
+                <td
+                  colSpan={6}
+                  className="px-5 py-8 text-center text-stone-500 dark:text-stone-400"
+                >
                   Loading...
                 </td>
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={6} className="px-5 py-8 text-center text-stone-500 dark:text-stone-400">
+                <td
+                  colSpan={6}
+                  className="px-5 py-8 text-center text-stone-500 dark:text-stone-400"
+                >
                   Failed to load payouts.
                 </td>
               </tr>
             ) : payouts.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-8 text-center text-stone-500 dark:text-stone-400">
+                <td
+                  colSpan={6}
+                  className="px-5 py-8 text-center text-stone-500 dark:text-stone-400"
+                >
                   No payouts yet — they appear here once a client pays the balance for your booking.
                 </td>
               </tr>

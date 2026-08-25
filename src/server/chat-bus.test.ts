@@ -89,11 +89,12 @@ describe("chat bus (upstash backend)", () => {
 
   it("streams subscribe responses and dispatches JSON lines to listeners", async () => {
     // A streaming body that emits two JSON lines (newline-terminated) then closes.
-    const lines = [
-      JSON.stringify({ id: "m1", senderId: "u1", senderName: "A", body: "one", createdAt: "" }),
-      "",
-      JSON.stringify({ id: "m2", senderId: "u2", senderName: "B", body: "two", createdAt: "" }),
-    ].join("\n") + "\n";
+    const lines =
+      [
+        JSON.stringify({ id: "m1", senderId: "u1", senderName: "A", body: "one", createdAt: "" }),
+        "",
+        JSON.stringify({ id: "m2", senderId: "u2", senderName: "B", body: "two", createdAt: "" }),
+      ].join("\n") + "\n";
     const stream = new ReadableStream({
       start(controller) {
         controller.enqueue(new TextEncoder().encode(lines));
@@ -114,7 +115,10 @@ describe("chat bus (upstash backend)", () => {
     await vi.waitFor(() => expect(received).toEqual(["one", "two"]));
 
     // Subscribe URL used the encoded channel and bearer auth.
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { headers: Record<string, string> }];
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      { headers: Record<string, string> },
+    ];
     expect(url).toBe("https://example.upstash.io/subscribe/chat%3Ab9");
     expect(init.headers.Authorization).toBe("Bearer tok");
   });
@@ -125,7 +129,13 @@ describe("chat bus (upstash backend)", () => {
         controller.enqueue(
           new TextEncoder().encode(
             ": heartbeat\n" +
-              JSON.stringify({ id: "m", senderId: "s", senderName: "n", body: "ok", createdAt: "" }) +
+              JSON.stringify({
+                id: "m",
+                senderId: "s",
+                senderName: "n",
+                body: "ok",
+                createdAt: "",
+              }) +
               "\n",
           ),
         );

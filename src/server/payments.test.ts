@@ -263,7 +263,9 @@ describe("billplz payment creation (mocked fetch)", () => {
       json: () => Promise.resolve({ error: { message: "Invalid" } }),
     }) as typeof fetch;
     try {
-      await expect(createBookingPayment(bookingId, "deposit", FEE)).rejects.toThrow("Failed to create payment");
+      await expect(createBookingPayment(bookingId, "deposit", FEE)).rejects.toThrow(
+        "Failed to create payment",
+      );
     } finally {
       globalThis.fetch = originalFetch;
     }

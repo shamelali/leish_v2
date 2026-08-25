@@ -110,9 +110,9 @@ signed by both Parties.
 
 **AGREED:**
 
-| | Party A | Party B |
-|---|---|---|
-| Signature | | |
-| Name | `[NAME]` | `[NAME]` |
-| Title / Capacity | `[TITLE]` | |
-| Date | | |
+|                  | Party A   | Party B  |
+| ---------------- | --------- | -------- |
+| Signature        |           |          |
+| Name             | `[NAME]`  | `[NAME]` |
+| Title / Capacity | `[TITLE]` |          |
+| Date             |           |          |

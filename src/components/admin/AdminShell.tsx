@@ -231,10 +231,7 @@ function SidebarBody({
           </Link>
         )}
         <div
-          className={cn(
-            "flex items-center gap-3 rounded-lg p-2",
-            collapsed && "justify-center",
-          )}
+          className={cn("flex items-center gap-3 rounded-lg p-2", collapsed && "justify-center")}
         >
           <span
             aria-hidden

@@ -147,7 +147,10 @@ export const POST = statefulRoute(
     // verified identity actually matters. Artists still see an unverified
     // flag on the request.
     if (!user!.email_verified) {
-      logger.info({ userId: user!.id }, "booking created by unverified account (gate moved to payment)");
+      logger.info(
+        { userId: user!.id },
+        "booking created by unverified account (gate moved to payment)",
+      );
     }
 
     const body = await readJson<unknown>(request);

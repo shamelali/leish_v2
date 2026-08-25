@@ -299,30 +299,30 @@ export default function BookingCalendar({
         {/* Submit CTA — sticks to the viewport bottom on mobile so the
             primary action is always one thumb-tap away. */}
         <div className="sticky bottom-0 -mx-6 -mb-6 bg-white/95 px-6 pb-4 pt-3 backdrop-blur rounded-b-2xl border-t border-stone-100 sm:static sm:mx-0 sm:mb-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none dark:border-stone-800 dark:bg-stone-900/95">
-        <button
-          type="submit"
-          disabled={!selectedService || !date || !time || isSubmitting}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 px-4 font-semibold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[48px]"
-        >
-          {isSubmitting ? (
-            <>
-              <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              <span>Sending request…</span>
-            </>
-          ) : (
-            <span>Send Booking Request &rarr;</span>
-          )}
-        </button>
+          <button
+            type="submit"
+            disabled={!selectedService || !date || !time || isSubmitting}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 px-4 font-semibold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[48px]"
+          >
+            {isSubmitting ? (
+              <>
+                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span>Sending request…</span>
+              </>
+            ) : (
+              <span>Send Booking Request &rarr;</span>
+            )}
+          </button>
         </div>
       </form>
     </div>

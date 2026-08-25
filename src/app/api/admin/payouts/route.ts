@@ -62,7 +62,11 @@ export const POST = statefulRoute(
       return jsonError('Invalid action — expected "settle" or "fail"', 400);
     }
 
-    const payout = await updatePayoutStatus(data.id!, data.action === "settle" ? "settled" : "failed", data.notes);
+    const payout = await updatePayoutStatus(
+      data.id!,
+      data.action === "settle" ? "settled" : "failed",
+      data.notes,
+    );
     if (!payout) return jsonError("Payout not found", 404);
 
     // Notify the artist when a payout settles (best-effort).

@@ -164,9 +164,7 @@ test("hybrid flow: deposit confirms, balance pays, artist sees payout", async ({
   expect(mine.netSen).toBe(85_000);
 });
 
-test("refund: balance refundable outside the 3-day window, blocked inside", async ({
-  request,
-}) => {
+test("refund: balance refundable outside the 3-day window, blocked inside", async ({ request }) => {
   // Case 1: event 14 days out → refund window open.
   const far = await setupConfirmedBooking(request, {
     daysFromNow: 14,
@@ -175,7 +173,9 @@ test("refund: balance refundable outside the 3-day window, blocked inside", asyn
   await request.post(`/api/bookings/${far.bookingId}/pay-balance`, { data: {} });
   await login(request, far.clientEmail);
   expect(
-    (await request.patch(`/api/bookings/${far.bookingId}`, { data: { action: "cancel" } })).status(),
+    (
+      await request.patch(`/api/bookings/${far.bookingId}`, { data: { action: "cancel" } })
+    ).status(),
   ).toBe(200);
   const refundOk = await request.post(`/api/bookings/${far.bookingId}/refund`, { data: {} });
   expect(refundOk.status()).toBe(200);
