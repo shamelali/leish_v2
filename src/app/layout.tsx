@@ -70,7 +70,10 @@ export const viewport: Viewport = {
 const themeScript = `
 (function () {
   try {
-    var t = localStorage.getItem("leish-theme") || "dark";
+    var t = "dark";
+    var match = document.cookie.match(/leish-theme=([^;]+)/);
+    if (match) t = match[1];
+    if (t === "light") t = "light";
     if (t === "dark") document.documentElement.classList.add("dark");
   } catch (e) {
     document.documentElement.classList.add("dark");
