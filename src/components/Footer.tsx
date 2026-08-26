@@ -1,5 +1,7 @@
 import { Logo } from "./Logo";
 
+const BUILD_YEAR = 2026;
+
 const footerLinks = [
   {
     title: "Explore",
@@ -63,7 +65,7 @@ export function Footer() {
           ))}
         </div>
         <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-stone-100 pt-6 text-xs text-stone-400 sm:flex-row dark:border-stone-800 dark:text-stone-500">
-          <p>© {new Date().getFullYear()} Leish! · Duta Integra Solutions.</p>
+          <p>© {BUILD_YEAR} Leish! · Duta Integra Solutions.</p>
           <p>Made with ♥ in Malaysia</p>
         </div>
       </div>
