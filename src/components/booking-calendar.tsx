@@ -31,6 +31,9 @@ interface BookingCalendarProps {
  * quotation and payment steps live in the dashboard.
  */
 function todayISO(): string {
+  if (typeof window === "undefined") {
+    return "2024-01-01";
+  }
   const d = new Date();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -87,7 +90,7 @@ export default function BookingCalendar({
         }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as { error?: string; code?: string; booking?: { id: string } };
       if (!res.ok) {
         const message: string = data.error ?? "Unable to send your booking request.";
         if (res.status === 401) {
@@ -107,7 +110,7 @@ export default function BookingCalendar({
         return;
       }
 
-      setCreatedBookingId(data.booking.id);
+      setCreatedBookingId(data.booking?.id ?? "");
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {

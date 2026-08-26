@@ -34,6 +34,10 @@ function formatRM(sen: number) {
   return `RM ${(sen / 100).toFixed(2)}`;
 }
 
+interface ArtistsResponse {
+  artists: Artist[];
+}
+
 export default function AdminArtistsPage() {
   const [artists, setArtists] = useState<Artist[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +57,7 @@ export default function AdminArtistsPage() {
 
   useEffect(() => {
     fetch("/api/admin/artists")
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<ArtistsResponse>)
       .then((d) => setArtists(d.artists ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -128,12 +132,12 @@ export default function AdminArtistsPage() {
           tagline: createForm.tagline,
         }),
       });
-      const data = await res.json();
+      const data: { error?: string; artist?: Artist } = await res.json();
       if (!res.ok) {
         setCreateError(data.error ?? "Failed to create artist");
         return;
       }
-      setArtists((prev) => [...prev, data.artist]);
+      if (data.artist) setArtists((prev) => [...prev, data.artist!]);
       setCreating(false);
       setCreateForm({ name: "", state: "", area: "", priceFrom: "", tagline: "" });
     } finally {

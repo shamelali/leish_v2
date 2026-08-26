@@ -14,6 +14,11 @@ interface AuditEntry {
   admin_email: string;
 }
 
+interface AuditResponse {
+  entries: AuditEntry[];
+  total: number;
+}
+
 const TARGET_TABLES = [
   "",
   "users",
@@ -54,7 +59,7 @@ export default function AdminAuditPage() {
     if (targetTable) params.set("targetTable", targetTable);
 
     fetch(`/api/admin/audit?${params}`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<AuditResponse>)
       .then((d) => {
         setEntries(d.entries);
         setTotal(d.total);

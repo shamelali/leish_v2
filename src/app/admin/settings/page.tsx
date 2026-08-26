@@ -6,6 +6,10 @@ interface Settings {
   [key: string]: string;
 }
 
+interface SettingsResponse {
+  settings: Settings;
+}
+
 const SETTING_LABELS: Record<string, { label: string; description: string }> = {
   site_name: { label: "Site Name", description: "The display name of the platform" },
   contact_email: { label: "Contact Email", description: "Public support email address" },
@@ -38,7 +42,7 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     fetch("/api/admin/settings")
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<SettingsResponse>)
       .then((body) => setSettings(body.settings ?? {}))
       .catch(() => setMessage("Failed to load settings."))
       .finally(() => setLoading(false));

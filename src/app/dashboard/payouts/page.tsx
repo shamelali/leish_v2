@@ -21,6 +21,10 @@ interface Payout {
   notes: string | null;
 }
 
+interface PayoutsResponse {
+  payouts: Payout[];
+}
+
 function formatDate(iso: string) {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-MY", {
     day: "numeric",
@@ -50,7 +54,7 @@ export default function ArtistPayoutsPage() {
     if (!user) return;
     let cancelled = false;
     fetch("/api/me/payouts")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
+      .then((r) => (r.ok ? r.json() as Promise<PayoutsResponse> : Promise.reject(new Error("failed"))))
       .then((d) => {
         if (!cancelled) setPayouts(d.payouts ?? []);
       })

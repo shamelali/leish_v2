@@ -54,7 +54,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetch("/api/admin")
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<DashboardData>)
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));

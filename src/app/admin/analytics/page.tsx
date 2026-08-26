@@ -96,7 +96,7 @@ export default function AdminAnalyticsPage() {
 
   useEffect(() => {
     fetch("/api/admin/analytics")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((r) => (r.ok ? r.json() as Promise<Analytics> : Promise.reject()))
       .then(setData)
       .catch(() => setError(true));
   }, []);

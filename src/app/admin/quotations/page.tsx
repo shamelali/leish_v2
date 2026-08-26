@@ -22,6 +22,11 @@ interface Quotation {
   customer_name: string;
 }
 
+interface QuotationsResponse {
+  quotations: Quotation[];
+  total: number;
+}
+
 const STATUS_OPTIONS = ["", "pending", "paid", "expired", "superseded"];
 
 function formatDate(iso: string) {
@@ -45,7 +50,7 @@ export default function AdminQuotationsPage() {
     if (status) params.set("status", status);
 
     fetch(`/api/admin/quotations?${params}`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<QuotationsResponse>)
       .then((d) => {
         setQuotations(d.quotations);
         setTotal(d.total);

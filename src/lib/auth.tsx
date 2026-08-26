@@ -26,11 +26,20 @@ interface AuthContextValue {
   logout: () => Promise<void>;
 }
 
+interface AuthMeResponse {
+  user: User | null;
+}
+
+interface AuthActionResponse {
+  user: User;
+  error?: string;
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function parseError(response: Response): Promise<string> {
   try {
-    const body = await response.json();
+    const body: { error?: string } = await response.json();
     if (typeof body?.error === "string") return body.error;
   } catch {
     // fall through
@@ -45,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     fetch("/api/auth/me")
-      .then((res) => res.json())
+      .then((res) => res.json() as Promise<AuthMeResponse>)
       .then((body) => {
         if (!cancelled) setUser(body?.user ?? null);
       })
@@ -67,9 +76,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ email, password, turnstileToken: getTurnstileToken() }),
     });
     if (!res.ok) throw new Error(await parseError(res));
-    const body = await res.json();
+    const body: AuthActionResponse = await res.json();
     setUser(body.user);
-    return body.user as User;
+    return body.user;
   }, []);
 
   const register = useCallback(
@@ -86,9 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ ...data, turnstileToken: getTurnstileToken() }),
       });
       if (!res.ok) throw new Error(await parseError(res));
-      const body = await res.json();
+      const body: AuthActionResponse = await res.json();
       setUser(body.user);
-      return body.user as User;
+      return body.user;
     },
     [],
   );

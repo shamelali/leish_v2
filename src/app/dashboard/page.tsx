@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, ROLE_LABELS } from "@/lib/auth";
+import { getTurnstileToken } from "@/lib/turnstile-token";
 import type { Artist } from "@/lib/types";
 import { catalogImageSrc, catalogPath, formatRM } from "@/lib/utils";
 import { Button } from "@/components/Button";
+import { TurnstileWidget } from "@/components/TurnstileWidget";
 
 interface ExtraItem {
   label: string;
@@ -47,6 +49,15 @@ interface Booking {
   balanceAmount: number | null;
   payment: {
     amount: number;
+    type: string;
+    status: string;
+    provider: string;
+    reference: string | null;
+    url: string | null;
+  } | null;
+  balancePayment: {
+    amount: number;
+    type: string;
     status: string;
     provider: string;
     reference: string | null;
@@ -107,11 +118,15 @@ export default function DashboardPage() {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteSending, setQuoteSending] = useState(false);
 
-  useEffect(() => {
+  interface BookingsResponse {
+  bookings: Booking[];
+}
+
+useEffect(() => {
     if (!user) return;
     let cancelled = false;
     fetch("/api/bookings")
-      .then((res) => (res.ok ? res.json() : { bookings: [] }))
+      .then((res) => (res.ok ? res.json() as Promise<BookingsResponse> : { bookings: [] }))
       .then((body) => {
         if (!cancelled) setBookings(body.bookings ?? []);
       })
@@ -127,7 +142,7 @@ export default function DashboardPage() {
     if (!user) return;
     let cancelled = false;
     fetch("/api/catalog/artists")
-      .then((res) => (res.ok ? res.json() : { artists: [] }))
+      .then((res) => (res.ok ? res.json() as Promise<{ artists: Artist[] }> : { artists: [] }))
       .then((body) => {
         if (!cancelled) setCatalog(body.artists ?? []);
       })
@@ -137,11 +152,15 @@ export default function DashboardPage() {
     };
   }, [user]);
 
+  interface ArtistProfileResponse {
+    profile: ClaimedProfile | null;
+  }
+
   useEffect(() => {
     if (!user || user.role === "customer") return;
     let cancelled = false;
     fetch("/api/artist-profiles")
-      .then((res) => (res.ok ? res.json() : { profile: null }))
+      .then((res) => (res.ok ? res.json() as Promise<ArtistProfileResponse> : { profile: null }))
       .then((body) => {
         if (!cancelled) setClaimedProfile(body.profile ?? null);
       })
@@ -154,7 +173,7 @@ export default function DashboardPage() {
   async function refreshBookings() {
     const res = await fetch("/api/bookings");
     if (res.ok) {
-      const body = await res.json();
+      const body: BookingsResponse = await res.json();
       setBookings(body.bookings ?? []);
     }
   }
@@ -164,7 +183,7 @@ export default function DashboardPage() {
     setVerifyError(null);
     try {
       const res = await fetch("/api/auth/resend-verification", { method: "POST" });
-      const body = await res.json();
+      const body: { error?: string } = await res.json();
       if (!res.ok) {
         setVerifyError(body?.error ?? "Could not resend the verification email.");
         return;
@@ -182,7 +201,7 @@ export default function DashboardPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
     });
-    const body = await res.json();
+    const body: { error?: string; booking?: Booking } = await res.json();
     if (!res.ok) {
       alert(body?.error ?? "Could not update the booking.");
       return;
@@ -223,7 +242,7 @@ export default function DashboardPage() {
 
   async function sendReminder(id: string) {
     const res = await fetch(`/api/bookings/${id}/remind`, { method: "POST" });
-    const body = await res.json();
+    const body: { message?: string; error?: string } = await res.json();
     alert(body?.message ?? body?.error ?? "Reminder sent.");
   }
 
@@ -231,14 +250,37 @@ export default function DashboardPage() {
     if (!window.confirm("Request a refund of the balance? (RM 200 booking fee is non-refundable)"))
       return;
     const res = await fetch(`/api/bookings/${id}/refund`, { method: "POST" });
-    const body = await res.json();
+    const body: { message?: string; error?: string } = await res.json();
     alert(body?.message ?? body?.error ?? "Refund processed.");
     refreshBookings();
   }
 
   async function payBookingFee(id: string) {
-    const res = await fetch(`/api/bookings/${id}/pay-fee`, { method: "POST" });
-    const body = await res.json();
+    const turnstileToken = getTurnstileToken();
+    const res = await fetch(`/api/bookings/${id}/pay-fee`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turnstileToken }),
+    });
+    const body: { error?: string; payment?: { url?: string } } = await res.json();
+    if (!res.ok) {
+      alert(body?.error ?? "Could not create the payment.");
+      return;
+    }
+    if (body.payment?.url) {
+      window.open(body.payment.url, "_blank", "noopener,noreferrer");
+    }
+    refreshBookings();
+  }
+
+  async function payBalance(id: string) {
+    const turnstileToken = getTurnstileToken();
+    const res = await fetch(`/api/bookings/${id}/pay-balance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turnstileToken }),
+    });
+    const body: { error?: string; payment?: { url?: string } } = await res.json();
     if (!res.ok) {
       alert(body?.error ?? "Could not create the payment.");
       return;
@@ -293,7 +335,7 @@ export default function DashboardPage() {
           artistNote: quoteForm.artistNote,
         }),
       });
-      const body = await res.json();
+      const body: { error?: string } = await res.json();
       if (!res.ok) {
         setQuoteError(body?.error ?? "Could not send the quotation.");
         return;
@@ -316,12 +358,12 @@ export default function DashboardPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ artistId: claimArtistId }),
     });
-    const body = await res.json();
+    const body: { error?: string; profile?: ClaimedProfile | null } = await res.json();
     if (!res.ok) {
       setClaimError(body?.error ?? "Could not claim this profile.");
       return;
     }
-    setClaimedProfile(body.profile);
+    setClaimedProfile(body.profile ?? null);
     setClaimMsg("Profile claimed — you can now manage its bookings.");
     refreshBookings();
   }
@@ -688,13 +730,16 @@ export default function DashboardPage() {
                               </p>
                             )}
                             {appt.payment?.status === "required" ? (
-                              <button
-                                type="button"
-                                onClick={() => payBookingFee(appt.id)}
-                                className="mt-2 rounded-full bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500"
-                              >
-                                Pay RM 200 booking fee →
-                              </button>
+                              <>
+                                <TurnstileWidget onVerify={() => {}} />
+                                <button
+                                  type="button"
+                                  onClick={() => payBookingFee(appt.id)}
+                                  className="mt-2 rounded-full bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500"
+                                >
+                                  Pay RM 200 booking fee →
+                                </button>
+                              </>
                             ) : (
                               <p className="mt-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
                                 ✓ Booking fee paid — slot secured!
@@ -965,6 +1010,18 @@ export default function DashboardPage() {
                         Send reminder
                       </button>
                     )}
+                    {!isArtist && appt.status === "confirmed" && (appt.balanceAmount ?? 0) > 0 && appt.balancePayment?.status !== "paid" && (
+                      <>
+                        <TurnstileWidget onVerify={() => {}} />
+                        <button
+                          type="button"
+                          onClick={() => payBalance(appt.id)}
+                          className="rounded-full bg-violet-600 px-3 py-1 text-xs font-medium text-white hover:bg-violet-500"
+                        >
+                          Pay balance ({formatRM(appt.balanceAmount ?? 0)})
+                        </button>
+                      </>
+                    )}
                     {!isArtist && appt.status === "cancelled" && (
                       <button
                         type="button"
@@ -1091,7 +1148,7 @@ function ChatThread({ bookingId, isArtist }: { bookingId: string; isArtist: bool
         body: JSON.stringify({ body: draft }),
       });
       if (res.ok) {
-        const body = await res.json();
+        const body: { message: { id: string; body: string; senderName: string; createdAt: string } } = await res.json();
         setMessages((prev) => [...prev, body.message]);
         setDraft("");
       }

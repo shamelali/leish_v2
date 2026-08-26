@@ -22,6 +22,10 @@ function formatRM(sen: number) {
   return `RM ${(sen / 100).toFixed(2)}`;
 }
 
+interface StudiosResponse {
+  studios: Studio[];
+}
+
 export default function AdminStudiosPage() {
   const [studios, setStudios] = useState<Studio[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +36,7 @@ export default function AdminStudiosPage() {
 
   useEffect(() => {
     fetch("/api/admin/studios")
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<StudiosResponse>)
       .then((d) => setStudios(d.studios ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));

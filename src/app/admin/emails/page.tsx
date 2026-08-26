@@ -11,6 +11,11 @@ interface EmailEntry {
   created_at: string;
 }
 
+interface EmailsResponse {
+  emails: EmailEntry[];
+  total: number;
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-MY", {
     month: "short",
@@ -33,7 +38,7 @@ export default function AdminEmailsPage() {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
 
     fetch(`/api/admin/emails?${params}`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<EmailsResponse>)
       .then((d) => {
         setEmails(d.emails);
         setTotal(d.total);

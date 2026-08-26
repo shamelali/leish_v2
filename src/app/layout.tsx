@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
@@ -13,6 +13,16 @@ async function getCspNonce(): Promise<string | undefined> {
     return (await headers()).get("x-nonce") ?? undefined;
   } catch {
     return undefined;
+  }
+}
+
+async function getInitialTheme(): Promise<"light" | "dark"> {
+  try {
+    const cookieStore = await cookies();
+    const theme = cookieStore.get("leish-theme")?.value;
+    return theme === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
   }
 }
 
@@ -74,6 +84,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const nonce = await getCspNonce();
+  const initialTheme = await getInitialTheme();
 
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
@@ -81,7 +92,7 @@ export default async function RootLayout({
         {/* Theme bootstrap — nonce'd so script-src can omit 'unsafe-inline'. */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
 
-        <ThemeProvider>
+        <ThemeProvider initialTheme={initialTheme}>
           <AuthProvider>
             <Navbar />
             <main className="flex-1">{children}</main>

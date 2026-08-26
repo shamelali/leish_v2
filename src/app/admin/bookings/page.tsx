@@ -61,6 +61,17 @@ interface BookingDetail {
   quotation: Quotation | null;
 }
 
+interface BookingsResponse {
+  bookings: Booking[];
+  total: number;
+}
+
+interface BookingDetailResponse {
+  booking: Booking;
+  payment: Payment | null;
+  quotation: Quotation | null;
+}
+
 function formatRM(sen: number) {
   return `RM ${(sen / 100).toFixed(2)}`;
 }
@@ -111,7 +122,7 @@ export default function AdminBookingsPage() {
     void fetch(`/api/admin/bookings?${params}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch");
-        return res.json();
+        return res.json() as Promise<BookingsResponse>;
       })
       .then((data) => {
         if (!cancelled) {
@@ -138,7 +149,7 @@ export default function AdminBookingsPage() {
     try {
       const res = await fetch(`/api/admin/bookings/${id}`);
       if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
+      const data: BookingDetailResponse = await res.json();
       setDetail(data);
       setNotesDraft(data.booking.notes ?? "");
     } catch {
@@ -158,7 +169,7 @@ export default function AdminBookingsPage() {
         body: JSON.stringify({ status: newStatus }),
       });
       if (!res.ok) throw new Error("Failed to update");
-      const data = await res.json();
+      const data: { booking: Booking } = await res.json();
       setDetail((prev) => (prev ? { ...prev, booking: data.booking } : null));
       setBookings((prev) =>
         prev.map((b) => (b.id === selectedId ? { ...b, status: newStatus } : b)),
@@ -180,7 +191,7 @@ export default function AdminBookingsPage() {
         body: JSON.stringify({ notes: notesDraft }),
       });
       if (!res.ok) throw new Error("Failed to update");
-      const data = await res.json();
+      const data: { booking: Booking } = await res.json();
       setDetail((prev) => (prev ? { ...prev, booking: data.booking } : null));
     } catch {
       /* ignore */

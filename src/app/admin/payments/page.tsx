@@ -20,6 +20,11 @@ interface Payment {
   customer_name: string;
 }
 
+interface PaymentsResponse {
+  payments: Payment[];
+  total: number;
+}
+
 const STATUS_OPTIONS = ["", "required", "paid", "failed", "refunded"];
 
 function formatDate(iso: string) {
@@ -43,7 +48,7 @@ export default function AdminPaymentsPage() {
     if (status) params.set("status", status);
 
     fetch(`/api/admin/payments?${params}`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<PaymentsResponse>)
       .then((d) => {
         setPayments(d.payments);
         setTotal(d.total);

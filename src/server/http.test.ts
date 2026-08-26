@@ -62,7 +62,7 @@ describe("tryRoute", () => {
       return NextResponse.json({ ok: true });
     });
     const res = await handler(fakeRequest());
-    const body = await res.json();
+    const body: { ok?: boolean; error?: string } = await res.json();
     expect(body.ok).toBe(true);
   });
 
@@ -73,7 +73,7 @@ describe("tryRoute", () => {
     });
     const res = await handler(fakeRequest());
     expect(res.status).toBe(500);
-    const body = await res.json();
+    const body: { error?: string } = await res.json();
     expect(body.error).toBe("Something went wrong. Please try again.");
   });
 

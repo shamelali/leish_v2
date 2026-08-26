@@ -5,38 +5,31 @@ import type { ReactNode } from "react";
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "leish-theme";
+const COOKIE_NAME = "leish-theme";
 
-/**
- * Minimal external store for the theme, backed by localStorage.
- * Dark is the default so the app opens in dark mode; the inline script in
- * the layout applies the class before first paint to avoid a flash.
- */
-let cachedTheme: Theme = "dark";
-let cacheReady = false;
-const listeners = new Set<() => void>();
-
-function readTheme(): Theme {
+function readThemeFromStorage(): Theme {
   if (typeof window === "undefined") return "dark";
-  if (!cacheReady) {
-    cacheReady = true;
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      cachedTheme = saved === "light" ? "light" : "dark";
-    } catch {
-      cachedTheme = "dark";
-    }
+  try {
+    const saved = window.localStorage.getItem(COOKIE_NAME);
+    return saved === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
   }
-  return cachedTheme;
 }
 
-function apply(theme: Theme) {
-  document.documentElement.classList.toggle("dark", theme === "dark");
+function applyTheme(theme: Theme) {
+  if (typeof window !== "undefined") {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }
 }
 
-function emit() {
-  listeners.forEach((listener) => listener());
+function setCookie(theme: Theme) {
+  if (typeof window !== "undefined") {
+    document.cookie = `${COOKIE_NAME}=${theme}; path=/; max-age=31536000; SameSite=Lax`;
+  }
 }
+
+const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
@@ -45,16 +38,25 @@ function subscribe(listener: () => void) {
   };
 }
 
-function setTheme(theme: Theme) {
-  cachedTheme = theme;
-  cacheReady = true;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, theme);
-  } catch {
-    // storage may be unavailable; in-memory theme still works
+function emit() {
+  listeners.forEach((listener) => listener());
+}
+
+function setThemeInStorage(theme: Theme) {
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(COOKIE_NAME, theme);
+    } catch {
+      // ignore
+    }
+    setCookie(theme);
+    applyTheme(theme);
   }
-  apply(theme);
   emit();
+}
+
+function getServerSnapshot(initialTheme: Theme): Theme {
+  return initialTheme;
 }
 
 interface ThemeContextValue {
@@ -65,14 +67,24 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const theme = useSyncExternalStore(subscribe, readTheme, () => "dark" as Theme);
+export function ThemeProvider({
+  children,
+  initialTheme = "dark",
+}: { children: ReactNode; initialTheme?: Theme }) {
+  const theme = useSyncExternalStore(
+    subscribe,
+    readThemeFromStorage,
+    () => getServerSnapshot(initialTheme)
+  );
 
-  const toggle = useCallback(() => setTheme(theme === "dark" ? "light" : "dark"), [theme]);
-  const change = useCallback((next: Theme) => setTheme(next), []);
+  const setTheme = useCallback((next: Theme) => {
+    setThemeInStorage(next);
+  }, []);
+
+  const toggle = useCallback(() => setTheme(theme === "dark" ? "light" : "dark"), [theme, setTheme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggle, setTheme: change }}>
+    <ThemeContext.Provider value={{ theme, toggle, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -14,6 +14,11 @@ interface Message {
   sender_email: string;
 }
 
+interface MessagesResponse {
+  messages: Message[];
+  total: number;
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-MY", {
     month: "short",
@@ -38,7 +43,7 @@ export default function AdminMessagesPage() {
     if (bookingIdFilter) params.set("bookingId", bookingIdFilter);
 
     fetch(`/api/admin/messages?${params}`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<MessagesResponse>)
       .then((d) => {
         setMessages(d.messages);
         setTotal(d.total);

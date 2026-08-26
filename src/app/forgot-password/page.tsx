@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, turnstileToken: getTurnstileToken() }),
       });
-      const body = await res.json();
+      const body: { error?: string; message?: string; devResetUrl?: string } = await res.json();
       if (!res.ok) {
         setError(body?.error ?? "Something went wrong. Please try again.");
         return;

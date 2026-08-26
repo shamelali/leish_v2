@@ -12,6 +12,11 @@ interface User {
   created_at?: string;
 }
 
+interface UsersResponse {
+  users: User[];
+  total: number;
+}
+
 const ROLES = ["", "customer", "artist", "studio", "admin"] as const;
 
 function formatDate(iso: string) {
@@ -154,7 +159,7 @@ export default function AdminUsersPage() {
     params.set("offset", String(offset));
 
     void fetch(`/api/admin/users?${params}`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<UsersResponse>)
       .then((data) => {
         if (!cancelled) {
           setUsers(data.users ?? []);
@@ -192,7 +197,7 @@ export default function AdminUsersPage() {
           body: JSON.stringify(data),
         });
         if (!res.ok) {
-          const err = await res.json();
+          const err: { error?: string } = await res.json();
           alert(err.error ?? "Failed to create user");
           return;
         }
@@ -210,7 +215,7 @@ export default function AdminUsersPage() {
           body: JSON.stringify(payload),
         });
         if (!res.ok) {
-          const err = await res.json();
+          const err: { error?: string } = await res.json();
           alert(err.error ?? "Failed to update user");
           return;
         }

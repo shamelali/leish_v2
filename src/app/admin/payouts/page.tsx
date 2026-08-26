@@ -21,6 +21,10 @@ interface Payout {
   createdAt: string;
 }
 
+interface PayoutsResponse {
+  payouts: Payout[];
+}
+
 const STATUS_OPTIONS = ["", "pending", "settled", "failed"];
 
 function formatDate(iso: string) {
@@ -32,6 +36,7 @@ function formatDate(iso: string) {
 }
 
 function isSettleable(payout: Payout): boolean {
+  if (typeof window === "undefined") return false;
   return (
     payout.status === "pending" &&
     (!payout.settleableAt || new Date(payout.settleableAt).getTime() <= Date.now())
@@ -51,7 +56,7 @@ export default function AdminPayoutsPage() {
     const params = new URLSearchParams();
     if (status) params.set("status", status);
     fetch(`/api/admin/payouts?${params}`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<PayoutsResponse>)
       .then((d) => {
         if (!cancelled) setPayouts(d.payouts ?? []);
       })
