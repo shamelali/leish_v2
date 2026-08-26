@@ -10,11 +10,15 @@ const COOKIE_NAME = "leish-theme";
 function readThemeFromStorage(): Theme {
   if (typeof window === "undefined") return "dark";
   try {
+    const match = document.cookie.match(new RegExp(`${COOKIE_NAME}=([^;]+)`));
+    if (match) return match[1] === "light" ? "light" : "dark";
+    // Fallback to localStorage for backward compatibility
     const saved = window.localStorage.getItem(COOKIE_NAME);
-    return saved === "light" ? "light" : "dark";
+    if (saved) return saved === "light" ? "light" : "dark";
   } catch {
-    return "dark";
+    // ignore
   }
+  return "dark";
 }
 
 function applyTheme(theme: Theme) {
