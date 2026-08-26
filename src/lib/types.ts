@@ -43,6 +43,9 @@ export interface Artist {
   verified: boolean;
   yearsExperience: number;
   reviews: Review[];
+  referralCode?: string;
+  referredBy?: string | null;
+  referralEarnings?: number;
 }
 
 export interface Studio {
@@ -62,6 +65,9 @@ export interface Studio {
   priceFrom: number;
   hours: string;
   phone: string;
+  referralCode?: string;
+  referredBy?: string | null;
+  referralEarnings?: number;
 }
 
 export interface Category {

@@ -330,6 +330,9 @@ export const PG_SCHEMA = `
     non_bridal    TEXT NOT NULL DEFAULT '[]',
     availability  TEXT NOT NULL DEFAULT '[]',
     portfolio     TEXT NOT NULL DEFAULT '[]',
+    referral_code TEXT NOT NULL DEFAULT '',
+    referred_by   TEXT REFERENCES artists(id) ON DELETE SET NULL,
+    referral_earnings INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
   );
@@ -349,6 +352,9 @@ export const PG_SCHEMA = `
     price_from    INTEGER NOT NULL DEFAULT 0,
     hours         TEXT NOT NULL DEFAULT '',
     phone         TEXT NOT NULL DEFAULT '',
+    referral_code TEXT NOT NULL DEFAULT '',
+    referred_by   TEXT REFERENCES studios(id) ON DELETE SET NULL,
+    referral_earnings INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
   );
@@ -364,8 +370,23 @@ export const PG_SCHEMA = `
     text         TEXT NOT NULL,
     created_at   TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS referrals (
+    id              TEXT PRIMARY KEY,
+    referrer_type   TEXT NOT NULL CHECK (referrer_type IN ('artist','studio')),
+    referrer_id     TEXT NOT NULL,
+    referee_type    TEXT NOT NULL CHECK (referee_type IN ('artist','studio')),
+    referee_id      TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','qualified','paid')),
+    reward_sen      INTEGER NOT NULL DEFAULT 0,
+    qualified_at    TEXT,
+    paid_at         TEXT,
+    created_at      TEXT NOT NULL
+  );
   CREATE INDEX IF NOT EXISTS idx_artists_state_area ON artists(state, area);
   CREATE INDEX IF NOT EXISTS idx_studios_state_area ON studios(state, area);
+  CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_type, referrer_id);
+  CREATE INDEX IF NOT EXISTS idx_referrals_referee ON referrals(referee_type, referee_id);
+  CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status);
   CREATE INDEX IF NOT EXISTS idx_reviews_entity ON reviews(entity_type, entity_id);
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -566,6 +587,9 @@ const SQLITE_SCHEMA = `
     non_bridal    TEXT NOT NULL DEFAULT '[]',
     availability  TEXT NOT NULL DEFAULT '[]',
     portfolio     TEXT NOT NULL DEFAULT '[]',
+    referral_code TEXT NOT NULL DEFAULT '',
+    referred_by   TEXT REFERENCES artists(id) ON DELETE SET NULL,
+    referral_earnings INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
   );
@@ -585,6 +609,9 @@ const SQLITE_SCHEMA = `
     price_from    INTEGER NOT NULL DEFAULT 0,
     hours         TEXT NOT NULL DEFAULT '',
     phone         TEXT NOT NULL DEFAULT '',
+    referral_code TEXT NOT NULL DEFAULT '',
+    referred_by   TEXT REFERENCES studios(id) ON DELETE SET NULL,
+    referral_earnings INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
   );
@@ -600,8 +627,23 @@ const SQLITE_SCHEMA = `
     text         TEXT NOT NULL,
     created_at   TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS referrals (
+    id              TEXT PRIMARY KEY,
+    referrer_type   TEXT NOT NULL CHECK (referrer_type IN ('artist','studio')),
+    referrer_id     TEXT NOT NULL,
+    referee_type    TEXT NOT NULL CHECK (referee_type IN ('artist','studio')),
+    referee_id      TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','qualified','paid')),
+    reward_sen      INTEGER NOT NULL DEFAULT 0,
+    qualified_at    TEXT,
+    paid_at         TEXT,
+    created_at      TEXT NOT NULL
+  );
   CREATE INDEX IF NOT EXISTS idx_artists_state_area ON artists(state, area);
   CREATE INDEX IF NOT EXISTS idx_studios_state_area ON studios(state, area);
+  CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_type, referrer_id);
+  CREATE INDEX IF NOT EXISTS idx_referrals_referee ON referrals(referee_type, referee_id);
+  CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status);
   CREATE INDEX IF NOT EXISTS idx_reviews_entity ON reviews(entity_type, entity_id);
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);

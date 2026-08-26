@@ -34,6 +34,9 @@ export interface ArtistRow {
   non_bridal: string;
   availability: string;
   portfolio: string;
+  referral_code: string;
+  referred_by: string | null;
+  referral_earnings: number;
   created_at: string;
   updated_at: string;
 }
@@ -54,6 +57,9 @@ export interface StudioRow {
   price_from: number;
   hours: string;
   phone: string;
+  referral_code: string;
+  referred_by: string | null;
+  referral_earnings: number;
   created_at: string;
   updated_at: string;
 }
@@ -115,6 +121,9 @@ export function rowToArtist(row: ArtistRow): Artist {
     verified: Boolean(row.verified),
     yearsExperience: Number(row.years_experience),
     reviews: [],
+    referralCode: row.referral_code || undefined,
+    referredBy: row.referred_by || undefined,
+    referralEarnings: row.referral_earnings || undefined,
   };
 }
 
@@ -135,6 +144,9 @@ export function rowToStudio(row: StudioRow): Studio {
     priceFrom: Number(row.price_from),
     hours: row.hours,
     phone: row.phone,
+    referralCode: row.referral_code || undefined,
+    referredBy: row.referred_by || undefined,
+    referralEarnings: row.referral_earnings || undefined,
   };
 }
 
@@ -278,6 +290,7 @@ const ARTIST_UPDATE_FIELDS: Record<string, string> = {
   nonBridal: "non_bridal",
   availability: "availability",
   portfolio: "portfolio",
+  referralEarnings: "referral_earnings",
 };
 
 const STUDIO_UPDATE_FIELDS: Record<string, string> = {
@@ -292,6 +305,7 @@ const STUDIO_UPDATE_FIELDS: Record<string, string> = {
   priceFrom: "price_from",
   hours: "hours",
   phone: "phone",
+  referralEarnings: "referral_earnings",
 };
 
 /** Fields stored as JSON arrays in their columns. */
@@ -349,6 +363,7 @@ export async function createArtist(input: {
   priceFrom?: number;
   specialties?: string[];
   services?: Service[];
+  referralCode?: string;
 }): Promise<Artist | null> {
   await ensureCatalogSeeded();
   const db = getDb();
@@ -363,11 +378,34 @@ export async function createArtist(input: {
 
   const id = randomUUID();
   const now = new Date().toISOString();
+
+  // Generate referral code for this new artist
+  const referralCode = await import("./referral").then((m) => m.assignReferralCode("artist", id));
+
+  let referredBy: string | null = null;
+  if (input.referralCode) {
+    const referrer = await import("./referral").then((m) =>
+      m.findReferrerByCode(input.referralCode!),
+    );
+    if (referrer && referrer.type === "artist") {
+      referredBy = referrer.id;
+      // Create referral record
+      await import("./referral").then((m) =>
+        m.createReferral({
+          referrerType: "artist",
+          referrerId: referrer.id,
+          refereeType: "artist",
+          refereeId: id,
+        }),
+      );
+    }
+  }
+
   await db
     .prepare(
       `INSERT INTO artists (id, slug, name, tagline, bio, image, state, area, price_from,
-                            specialties, services, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            specialties, services, referral_code, referred_by, referral_earnings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -383,6 +421,9 @@ export async function createArtist(input: {
       Math.max(0, Math.round(input.priceFrom ?? 0)),
       JSON.stringify(input.specialties ?? []),
       JSON.stringify(input.services ?? []),
+      referralCode,
+      referredBy,
+      0,
       now,
       now,
     );
@@ -416,6 +457,92 @@ export async function updateStudio(
 ): Promise<Studio | null> {
   const ok = await applyUpdate("studios", STUDIO_UPDATE_FIELDS, id, updates);
   return ok ? getStudioById(id) : null;
+}
+
+/**
+ * Create a brand-new catalog studio.
+ * Slug is derived from the name and de-duplicated. Returns the full profile.
+ */
+export async function createStudio(input: {
+  name: string;
+  slug?: string;
+  tagline?: string;
+  description?: string;
+  state?: string;
+  area?: string;
+  address?: string;
+  services?: string[];
+  priceFrom?: number;
+  hours?: string;
+  phone?: string;
+  referralCode?: string;
+}): Promise<Studio | null> {
+  await ensureCatalogSeeded();
+  const db = getDb();
+
+  const base = slugifyName(input.slug || input.name);
+  let slug = base;
+  for (let i = 2; ; i++) {
+    const exists = await db.prepare("SELECT 1 FROM studios WHERE slug = ?").get(slug);
+    if (!exists) break;
+    slug = `${base}-${i}`;
+  }
+
+  const id = randomUUID();
+  const now = new Date().toISOString();
+
+  // Generate referral code for this new studio
+  const referralCode = await import("./referral").then((m) => m.assignReferralCode("studio", id));
+
+  let referredBy: string | null = null;
+  if (input.referralCode) {
+    const referrer = await import("./referral").then((m) =>
+      m.findReferrerByCode(input.referralCode!),
+    );
+    if (referrer && referrer.type === "studio") {
+      referredBy = referrer.id;
+      // Create referral record
+      await import("./referral").then((m) =>
+        m.createReferral({
+          referrerType: "studio",
+          referrerId: referrer.id,
+          refereeType: "studio",
+          refereeId: id,
+        }),
+      );
+    }
+  }
+
+  await db
+    .prepare(
+      `INSERT INTO studios (id, slug, name, tagline, description, image, state, area, address,
+                            services, price_from, hours, phone, referral_code, referred_by, referral_earnings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      slug,
+      input.name.trim(),
+      input.tagline?.trim() ?? "",
+      input.description?.trim() ?? "",
+      // Empty src crashes next/image on listing cards — use a catalog placeholder
+      // until an admin attaches a real photo.
+      "/images/hero.jpg",
+      input.state ?? "",
+      input.area ?? "",
+      input.address ?? "",
+      JSON.stringify(input.services ?? []),
+      Math.max(0, Math.round(input.priceFrom ?? 0)),
+      input.hours?.trim() ?? "",
+      input.phone?.trim() ?? "",
+      referralCode,
+      referredBy,
+      0,
+      now,
+      now,
+    );
+
+  return getStudioById(id);
 }
 
 // ── Reviews ──────────────────────────────────────────────────────────────────

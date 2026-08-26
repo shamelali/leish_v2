@@ -63,10 +63,7 @@ export function Footer() {
           ))}
         </div>
         <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-stone-100 pt-6 text-xs text-stone-400 sm:flex-row dark:border-stone-800 dark:text-stone-500">
-          <p>
-            © {new Date().getFullYear()} Leish! · Demo build for leish.my v2. All data is sample
-            content.
-          </p>
+          <p>© {new Date().getFullYear()} Leish! · Duta Integra Solutions.</p>
           <p>Made with ♥ in Malaysia</p>
         </div>
       </div>

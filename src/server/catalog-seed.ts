@@ -1,6 +1,7 @@
 import { getDb, bind } from "./db.ts";
 import { SEED_ARTISTS, SEED_STUDIOS } from "../lib/data.ts";
 import type { Artist, Studio } from "@/lib/types";
+import { generateReferralCode } from "./referral";
 
 /**
  * Catalog seeding: populates the DB-backed artists/studios tables from the
@@ -37,6 +38,9 @@ function artistToRow(a: Artist, now: string): Record<string, unknown> {
     non_bridal: JSON.stringify(a.nonBridal ?? []),
     availability: JSON.stringify(a.availability ?? []),
     portfolio: JSON.stringify(a.portfolio ?? []),
+    referral_code: generateReferralCode(),
+    referred_by: null,
+    referral_earnings: 0,
     created_at: now,
     updated_at: now,
   };
@@ -59,6 +63,9 @@ function studioToRow(s: Studio, now: string): Record<string, unknown> {
     price_from: s.priceFrom ?? 0,
     hours: s.hours ?? "",
     phone: s.phone ?? "",
+    referral_code: generateReferralCode(),
+    referred_by: null,
+    referral_earnings: 0,
     created_at: now,
     updated_at: now,
   };
