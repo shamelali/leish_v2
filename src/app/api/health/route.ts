@@ -38,13 +38,13 @@ export async function GET() {
       database_backend: isPostgres() ? "postgres" : "sqlite",
       database: dbStatus,
       database_error: dbError,
-      email: getActiveEmailProvider() !== 'dev',
+      email: getActiveEmailProvider() !== "dev",
       billplz: isBillplzConfigured(),
       turnstile: isTurnstileConfigured(),
       sentry: isSentryConfigured(),
       webhooks: areWebhooksConfigured(),
-      rate_limit: 'memory',
-      chat: 'memory',
+      rate_limit: "memory",
+      chat: "memory",
     },
   });
 }

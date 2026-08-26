@@ -10,22 +10,22 @@
  * - Health endpoint reports only the integrations we actually use.
  */
 
-export type EmailProvider = 'dev' | 'resend' | 'postmark';
+export type EmailProvider = "dev" | "resend" | "postmark" | "brevo";
 
 export function getActiveEmailProvider(): EmailProvider {
   const explicit = process.env.EMAIL_PROVIDER;
-  if (explicit === 'resend' || explicit === 'postmark' || explicit === 'dev') {
+  if (explicit === "resend" || explicit === "postmark" || explicit === "dev") {
     return explicit;
   }
 
   // No (or unknown) explicit provider: auto-detect from configured credentials.
-  if (process.env.RESEND_API_KEY) return 'resend';
-  if (process.env.POSTMARK_SERVER_TOKEN) return 'postmark';
-  return 'dev';
+  if (process.env.RESEND_API_KEY) return "resend";
+  if (process.env.POSTMARK_SERVER_TOKEN) return "postmark";
+  return "dev";
 }
 
 export function isEmailConfigured(): boolean {
-  return getActiveEmailProvider() !== 'dev';
+  return getActiveEmailProvider() !== "dev";
 }
 
 export function isBillplzConfigured(): boolean {
@@ -45,5 +45,5 @@ export function areWebhooksConfigured(): boolean {
 }
 
 // Rate limit and chat are intentionally always in-memory in this deployment.
-export const rateLimitMode = 'memory' as const;
-export const chatMode = 'memory' as const;
+export const rateLimitMode = "memory" as const;
+export const chatMode = "memory" as const;

@@ -7,3 +7,5 @@ strictDepBuilds: false
 ignoredBuiltDependencies:
   - unrs-resolver
 onlyBuiltDependencies: []
+allowBuilds:
+  unrs-resolver: set this to true or false

@@ -25,7 +25,7 @@ export interface EmailMessage {
   html?: string;
 }
 
-export type EmailProvider = "dev" | "resend" | "postmark";
+export type EmailProvider = "dev" | "resend" | "postmark" | "brevo";
 
 export type EmailPreferenceKey =
   | "booking_created"
