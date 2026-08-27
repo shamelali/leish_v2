@@ -15,6 +15,9 @@ function hashToken(token: string): string {
 }
 
 export async function storeVerificationToken(userId: string): Promise<string> {
+  await getDb()
+    .prepare("DELETE FROM email_verifications WHERE user_id = ?")
+    .run(userId);
   const token = randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
   await getDb()
@@ -52,6 +55,12 @@ export async function validateVerificationToken(token: string): Promise<string |
 
   if (!row) return null;
   if (new Date(row.expires_at).getTime() < Date.now()) return null;
+
+  // Single-use: mark consumed immediately.
+  await db
+    .prepare("UPDATE email_verifications SET used_at = ? WHERE token_hash = ?")
+    .run(new Date().toISOString(), tokenHash);
+
   return row.user_id;
 }
 

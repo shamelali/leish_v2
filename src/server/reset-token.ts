@@ -24,6 +24,9 @@ export async function storeResetToken(userId: string): Promise<string> {
   const { token, tokenHash } = createResetToken();
   const db = await getDb();
   await db
+    .prepare("DELETE FROM password_resets WHERE user_id = ?")
+    .run(userId);
+  await db
     .prepare(
       "INSERT INTO password_resets (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
     )
