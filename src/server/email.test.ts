@@ -42,6 +42,7 @@ describe("email service", () => {
     delete process.env.EMAIL_PROVIDER;
     delete process.env.RESEND_API_KEY;
     delete process.env.POSTMARK_SERVER_TOKEN;
+    delete process.env.BREVO_API_KEY;
     await getDb().prepare("DELETE FROM email_outbox").run();
     await getDb().prepare("DELETE FROM email_retries").run();
     await getDb().prepare("DELETE FROM email_preferences").run();
@@ -57,22 +58,27 @@ describe("email service", () => {
     it("defaults to dev", () => {
       expect(activeEmailProvider()).toBe("dev");
     });
-    it("honours resend/postmark when configured", () => {
+    it("honours resend/postmark/brevo when configured", () => {
       process.env.EMAIL_PROVIDER = "resend";
       expect(activeEmailProvider()).toBe("resend");
       process.env.EMAIL_PROVIDER = "postmark";
       expect(activeEmailProvider()).toBe("postmark");
+      process.env.EMAIL_PROVIDER = "brevo";
+      expect(activeEmailProvider()).toBe("brevo");
     });
     it("falls back to dev for unknown providers", () => {
       process.env.EMAIL_PROVIDER = "ses";
       expect(activeEmailProvider()).toBe("dev");
     });
-    it("auto-detects resend/postmark from credentials when EMAIL_PROVIDER is unset", () => {
+    it("auto-detects resend/postmark/brevo from credentials when EMAIL_PROVIDER is unset", () => {
       process.env.RESEND_API_KEY = "test-key";
       expect(activeEmailProvider()).toBe("resend");
       delete process.env.RESEND_API_KEY;
       process.env.POSTMARK_SERVER_TOKEN = "test-token";
       expect(activeEmailProvider()).toBe("postmark");
+      delete process.env.POSTMARK_SERVER_TOKEN;
+      process.env.BREVO_API_KEY = "test-key";
+      expect(activeEmailProvider()).toBe("brevo");
     });
   });
 
@@ -89,7 +95,7 @@ describe("email service", () => {
   });
 
   describe("provider fallback", () => {
-    it.each(["resend", "postmark"] as const)(
+    it.each(["resend", "postmark", "brevo"] as const)(
       "%s without a key falls back to the dev outbox",
       async (provider) => {
         process.env.EMAIL_PROVIDER = provider;

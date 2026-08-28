@@ -46,7 +46,13 @@ const baseParams = {
 };
 
 describe("booking-emails", () => {
+  const origBrevoKey = process.env.BREVO_API_KEY;
+
   beforeEach(async () => {
+    delete process.env.BREVO_API_KEY;
+    delete process.env.EMAIL_PROVIDER;
+    delete process.env.RESEND_API_KEY;
+    delete process.env.POSTMARK_SERVER_TOKEN;
     await getDb().prepare("DELETE FROM email_outbox").run();
     await getDb().prepare("DELETE FROM quotations").run();
     await getDb().prepare("DELETE FROM payments").run();

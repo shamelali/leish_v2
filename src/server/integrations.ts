@@ -14,13 +14,14 @@ export type EmailProvider = "dev" | "resend" | "postmark" | "brevo";
 
 export function getActiveEmailProvider(): EmailProvider {
   const explicit = process.env.EMAIL_PROVIDER;
-  if (explicit === "resend" || explicit === "postmark" || explicit === "dev") {
+  if (explicit === "resend" || explicit === "postmark" || explicit === "brevo" || explicit === "dev") {
     return explicit;
   }
 
   // No (or unknown) explicit provider: auto-detect from configured credentials.
   if (process.env.RESEND_API_KEY) return "resend";
   if (process.env.POSTMARK_SERVER_TOKEN) return "postmark";
+  if (process.env.BREVO_API_KEY) return "brevo";
   return "dev";
 }
 

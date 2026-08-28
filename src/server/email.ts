@@ -8,6 +8,8 @@ import { logger } from "./logger";
  * Providers:
  * - "dev" (default): stores messages in the `email_outbox` table and logs
  *   them. View them at /dev/emails (dev builds only).
+ * - "brevo": sends via the Brevo (ex-Sendinblue) API. Configure BREVO_API_KEY
+ *   and set EMAIL_PROVIDER=brevo.
  * - "resend": sends via the Resend API. Configure RESEND_API_KEY and set
  *   EMAIL_PROVIDER=resend.
  * - "postmark": sends via the Postmark API. Configure POSTMARK_SERVER_TOKEN
@@ -95,6 +97,25 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
     return;
   }
 
+  if (provider === "brevo") {
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+      logger.warn(
+        { to: message.to },
+        "EMAIL_PROVIDER=brevo but BREVO_API_KEY is not set — falling back to dev outbox",
+      );
+      await devSend(message);
+      return;
+    }
+    try {
+      await brevoSend(message, apiKey);
+    } catch (err) {
+      await queueRetry(message, err);
+      throw err;
+    }
+    return;
+  }
+
   await devSend(message);
 }
 
@@ -161,6 +182,37 @@ async function resendSend(message: EmailMessage, apiKey: string) {
     throw new Error("Failed to send email");
   }
   logger.info({ to: message.to, subject: message.subject }, "email sent via resend");
+}
+
+async function brevoSend(message: EmailMessage, apiKey: string) {
+  const from = process.env.EMAIL_FROM ?? "Leish! <no-reply@leish.my>";
+  const nameMatch = from.match(/^(.*?)\s*<(.+?)>$/);
+  const sender = nameMatch
+    ? { email: nameMatch[2], name: nameMatch[1].trim() }
+    : { email: from };
+
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender,
+      to: [{ email: message.to }],
+      subject: message.subject,
+      textContent: message.text,
+      htmlContent: message.html,
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    logger.error({ status: res.status, detail }, "brevo email failed");
+    throw new Error("Failed to send email");
+  }
+  logger.info({ to: message.to, subject: message.subject }, "email sent via brevo");
 }
 
 /**
