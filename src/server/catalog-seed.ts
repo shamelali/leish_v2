@@ -1,7 +1,7 @@
 import { getDb, bind } from "./db.ts";
 import { SEED_ARTISTS, SEED_STUDIOS } from "../lib/data.ts";
 import type { Artist, Studio } from "@/lib/types";
-import { generateReferralCode } from "./referral";
+import { generateReferralCode } from "./referral.ts";
 
 /**
  * Catalog seeding: populates the DB-backed artists/studios tables from the

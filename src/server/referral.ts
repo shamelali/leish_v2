@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { getDb, bind } from "./db";
+import { getDb, bind } from "./db.ts";
 
 export type ReferrerType = "artist" | "studio";
 

@@ -722,6 +722,18 @@ function migrateSqlite(db: DatabaseSync) {
       db.exec(ddl);
     }
   }
+  for (const table of ["artists", "studios"] as const) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === "referral_code")) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN referral_code TEXT NOT NULL DEFAULT ''`);
+    }
+    if (!cols.some((c) => c.name === "referred_by")) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN referred_by TEXT REFERENCES ${table}(id) ON DELETE SET NULL`);
+    }
+    if (!cols.some((c) => c.name === "referral_earnings")) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN referral_earnings INTEGER NOT NULL DEFAULT 0`);
+    }
+  }
 }
 
 // ── Singleton ────────────────────────────────────────────────────────────────

@@ -64,6 +64,16 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
     ["html", "ALTER TABLE email_retries ADD COLUMN html TEXT"],
     ["last_error", "ALTER TABLE email_retries ADD COLUMN last_error TEXT"],
   ],
+  artists: [
+    ["referral_code", "ALTER TABLE artists ADD COLUMN referral_code TEXT NOT NULL DEFAULT ''"],
+    ["referred_by", "ALTER TABLE artists ADD COLUMN referred_by TEXT REFERENCES artists(id) ON DELETE SET NULL"],
+    ["referral_earnings", "ALTER TABLE artists ADD COLUMN referral_earnings INTEGER NOT NULL DEFAULT 0"],
+  ],
+  studios: [
+    ["referral_code", "ALTER TABLE studios ADD COLUMN referral_code TEXT NOT NULL DEFAULT ''"],
+    ["referred_by", "ALTER TABLE studios ADD COLUMN referred_by TEXT REFERENCES studios(id) ON DELETE SET NULL"],
+    ["referral_earnings", "ALTER TABLE studios ADD COLUMN referral_earnings INTEGER NOT NULL DEFAULT 0"],
+  ],
 };
 
 /**
