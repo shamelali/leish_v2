@@ -11,6 +11,17 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
 ];
 
+const supabasePattern = {
+  protocol: "https" as const,
+  hostname: "*.supabase.co",
+  pathname: "/**" as const,
+};
+const blobPattern = {
+  protocol: "https" as const,
+  hostname: "*.public.blob.vercel-storage.com",
+  pathname: "/**" as const,
+};
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Standalone output is for Docker/self-hosting. Vercel's post-build trace
@@ -22,6 +33,9 @@ const nextConfig: NextConfig = {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
   allowedDevOrigins: ["*.e2b.app"],
+  images: {
+    remotePatterns: [supabasePattern, blobPattern],
+  },
 };
 
 export default nextConfig;
