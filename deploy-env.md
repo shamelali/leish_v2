@@ -63,18 +63,18 @@
 
 | Variable | Value | Notes |
 |---|---|---|
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | `0x4AAAAAAEaBz0L0kZEVlLSt` | Widget site key |
-| `TURNSTILE_SECRET_KEY` | `your-turnstile-secret-key-here` | **PLACEHOLDER — needs real value** |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | `0x4AAAAAAEaBz0L0kZEVlLSt` | Widget site key (leish.my) |
+| `TURNSTILE_SECRET_KEY` | `0x4AAAAAAEaBz8BLW67_hHJpPK16ybVCL6E` | Retrieved via `wrangler turnstile widget get` |
 
 ## Storage — Cloudflare R2
 
 | Variable | Value | Notes |
 |---|---|---|
-| `R2_ACCOUNT_ID` | _(not set in .env.local)_ | **NOT YET CONFIGURED** |
-| `R2_ACCESS_KEY_ID` | _(not set in .env.local)_ | **NOT YET CONFIGURED** |
-| `R2_SECRET_ACCESS_KEY` | _(not set in .env.local)_ | **NOT YET CONFIGURED** |
-| `R2_BUCKET` | `leish-v2-assets` (from .env.example) | |
-| `R2_PUBLIC_URL` | `https://assets.leish.my` (from .env.example) | Custom domain on R2 bucket |
+| `R2_ACCOUNT_ID` | `26565f2b5af4f08b4a28122e9484c9e4` | Same as Cloudflare account ID |
+| `R2_ACCESS_KEY_ID` | _(not set)_ | **R2 NOT ENABLED** — enable via Cloudflare Dashboard first |
+| `R2_SECRET_ACCESS_KEY` | _(not set)_ | Create API token after enabling R2 |
+| `R2_BUCKET` | `leish-v2-assets` (from .env.example) | Will be created when R2 is enabled |
+| `R2_PUBLIC_URL` | `https://assets.leish.my` | Custom domain on R2 bucket |
 
 ## Observability (optional)
 
@@ -108,10 +108,9 @@
 | `BILLPLZ_API_KEY` | ✅ Found | Set in .env.local |
 | `BILLPLZ_COLLECTION_ID` | ✅ Found | Set in .env.local |
 | `BILLPLZ_X_SIGNATURE_KEY` | ✅ Not needed | v2 uses BILLPLZ_API_KEY for HMAC |
-| `TURNSTILE_SECRET_KEY` | ⚠️ Placeholder | Get from Cloudflare Turnstile dashboard |
-| `R2_ACCOUNT_ID` | ❌ Missing | Get from Cloudflare dashboard |
-| `R2_ACCESS_KEY_ID` | ❌ Missing | Get from Cloudflare R2 API token |
-| `R2_SECRET_ACCESS_KEY` | ❌ Missing | Get from Cloudflare R2 API token |
+| `TURNSTILE_SECRET_KEY` | ✅ Retrieved | Set in .env.local via wrangler |
+| `R2_ACCOUNT_ID` | ✅ Known | `26565f2b5af4f08b4a28122e9484c9e4` |
+| `R2_ACCESS_KEY_ID` | ❌ R2 not enabled | Enable R2 in Cloudflare Dashboard → R2 |
+| `R2_SECRET_ACCESS_KEY` | ❌ R2 not enabled | Create API token after enabling R2 |
 | `NEON_AUTH_BASE_URL` | ⚠️ Placeholder | Configure or remove |
 | `NEON_AUTH_COOKIE_SECRET` | ⚠️ Placeholder | Configure or remove |
-| `VERCEL_OIDC_TOKEN` | Expired JWT | Auto-refreshed by Vercel at runtime, don't set manually |
