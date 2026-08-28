@@ -55,3 +55,6 @@ next-env.d.ts
 *.bundle
 leish-v2.bundle
 .neon
+/dist/
+.vinext/
+.wrangler/

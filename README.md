@@ -153,6 +153,6 @@ docs/             # CODEBASE-AUDIT.md — enterprise-readiness review
 
 ## Notes
 
-- All artist/studio data and reviews are fictional sample content.
-- Booking and auth flows are front-end demos — nothing is persisted server-side.
+- Artist/studio catalog data and reviews are fictional sample content for demonstration.
+- Auth, bookings, payments, and chat are fully functional and persisted server-side (SQLite in dev, PostgreSQL in prod).
 - Generated photography lives in `public/images/`.

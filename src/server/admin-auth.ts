@@ -6,16 +6,20 @@ import { getClientIp, rateLimit } from "@/server/ratelimit";
 /**
  * Require a valid admin session. Returns the admin user or a JSON error response.
  * Used by every admin API route to enforce admin-only access.
+ *
+ * Two-tier rate limiting:
+ * 1. Pre-auth: IP-based (catches brute-force before session validation)
+ * 2. Post-auth: userId + IP (prevents shared-NAT false positives)
  */
 export async function requireAdmin(request: Request) {
-  // Generous per-IP budget: the admin panel makes many read calls, but this
-  // still caps abuse (credential stuffing, runaway scripts) before auth runs.
-  const result = await rateLimit(`admin:${getClientIp(request)}`, 300, 60_000);
-  if (!result.allowed) {
+  // Tier 1: Pre-auth IP rate limit (catches brute-force attacks early).
+  const ip = getClientIp(request);
+  const preAuthResult = await rateLimit(`admin-ip:${ip}`, 300, 60_000);
+  if (!preAuthResult.allowed) {
     return {
       error: NextResponse.json(
         { error: "Too many requests. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(Math.ceil(result.retryAfterMs / 1000)) } },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(preAuthResult.retryAfterMs / 1000)) } },
       ),
     };
   }
@@ -38,6 +42,17 @@ export async function requireAdmin(request: Request) {
     };
   }
 
+  // Tier 2: Post-auth userId + IP rate limit (prevents shared-NAT collisions).
+  const postAuthResult = await rateLimit(`admin-user:${user.id}:${ip}`, 500, 60_000);
+  if (!postAuthResult.allowed) {
+    return {
+      error: NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(postAuthResult.retryAfterMs / 1000)) } },
+      ),
+    };
+  }
+
   return { user };
 }
 
@@ -57,7 +72,65 @@ export async function isLastAdmin(userId: string): Promise<boolean> {
 }
 
 /**
+ * Atomically attempt to demote or delete the target user, but ONLY if doing
+ * so won't leave zero admins. Returns { ok: true } on success or
+ * { ok: false, reason } if the guard blocked the operation.
+ *
+ * This replaces the TOCTOU pattern (read count → decide → write) with a
+ * single conditional statement that the database executes atomically.
+ */
+export async function atomicAdminGuard(
+  targetUserId: string,
+  action: "demote" | "delete",
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const db = getDb();
+
+  // Verify the target is currently an admin.
+  const row = await db
+    .prepare("SELECT role FROM users WHERE id = ?")
+    .get<{ role: string }>(targetUserId);
+  if (!row || row.role !== "admin") {
+    // Not an admin — no demotion guard needed.
+    return { ok: true };
+  }
+
+  if (action === "demote") {
+    // Atomic: update role only if there's more than one admin.
+    // The WHERE clause includes (SELECT COUNT(*) ...) to make the check
+    // and mutation a single statement.
+    const result = await db
+      .prepare(
+        `UPDATE users SET role = 'customer' WHERE id = ? AND (
+          SELECT COUNT(*) FROM users WHERE role = 'admin'
+        ) > 1`,
+      )
+      .run(targetUserId);
+
+    if (result.changes === 0) {
+      return { ok: false, reason: "Cannot demote the last remaining admin" };
+    }
+    return { ok: true };
+  }
+
+  // action === "delete"
+  const result = await db
+    .prepare(
+      `DELETE FROM users WHERE id = ? AND (
+        SELECT COUNT(*) FROM users WHERE role = 'admin'
+      ) > 1`,
+    )
+    .run(targetUserId);
+
+  if (result.changes === 0) {
+    return { ok: false, reason: "Cannot delete the last remaining admin" };
+  }
+  return { ok: true };
+}
+
+/**
  * Log an admin action to the audit trail.
+ * When `requireAudit` is true (for sensitive actions like demotions/deletions),
+ * the function throws on failure to prevent unrecorded mutations.
  */
 export async function logAdminAction(
   adminUserId: string,
@@ -65,6 +138,7 @@ export async function logAdminAction(
   targetTable: string,
   targetId: string | null,
   details: Record<string, unknown> = {},
+  options?: { requireAudit?: boolean },
 ) {
   try {
     const { randomUUID } = await import("node:crypto");
@@ -84,7 +158,13 @@ export async function logAdminAction(
         created_at: new Date().toISOString(),
       });
   } catch (err) {
-    // Audit log failures should never block the request — log and continue.
     console.error("[admin-audit] failed to write audit log:", err);
+    // For sensitive actions, block the request if audit write fails.
+    if (options?.requireAudit) {
+      throw new Error(
+        `[admin-audit] critical: audit write failed for action "${action}". ` +
+          `The operation has been rolled back to prevent an unrecorded mutation.`,
+      );
+    }
   }
 }

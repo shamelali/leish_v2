@@ -24,10 +24,14 @@ export default defineConfig({
         "**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        statements: 60,
-        branches: 55,
-        functions: 60,
-        lines: 60,
+        // Audit target: 80% across all metrics (Phase 2 report).
+        // Current measured: ~68% statements / 62% branches / 70% functions/lines.
+        // Enforce a modest gate above the prior 60/55 baseline; raise to 80
+        // incrementally as referral/upload/turnstile coverage lands.
+        statements: 65,
+        branches: 60,
+        functions: 68,
+        lines: 68,
       },
     },
   },

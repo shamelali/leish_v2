@@ -3,6 +3,18 @@ export async function register() {
     const { validateEnv } = await import("@/env");
     validateEnv();
 
+    // Initialize Agnost analytics.
+    const { initAgnost, shutdownAgnost } = await import("@/server/agnost");
+    initAgnost();
+
+    // Flush pending Agnost events on process exit.
+    process.on("SIGTERM", () => {
+      void shutdownAgnost();
+    });
+    process.on("SIGINT", () => {
+      void shutdownAgnost();
+    });
+
     // Guard rail: the e2e-only escape hatches (exposed verification links,
     // relaxed rate limits) must never run against a real database. The
     // playwright webServer forces SQLite via an empty DATABASE_URL; if both

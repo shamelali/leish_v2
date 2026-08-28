@@ -7,6 +7,7 @@ import { quotationSchema } from "@/server/validation";
 import { jsonError, readJson, statefulRoute } from "@/server/http";
 import { logger } from "@/server/logger";
 import { sendQuotationEmail } from "@/server/booking-emails";
+import { isAgnostEnabled, agnost } from "@/server/agnost";
 
 /**
  * POST /api/bookings/[id]/quotation
@@ -48,26 +49,41 @@ export const POST = statefulRoute(
       return jsonError(parsed.error.issues[0]?.message ?? "Invalid quotation", 400);
     }
 
-    const quotation = await createQuotation(booking.id, parsed.data);
+    // Begin Agnost tracking.
+    const interaction = isAgnostEnabled()
+      ? agnost.begin({
+          userId: user.id,
+          agentName: "quotation-create",
+          input: JSON.stringify({ bookingId: id }),
+        })
+      : null;
 
-    // Notify the client with the quotation breakdown and 24h deadline.
-    await sendQuotationEmail({
-      bookingId: booking.id,
-      ownerUserId: booking.user_id,
-      artistName: booking.artist_name,
-      service: booking.service,
-      date: booking.date,
-      time: booking.time,
-      totalSen: quotation.total,
-      expiresAt: quotation.expires_at,
-    });
+    try {
+      const quotation = await createQuotation(booking.id, parsed.data);
 
-    logger.info(
-      { bookingId: booking.id, quotationId: quotation.id, total: quotation.total },
-      "quotation sent",
-    );
+      // Notify the client with the quotation breakdown and 24h deadline.
+      await sendQuotationEmail({
+        bookingId: booking.id,
+        ownerUserId: booking.user_id,
+        artistName: booking.artist_name,
+        service: booking.service,
+        date: booking.date,
+        time: booking.time,
+        totalSen: quotation.total,
+        expiresAt: quotation.expires_at,
+      });
 
-    return NextResponse.json({ quotation: serializeQuotation(quotation) }, { status: 201 });
+      logger.info(
+        { bookingId: booking.id, quotationId: quotation.id, total: quotation.total },
+        "quotation sent",
+      );
+
+      interaction?.end(JSON.stringify({ quotationId: quotation.id, total: quotation.total }), true);
+      return NextResponse.json({ quotation: serializeQuotation(quotation) }, { status: 201 });
+    } catch (err) {
+      interaction?.end(err instanceof Error ? err.message : String(err), false);
+      throw err;
+    }
   },
   { route: "POST /api/bookings/[id]/quotation" },
 );

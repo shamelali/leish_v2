@@ -372,18 +372,22 @@ export async function refundBalancePayment(payment: PaymentRecord): Promise<Paym
 
 /**
  * Verify the Billplz webhook signature.
- * Billplz signs the RAW request body with HMAC-SHA256 using the API key) as
+ * Billplz signs the RAW request body with HMAC-SHA256 using the API key as
  * the secret; the digest is sent hex-encoded in the X-Billplz-Signature
  * header. Comparison is timing-safe.
  */
+const HEX_64_RE = /^[0-9a-f]{64}$/i;
+
 export function verifyBillplzSignature(
   rawBody: string,
   signatureHeader: string | null,
   apiKey = process.env.BILLPLZ_API_KEY,
 ): boolean {
   if (!signatureHeader || !apiKey) return false;
+  // Reject non-hex or wrong-length signatures early.
+  if (!HEX_64_RE.test(signatureHeader)) return false;
   const expected = createHmac("sha256", apiKey).update(rawBody).digest("hex");
-  const provided = Buffer.from(signatureHeader);
-  const expectedBuf = Buffer.from(expected);
+  const provided = Buffer.from(signatureHeader, "hex");
+  const expectedBuf = Buffer.from(expected, "hex");
   return provided.length === expectedBuf.length && timingSafeEqual(provided, expectedBuf);
 }

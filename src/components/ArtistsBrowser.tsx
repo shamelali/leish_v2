@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { AREAS_BY_STATE, BRIDAL_EVENTS, NON_BRIDAL_EVENTS, MALAYSIA_STATES } from "@/lib/data";
 import {
@@ -12,6 +12,7 @@ import {
 import type { Artist } from "@/lib/types";
 import { ArtistCard } from "@/components/ArtistCard";
 import { cn, pluralize } from "@/lib/utils";
+import { trackSearch } from "@/lib/agnost-client";
 
 const CATEGORY_TO_FILTER: Record<string, Partial<ArtistFilters>> = {
   bridal: { bridal: "full-package" },
@@ -39,6 +40,20 @@ function ArtistsBrowser({ artists }: { artists: Artist[] }) {
   }
 
   const active = hasActiveArtistFilters(filters);
+
+  // Track filter changes for analytics.
+  useEffect(() => {
+    if (active) {
+      trackSearch("", {
+        state: filters.state,
+        area: filters.area,
+        bridal: filters.bridal,
+        nonBridal: filters.nonBridal,
+        budget: filters.budget,
+        resultsCount: results.length,
+      });
+    }
+  }, [active, filters, results.length]);
 
   function resetFilters() {
     setFilters({ ...DEFAULT_ARTIST_FILTERS, budget: 0 });

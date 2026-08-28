@@ -27,6 +27,15 @@ interface ChatBus {
   publish(bookingId: string, message: ChatMessageEvent): void;
 }
 
+// ── SSE keepalive ───────────────────────────────────────────────────────────
+
+/** Heartbeat interval for SSE streams (must be < Vercel's 60s timeout). */
+const SSE_HEARTBEAT_MS = 30_000;
+
+/** Max reconnection attempts before giving up. */
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_BASE_DELAY_MS = 1_000;
+
 // ── In-memory backend ───────────────────────────────────────────────────────
 
 export function createMemoryBusForTest(): ChatBus {
@@ -78,7 +87,7 @@ function createUpstashBusInner(opts?: {
     return `chat:${bookingId}`;
   }
 
-  async function pump(channel: string) {
+  async function pump(channel: string, attempt = 0) {
     const controller = new AbortController();
     streams.set(channel, controller);
     try {
@@ -111,13 +120,35 @@ function createUpstashBusInner(opts?: {
           }
         }
       }
+      // Stream ended normally — reconnect with backoff if listeners remain.
+      if (listeners.get(channel)?.size ?? 0 > 0) {
+        reconnect(channel, attempt);
+      }
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         logger.warn({ channel, err: (err as Error).message }, "upstash subscribe stream ended");
+        // Reconnect on error if listeners remain.
+        if (listeners.get(channel)?.size ?? 0 > 0) {
+          reconnect(channel, attempt);
+        }
       }
     } finally {
       streams.delete(channel);
     }
+  }
+
+  function reconnect(channel: string, attempt: number) {
+    if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+      logger.warn({ channel, attempts: attempt }, "upstash reconnect limit reached");
+      return;
+    }
+    const delay = Math.min(RECONNECT_BASE_DELAY_MS * 2 ** attempt, 30_000);
+    logger.info({ channel, attempt: attempt + 1, delay }, "upstash reconnecting");
+    setTimeout(() => {
+      if (listeners.get(channel)?.size ?? 0 > 0) {
+        void pump(channel, attempt + 1);
+      }
+    }, delay);
   }
 
   return {
@@ -172,3 +203,5 @@ export function subscribeToBooking(
 export function publishToBooking(bookingId: string, message: ChatMessageEvent) {
   getChatBus().publish(bookingId, message);
 }
+
+export { SSE_HEARTBEAT_MS };

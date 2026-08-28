@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "agnost-ai": {
+      "source": "AgnostAI/skills",
+      "sourceType": "github",
+      "skillPath": "skills/agnost-ai/SKILL.md",
+      "computedHash": "379cb1922f26618c42c010cedf292e64e7f910e4a1962e566b9a0e223c93dccf"
+    },
+    "migrate-to-vinext": {
+      "source": "cloudflare/vinext",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/migrate-to-vinext/SKILL.md",
+      "computedHash": "4a39cac303d49e47fb84757a2f328d4c78781f65278b433b5da224a2957f6080"
+    }
+  }
+}

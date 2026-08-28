@@ -41,6 +41,18 @@ export function validateEnv(): void {
   }
 }
 
+/**
+ * Get an environment variable or throw if missing.
+ * Use for vars that are absolutely required at runtime.
+ */
+export function getEnvOrThrow(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+}
+
 export const env = {
   DATABASE_URL: process.env.DATABASE_URL,
   SESSION_SECRET: process.env.SESSION_SECRET,

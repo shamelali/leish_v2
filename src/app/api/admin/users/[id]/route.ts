@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb, toPublicUser, type UserRow } from "@/server/db";
-import { requireAdmin, logAdminAction, isLastAdmin } from "@/server/admin-auth";
+import { requireAdmin, logAdminAction, atomicAdminGuard } from "@/server/admin-auth";
 import { statefulRoute, tryRoute, readJson, jsonError } from "@/server/http";
 import { hashPassword } from "@/server/password";
 
@@ -48,10 +48,11 @@ export const PATCH = statefulRoute(
       return jsonError("Invalid role", 400);
     }
 
-    // Lockout guard: never demote or delete the only remaining admin.
+    // Atomic lockout guard: demote only if >1 admin remains.
     if (existing.role === "admin" && role !== undefined && role !== "admin") {
-      if (await isLastAdmin(id)) {
-        return jsonError("Cannot demote the last remaining admin", 409);
+      const guard = await atomicAdminGuard(id, "demote");
+      if (!guard.ok) {
+        return jsonError(guard.reason, 409);
       }
     }
 
@@ -101,11 +102,19 @@ export const PATCH = statefulRoute(
       return jsonError("User not found", 404);
     }
 
-    await logAdminAction(admin.id, "update_user", "users", id, {
-      fields: Object.keys(body.data).filter(
-        (k) => body.data[k as keyof typeof body.data] !== undefined,
-      ),
-    });
+    await logAdminAction(
+      admin.id,
+      "update_user",
+      "users",
+      id,
+      {
+        fields: Object.keys(body.data).filter(
+          (k) => body.data[k as keyof typeof body.data] !== undefined,
+        ),
+      },
+      // Role changes are sensitive — require audit trail.
+      { requireAudit: role !== undefined },
+    );
 
     return NextResponse.json({ user: toPublicUser(updated) });
   },
@@ -128,14 +137,18 @@ export const DELETE = statefulRoute(
       return jsonError("User not found", 404);
     }
 
-    // Lockout guard: never delete the only remaining admin.
-    if (existing.role === "admin" && (await isLastAdmin(id))) {
-      return jsonError("Cannot delete the last remaining admin", 409);
+    // Atomic lockout guard: delete only if >1 admin remains.
+    if (existing.role === "admin") {
+      const guard = await atomicAdminGuard(id, "delete");
+      if (!guard.ok) {
+        return jsonError(guard.reason, 409);
+      }
+    } else {
+      // Non-admin: plain delete (atomicAdminGuard already ran for admin case).
+      await db.prepare("DELETE FROM users WHERE id = ?").run(id);
     }
 
-    await db.prepare("DELETE FROM users WHERE id = ?").run(id);
-
-    await logAdminAction(admin.id, "delete_user", "users", id);
+    await logAdminAction(admin.id, "delete_user", "users", id, {}, { requireAudit: true });
 
     return NextResponse.json({ ok: true });
   },

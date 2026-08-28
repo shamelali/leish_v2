@@ -13,15 +13,18 @@ import { logger } from "@/server/logger";
 
 const COOKIE_NAME = "leish_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const ROTATE_AFTER_SECONDS = SESSION_TTL_SECONDS / 2; // rotate at 50% TTL
 
 function getSecret(): Uint8Array {
   const secret = process.env.SESSION_SECRET;
   if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("SESSION_SECRET is required in production");
+    // Never allow the static dev fallback in any non-local environment.
+    // Production and Vercel preview deployments must always set SESSION_SECRET.
+    if (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test") {
+      throw new Error("SESSION_SECRET is required — generate with: openssl rand -base64 32");
     }
-    // Dev-only fallback so the demo works without configuration.
-    return new TextEncoder().encode("dev-only-insecure-secret-change-me");
+    // Local dev fallback only — not used outside `npm run dev`.
+    return new TextEncoder().encode("test-or-dev-only-secret-not-for-production");
   }
   return new TextEncoder().encode(secret);
 }
@@ -99,6 +102,42 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
       role: payload.role as Role,
       jti: String(payload.jti),
     };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if a token should be rotated (issued >50% of TTL ago).
+ * Returns a new token if rotation is needed, otherwise null.
+ */
+export async function rotateSessionIfNeeded(
+  token: string,
+  payload: SessionPayload,
+): Promise<string | null> {
+  try {
+    const { payload: jwtPayload } = await jwtVerify(token, getSecret(), {
+      algorithms: ["HS256"],
+    });
+
+    const iat = jwtPayload.iat;
+    if (!iat) return null;
+
+    const age = Math.floor(Date.now() / 1000) - iat;
+    if (age < ROTATE_AFTER_SECONDS) return null;
+
+    // Revoke old JTI
+    await revokeSession(payload.jti);
+
+    // Issue new token with fresh JTI
+    const newJti = crypto.randomUUID();
+    return createSessionToken({
+      sub: payload.sub,
+      email: payload.email,
+      name: payload.name,
+      role: payload.role,
+      jti: newJti,
+    });
   } catch {
     return null;
   }

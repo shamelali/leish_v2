@@ -166,10 +166,26 @@ function rowToPublicReview(row: ReviewRow): Review {
 
 const ARTIST_SELECT = `SELECT * FROM artists`;
 
-export async function listAllArtists(): Promise<Artist[]> {
+/**
+ * Full catalog listing with OOM guard. Unpaginated calls are capped at 500
+ * rows; callers with large catalogs should pass { limit, offset } for
+ * cursor-based pagination. Keeps existing call sites working while preventing
+ * unbounded `SELECT *` scans flagged in the performance audit.
+ */
+export async function listAllArtists(opts?: { limit?: number; offset?: number }): Promise<Artist[]> {
   await ensureCatalogSeeded();
+  if (opts) {
+    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
+    const offset = Math.max(opts.offset ?? 0, 0);
+    const rows = (await getDb()
+      .prepare(`${ARTIST_SELECT} ORDER BY rating DESC LIMIT ? OFFSET ?`)
+      .all(limit, offset)) as unknown as ArtistRow[];
+    return rows.map(rowToArtist);
+  }
+  // Legacy unpaginated path — hard-capped at 500 to prevent OOM/timeout as
+  // the catalog scales. Prefer the paginated form for API routes.
   const rows = (await getDb()
-    .prepare(`${ARTIST_SELECT} ORDER BY rating DESC`)
+    .prepare(`${ARTIST_SELECT} ORDER BY rating DESC LIMIT 500`)
     .all()) as unknown as ArtistRow[];
   return rows.map(rowToArtist);
 }
@@ -245,10 +261,22 @@ export async function resolveArtist(idOrSlug: string): Promise<Artist | null> {
 
 const STUDIO_SELECT = `SELECT * FROM studios`;
 
-export async function listAllStudios(): Promise<Studio[]> {
+/**
+ * Full studio listing — same OOM guard as listAllArtists. Pass { limit,
+ * offset } for paginated access; unpaginated callers are capped at 500.
+ */
+export async function listAllStudios(opts?: { limit?: number; offset?: number }): Promise<Studio[]> {
   await ensureCatalogSeeded();
+  if (opts) {
+    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
+    const offset = Math.max(opts.offset ?? 0, 0);
+    const rows = (await getDb()
+      .prepare(`${STUDIO_SELECT} ORDER BY rating DESC LIMIT ? OFFSET ?`)
+      .all(limit, offset)) as unknown as StudioRow[];
+    return rows.map(rowToStudio);
+  }
   const rows = (await getDb()
-    .prepare(`${STUDIO_SELECT} ORDER BY rating DESC`)
+    .prepare(`${STUDIO_SELECT} ORDER BY rating DESC LIMIT 500`)
     .all()) as unknown as StudioRow[];
   return rows.map(rowToStudio);
 }
@@ -574,9 +602,15 @@ export async function listEntityReviews(
 }
 
 /**
- * Incrementally blend a new rating into the entity's aggregate:
- *   newRating = (oldRating * oldCount + r) / (oldCount + 1)
- * Seeded legacy aggregates stay intact while live reviews accumulate.
+ * Atomically blend a new rating into the entity's aggregate in a single
+ * statement to avoid lost-update races. Previously this was read → compute
+ * in JS → write, which lost updates under concurrent reviews.
+ *
+ *   newCount  = review_count + 1
+ *   newRating = ((rating * review_count) + :rating) / (review_count + 1)
+ *
+ * ROUND(*,2) is supported by both Postgres and SQLite and keeps the
+ * aggregate to 2dp without a second round-trip.
  */
 async function blendAggregate(
   entityType: EntityType,
@@ -585,23 +619,15 @@ async function blendAggregate(
 ): Promise<void> {
   const table = entityType === "artist" ? "artists" : "studios";
   const db = getDb();
-  const row = (await db
-    .prepare(`SELECT rating, review_count FROM ${table} WHERE id = ?`)
-    .get(entityId)) as { rating: number; review_count: number } | undefined;
-  if (!row) return;
-
-  const newCount = Number(row.review_count) + 1;
-  // Round to 2dp in JS — SQL ROUND(double, n) isn't portable to Postgres.
-  const newRating =
-    Math.round(((Number(row.rating) * Number(row.review_count) + rating) / newCount) * 100) / 100;
-
   await db
     .prepare(
       `UPDATE ${table}
-       SET rating = ?, review_count = ?, updated_at = ?
+       SET review_count = review_count + 1,
+           rating = ROUND(((rating * review_count) + ?) / (review_count + 1), 2),
+           updated_at = ?
        WHERE id = ?`,
     )
-    .run(newRating, newCount, new Date().toISOString(), entityId);
+    .run(rating, new Date().toISOString(), entityId);
 }
 
 export async function addEntityReview(input: NewReviewInput): Promise<Review> {

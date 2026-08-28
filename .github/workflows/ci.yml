@@ -47,6 +47,31 @@ jobs:
       - name: Build
         run: pnpm run build
 
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: verify
+    env:
+      CI: "true"
+      SKIP_ENV_VALIDATION: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 

@@ -23,21 +23,24 @@ export async function claimArtistProfile(
     throw new Error("ARTIST_NOT_FOUND");
   }
   const db = await getDb();
-  const existing = await db
-    .prepare("SELECT user_id FROM artist_profiles WHERE user_id = ?")
-    .get(userId);
-  if (existing) {
-    throw new Error("ALREADY_CLAIMED");
-  }
 
   const row: ArtistProfileRow = {
     user_id: userId,
     artist_id: artistId,
     claimed_at: new Date().toISOString(),
   };
-  await db
-    .prepare("INSERT INTO artist_profiles (user_id, artist_id, claimed_at) VALUES (?, ?, ?)")
+
+  // Atomic insert — relies on PRIMARY KEY(user_id) to prevent TOCTOU races
+  // where two concurrent claims both pass a prior SELECT check.
+  const result = await db
+    .prepare(
+      "INSERT INTO artist_profiles (user_id, artist_id, claimed_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING",
+    )
     .run(row.user_id, row.artist_id, row.claimed_at);
+
+  if (result.changes === 0) {
+    throw new Error("ALREADY_CLAIMED");
+  }
   return row;
 }
 

@@ -139,6 +139,64 @@ function createSqliteFacade(db: DatabaseSync): DbFacade {
   };
 }
 
+// ── Schema drift detection ──────────────────────────────────────────────────
+
+/**
+ * Extract table name → column names from a SQL schema string.
+ * Handles CREATE TABLE IF NOT EXISTS and inline CHECK/DEFAULT constraints.
+ */
+function extractSchemaTables(schema: string): Map<string, Set<string>> {
+  const tables = new Map<string, Set<string>>();
+  const tableRe = /CREATE TABLE IF NOT EXISTS (\w+)\s*\(([\s\S]*?)\);\s*(?=CREATE|$)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = tableRe.exec(schema))) {
+    const tableName = match[1];
+    const body = match[2];
+    const cols = new Set<string>();
+    // Split by comma, but not inside parentheses (e.g. CHECK constraints).
+    let depth = 0;
+    let current = "";
+    for (const ch of body) {
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      else if (ch === "," && depth === 0) {
+        const col = current.trim().split(/\s+/)[0];
+        if (col) cols.add(col);
+        current = "";
+        continue;
+      }
+      current += ch;
+    }
+    const col = current.trim().split(/\s+/)[0];
+    if (col) cols.add(col);
+    tables.set(tableName, cols);
+  }
+  return tables;
+}
+
+let driftChecked = false;
+
+function detectSchemaDrift() {
+  if (driftChecked) return;
+  driftChecked = true;
+
+  const pgTables = extractSchemaTables(PG_SCHEMA);
+  const sqliteTables = extractSchemaTables(SQLITE_SCHEMA);
+
+  for (const [table, pgCols] of pgTables) {
+    const sqliteCols = sqliteTables.get(table);
+    if (!sqliteCols) {
+      console.warn(`[db] schema drift: table "${table}" exists in PG but not in SQLite`);
+      continue;
+    }
+    for (const col of pgCols) {
+      if (!sqliteCols.has(col)) {
+        console.warn(`[db] schema drift: column "${table}.${col}" missing from SQLite`);
+      }
+    }
+  }
+}
+
 // ── Schema (PostgreSQL) ─────────────────────────────────────────────────────
 
 /**
@@ -666,6 +724,9 @@ const SQLITE_SCHEMA = `
 function migrateSqlite(db: DatabaseSync) {
   db.exec(SQLITE_SCHEMA);
 
+  // Schema drift detection: warn if PG and SQLite diverge on critical columns.
+  detectSchemaDrift();
+
   const userCols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
   if (!userCols.some((c) => c.name === "email_verified")) {
     db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0");
@@ -749,6 +810,13 @@ export function isPostgres(): boolean {
 /** Synchronous accessor — initialization is sync; pg migration runs lazily. */
 export function getDb(): DbFacade {
   if (facade) return facade;
+
+  // Production guard: SQLite is not suitable for production (data lost on redeploy).
+  if (!isPostgres() && process.env.NODE_ENV === "production" && !process.env.SKIP_DB_GUARD) {
+    throw new Error(
+      "DATABASE_URL is required in production. SQLite is only for development/tests.",
+    );
+  }
 
   if (isPostgres()) {
     const pool = new Pool({

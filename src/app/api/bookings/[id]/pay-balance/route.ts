@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb, type BookingRow, type UserRow } from "@/server/db";
 import { verifySessionToken } from "@/server/session";
+import { verifyTurnstileToken, clientIp } from "@/server/turnstile";
 import {
   createBookingPayment,
   getPaymentForBooking,
@@ -27,6 +28,15 @@ export const POST = statefulRoute(
     const token = request.headers.get("cookie")?.match(/(?:^|;\s*)leish_session=([^;]+)/)?.[1];
     const payload = token ? await verifySessionToken(token) : null;
     if (!payload) return jsonError("Not authenticated", 401);
+
+    // Verify Turnstile token if configured
+    const body = await request.json().catch(() => ({}));
+    const turnstileToken = (body as { turnstileToken?: string }).turnstileToken;
+    const ip = clientIp(request);
+    const turnstileOk = await verifyTurnstileToken(turnstileToken, ip);
+    if (!turnstileOk) {
+      return jsonError("Turnstile verification failed", 403);
+    }
 
     const db = await getDb();
     const user = (await db.prepare("SELECT * FROM users WHERE id = ?").get(payload.sub)) as

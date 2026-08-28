@@ -15,6 +15,40 @@ import {
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILES_PER_UPLOAD = 20;
+
+// ── Magic byte signatures ───────────────────────────────────────────────────
+
+const MAGIC_BYTES: Record<string, number[][]> = {
+  "image/jpeg": [[0xff, 0xd8, 0xff]],
+  "image/png": [[0x89, 0x50, 0x4e, 0x47]],
+  "image/webp": [
+    [0x52, 0x49, 0x46, 0x46], // RIFF header
+  ],
+  "image/avif": [
+    [0x00, 0x00, 0x00], // ftyp box (partial)
+  ],
+};
+
+function validateMagicBytes(buffer: Buffer, expectedType: string): boolean {
+  const signatures = MAGIC_BYTES[expectedType];
+  if (!signatures) return false;
+  return signatures.some((sig) =>
+    sig.every((byte, i) => buffer[i] === byte),
+  );
+}
+
+// ── Filename sanitization ───────────────────────────────────────────────────
+
+function sanitizeFilename(name: string): string {
+  // Remove path separators, null bytes, and dangerous characters.
+  return name
+    .replace(/[/\\:]/g, "_")
+    .replace(/\0/g, "")
+    .replace(/[<>"|?*]/g, "_")
+    .replace(/\.{2,}/g, ".") // collapse multiple dots
+    .slice(0, 100); // limit length
+}
 
 async function requireAuth(request: Request): Promise<{ user: UserRow; payload: { sub: string } } | { error: Response }> {
   const token = request.headers.get("cookie")?.match(/(?:^|;\s*)leish_session=([^;]+)/)?.[1];
@@ -52,6 +86,12 @@ export async function uploadFileDirect(request: Request) {
       return jsonError("File too large (max 10 MB)", 400);
     }
 
+    // Validate magic bytes match claimed content type.
+    if (!validateMagicBytes(buffer, contentType)) {
+      logger.warn({ userId: auth.user.id, key, contentType }, "upload rejected: magic bytes mismatch");
+      return jsonError("File content does not match declared type", 400);
+    }
+
     await uploadObject(key, buffer, contentType);
     logger.info({ userId: auth.user.id, key, size: buffer.length }, "Direct upload completed");
     return Response.json({ key });
@@ -86,10 +126,14 @@ export async function deleteFile(request: Request) {
 
 export async function uploadArtistPortfolio(artistId: string, files: File[]): Promise<string[]> {
   const urls: string[] = [];
-  for (const file of files) {
+  const remaining = files.slice(0, MAX_FILES_PER_UPLOAD);
+  for (const file of remaining) {
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) continue;
-    const key = generateKey(STORAGE_PREFIXES.artistPortfolio, `${artistId}-${file.name}`);
     const buffer = Buffer.from(await file.arrayBuffer());
+    if (buffer.length > MAX_FILE_SIZE) continue;
+    if (!validateMagicBytes(buffer, file.type)) continue;
+    const safeName = sanitizeFilename(file.name);
+    const key = generateKey(STORAGE_PREFIXES.artistPortfolio, `${artistId}-${safeName}`);
     await uploadObject(key, buffer, file.type);
     urls.push(key);
   }
@@ -98,10 +142,14 @@ export async function uploadArtistPortfolio(artistId: string, files: File[]): Pr
 
 export async function uploadStudioPortfolio(studioId: string, files: File[]): Promise<string[]> {
   const urls: string[] = [];
-  for (const file of files) {
+  const remaining = files.slice(0, MAX_FILES_PER_UPLOAD);
+  for (const file of remaining) {
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) continue;
-    const key = generateKey(STORAGE_PREFIXES.studioPortfolio, `${studioId}-${file.name}`);
     const buffer = Buffer.from(await file.arrayBuffer());
+    if (buffer.length > MAX_FILE_SIZE) continue;
+    if (!validateMagicBytes(buffer, file.type)) continue;
+    const safeName = sanitizeFilename(file.name);
+    const key = generateKey(STORAGE_PREFIXES.studioPortfolio, `${studioId}-${safeName}`);
     await uploadObject(key, buffer, file.type);
     urls.push(key);
   }

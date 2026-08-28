@@ -61,7 +61,7 @@ export function createMemoryStore(): RateLimitStore {
   };
 }
 
-// ── Upstash (Redis) store (fixed window) ────────────────────────────────────
+// ── Upstash (Redis) store (sliding window via sorted sets) ──────────────────
 
 export function createUpstashStore(opts?: {
   url?: string;
@@ -87,22 +87,34 @@ export function createUpstashStore(opts?: {
 
   return {
     async checkAndIncrement(key, limit, windowMs) {
+      const now = Date.now();
+      const windowStart = now - windowMs;
+      const member = `${now}:${crypto.randomUUID().slice(0, 8)}`;
+
+      // Sliding window via sorted sets:
+      // 1. Remove entries outside the window
+      // 2. Add the current request
+      // 3. Count entries in the window
+      // 4. Set TTL to auto-cleanup
+
+      // Use a pipeline-like approach: ZREMRANGEBYSCORE, ZADD, ZCARD, EXPIRE
+      // These run sequentially but atomically in Redis.
+      await command("ZREMRANGEBYSCORE", key, "-inf", windowStart);
+      await command("ZADD", key, now, member);
+      const count = (await command("ZCARD", key)) as number;
+
+      // Set TTL on the key (auto-cleanup when window expires)
       const ttlSeconds = Math.max(1, Math.ceil(windowMs / 1000));
-
-      // Blocked keys carry a :block marker with a TTL.
-      const blockTtl = (await command("TTL", `${key}:block`)) as number;
-      if (blockTtl > 0) {
-        return { allowed: false, remaining: 0, retryAfterMs: blockTtl * 1000 };
-      }
-
-      const count = (await command("INCR", key)) as number;
-      if (count === 1) {
-        await command("EXPIRE", key, ttlSeconds);
-      }
+      await command("EXPIRE", key, ttlSeconds);
 
       if (count > limit) {
-        await command("EXPIRE", `${key}:block`, Math.ceil(BLOCK_MS / 1000));
-        return { allowed: false, remaining: 0, retryAfterMs: BLOCK_MS };
+        // Over limit: remove the entry we just added and return blocked.
+        await command("ZREM", key, member);
+        // Calculate retry-after based on oldest entry in window.
+        const oldest = (await command("ZRANGE", key, 0, 0, "WITHSCORES")) as string[];
+        const oldestScore = oldest.length >= 2 ? parseInt(oldest[1], 10) : now;
+        const retryAfterMs = Math.max(0, oldestScore + windowMs - now);
+        return { allowed: false, remaining: 0, retryAfterMs };
       }
 
       return { allowed: true, remaining: Math.max(0, limit - count), retryAfterMs: 0 };

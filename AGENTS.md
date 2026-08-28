@@ -108,6 +108,23 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
   `POSTMARK_SERVER_TOKEN`, and both use `EMAIL_FROM`
 - Booking emails composed in `src/server/booking-emails.ts`
 
+### 8b. Analytics (`src/server/agnost.ts` + `src/lib/agnost-client.ts`)
+
+- **Server-side**: `agnostai` SDK initialized in `src/instrumentation.ts` at startup
+- **Client-side**: `src/lib/agnost-client.ts` — `trackEvent()`, `trackArtistView()`, `trackSearch()`, `trackBookingForm()`
+- **Org ID**: `AGNOST_ORG_ID` (server) + `NEXT_PUBLIC_AGNOST_ORG_ID` (client)
+- **Dashboard**: `https://app.agnost.ai/projects/3e27e121-654d-4746-ba55-7996f21bb351`
+- **Instrumented routes**:
+  - `POST /api/auth/register` — user registration
+  - `POST /api/auth/login` — login attempts
+  - `POST /api/bookings` — booking creation
+  - `PATCH /api/bookings/[id]` — booking status updates (accept/reject/complete/cancel)
+  - `POST /api/bookings/[id]/quotation` — quotation generation
+  - `POST /api/payments/webhook` — payment success/failure
+  - `PATCH /api/artist-profiles` — profile edits
+- **Frontend tracking**: `ArtistsBrowser` component tracks filter/search interactions
+- **Pattern**: `agnost.begin({ userId, agentName, input })` → `interaction.end(output, success)`
+
 ### 9. Theme (`src/lib/theme.tsx`)
 
 - `ThemeProvider` / `useTheme()` with localStorage persistence
@@ -179,6 +196,8 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - `LOG_WEBHOOK_URL` — log forwarding
 - `PEPPER_SECRET` — password pepper (scrypt hashing)
 - `CRON_SECRET`, `INTERNAL_API_SECRET` — internal endpoints
+- `AGNOST_ORG_ID` — Agnost AI analytics org ID
+- `NEXT_PUBLIC_AGNOST_ORG_ID` — client-side Agnost tracking
 
 ### 2. Vercel Settings
 

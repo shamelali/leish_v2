@@ -6,6 +6,7 @@ import { loginSchema } from "@/server/validation";
 import { enforceRateLimit, enforceSameOrigin, jsonError, readJson } from "@/server/http";
 import { randomUUID } from "node:crypto";
 import { logger } from "@/server/logger";
+import { isAgnostEnabled, agnost } from "@/server/agnost";
 
 export async function POST(request: Request) {
   const originBlocked = enforceSameOrigin(request);
@@ -33,28 +34,46 @@ export async function POST(request: Request) {
   }
 
   const { email, password } = parsed.data;
-  const db = await getDb();
 
-  const user = (await db.prepare("SELECT * FROM users WHERE email = ?").get(email)) as
-    UserRow | undefined;
-  if (!user || !verifyPassword(password, user.password)) {
-    // Same message for unknown email and wrong password (no user enumeration).
-    logger.warn({ email }, "failed login attempt");
-    return jsonError("Invalid email or password", 401);
+  // Begin Agnost tracking.
+  const interaction = isAgnostEnabled()
+    ? agnost.begin({
+        userId: email,
+        agentName: "auth-login",
+        input: JSON.stringify({ email }),
+      })
+    : null;
+
+  try {
+    const db = await getDb();
+
+    const user = (await db.prepare("SELECT * FROM users WHERE email = ?").get(email)) as
+      UserRow | undefined;
+    if (!user || !verifyPassword(password, user.password)) {
+      // Same message for unknown email and wrong password (no user enumeration).
+      logger.warn({ email }, "failed login attempt");
+      interaction?.end("Invalid credentials", false);
+      return jsonError("Invalid email or password", 401);
+    }
+
+    const jti = randomUUID();
+    const token = await createSessionToken({
+      sub: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      jti,
+    });
+
+    logger.info({ userId: user.id, jti }, "login succeeded");
+
+    const response = NextResponse.json({ user: toPublicUser(user) });
+    response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+
+    interaction?.end(JSON.stringify({ userId: user.id, role: user.role }), true);
+    return response;
+  } catch (error) {
+    interaction?.end(error instanceof Error ? error.message : String(error), false);
+    throw error;
   }
-
-  const jti = randomUUID();
-  const token = await createSessionToken({
-    sub: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    jti,
-  });
-
-  logger.info({ userId: user.id, jti }, "login succeeded");
-
-  const response = NextResponse.json({ user: toPublicUser(user) });
-  response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
-  return response;
 }

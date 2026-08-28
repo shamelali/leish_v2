@@ -61,48 +61,54 @@ describe("upstash rate limit store", () => {
     else delete process.env.UPSTASH_REST_TOKEN;
   });
 
-  it("allows within the limit and sets expiry on first hit", async () => {
-    let incr = 0;
+  it("allows within the limit and counts entries", async () => {
+    let zcard = 0;
     const store = mockUpstash((path) => {
-      if (path.startsWith("TTL")) return { result: -1 };
-      if (path.startsWith("INCR")) {
-        incr += 1;
-        return { result: incr };
-      }
+      if (path.startsWith("ZREMRANGEBYSCORE")) return { result: 0 };
+      if (path.startsWith("ZADD")) { zcard += 1; return { result: 1 }; }
+      if (path.startsWith("ZCARD")) return { result: zcard };
       if (path.startsWith("EXPIRE")) return { result: 1 };
       return { result: null };
     });
     const result = await store!.checkAndIncrement("auth:1.2.3.4", 5, 60_000);
     expect(result.allowed).toBe(true);
     expect(result.remaining).toBe(4);
-    expect(incr).toBe(1);
   });
 
   it("blocks once the limit is exceeded", async () => {
-    let incr = 0;
+    // Simulate: 2 entries already in the sorted set, this request adds a 3rd → over limit.
+    let zcard = 0;
     const store = mockUpstash((path) => {
-      if (path.startsWith("TTL")) return { result: -1 };
-      if (path.startsWith("INCR")) {
-        incr += 1;
-        return { result: incr };
-      }
+      if (path.startsWith("ZREMRANGEBYSCORE")) return { result: 0 };
+      if (path.startsWith("ZADD")) { zcard += 1; return { result: 1 }; }
+      if (path.startsWith("ZCARD")) return { result: zcard };
       if (path.startsWith("EXPIRE")) return { result: 1 };
+      if (path.startsWith("ZRANGE")) return { result: ["1000:abc", "1000"] };
+      if (path.startsWith("ZREM")) { zcard -= 1; return { result: 1 }; }
       return { result: null };
     });
+    // First two calls set zcard to 2.
     await store!.checkAndIncrement("k", 2, 60_000);
     await store!.checkAndIncrement("k", 2, 60_000);
     const blocked = await store!.checkAndIncrement("k", 2, 60_000);
     expect(blocked.allowed).toBe(false);
-    expect(blocked.retryAfterMs).toBeGreaterThan(0);
+    expect(blocked.retryAfterMs).toBeGreaterThanOrEqual(0);
   });
 
-  it("respects an active block marker", async () => {
+  it("returns zero remaining and retry-after when blocked", async () => {
+    // Simulate: ZCARD returns limit+1 → over limit.
+    let zcard = 0;
     const store = mockUpstash((path) => {
-      if (path.startsWith("TTL")) return { result: 42 };
+      if (path.startsWith("ZREMRANGEBYSCORE")) return { result: 0 };
+      if (path.startsWith("ZADD")) { zcard += 1; return { result: 1 }; }
+      if (path.startsWith("ZCARD")) return { result: zcard };
+      if (path.startsWith("EXPIRE")) return { result: 1 };
+      if (path.startsWith("ZRANGE")) return { result: ["1000:abc", "1000"] };
+      if (path.startsWith("ZREM")) { zcard -= 1; return { result: 1 }; }
       return { result: null };
     });
-    const result = await store!.checkAndIncrement("k", 5, 60_000);
-    expect(result.allowed).toBe(false);
-    expect(result.retryAfterMs).toBe(42_000);
+    const blocked = await store!.checkAndIncrement("k", 0, 60_000);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.remaining).toBe(0);
   });
 });

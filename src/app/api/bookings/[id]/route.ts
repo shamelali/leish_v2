@@ -9,6 +9,7 @@ import { getActiveQuotation, serializeQuotation } from "@/server/quotations";
 import { notifyBookingStatusChanged, sendInvoiceEmail } from "@/server/booking-emails";
 import { jsonError, readJson, statefulRoute } from "@/server/http";
 import { logger } from "@/server/logger";
+import { isAgnostEnabled, agnost } from "@/server/agnost";
 
 const BALANCE_DUE_DAYS_BEFORE = 3;
 
@@ -52,94 +53,110 @@ export const PATCH = statefulRoute(
       }
     }
 
-    const result = applyBookingTransition(booking.status, parsed.data, {
-      isOwner: booking.user_id === user.id,
-      role: user.role,
-    });
+    // Begin Agnost tracking.
+    const interaction = isAgnostEnabled()
+      ? agnost.begin({
+          userId: user.id,
+          agentName: "booking-status-update",
+          input: JSON.stringify({ bookingId: id, action: parsed.data, fromStatus: booking.status }),
+        })
+      : null;
 
-    if (!result.ok) {
-      return jsonError(result.error ?? "Invalid transition", 403);
-    }
+    try {
+      const result = applyBookingTransition(booking.status, parsed.data, {
+        isOwner: booking.user_id === user.id,
+        role: user.role,
+      });
 
-    await db.prepare("UPDATE bookings SET status = ? WHERE id = ?").run(result.status, booking.id);
+      if (!result.ok) {
+        interaction?.end(result.error ?? "Invalid transition", false);
+        return jsonError(result.error ?? "Invalid transition", 403);
+      }
 
-    // Notify the client about the status change; email the invoice on completion.
-    await notifyBookingStatusChanged({
-      bookingId: booking.id,
-      ownerUserId: booking.user_id,
-      artistName: booking.artist_name,
-      service: booking.service,
-      date: booking.date,
-      time: booking.time,
-      status: result.status,
-    });
-    if (parsed.data === "complete" && result.status === "completed") {
-      await sendInvoiceEmail({
+      await db.prepare("UPDATE bookings SET status = ? WHERE id = ?").run(result.status, booking.id);
+
+      // Notify the client about the status change; email the invoice on completion.
+      await notifyBookingStatusChanged({
         bookingId: booking.id,
         ownerUserId: booking.user_id,
         artistName: booking.artist_name,
         service: booking.service,
         date: booking.date,
-      });
-    }
-
-    logger.info(
-      { bookingId: booking.id, action: parsed.data, status: result.status },
-      "booking updated",
-    );
-
-    const quotation = await getActiveQuotation(booking.id);
-    const payment = await getPaymentForBooking(booking.id, "deposit");
-    const balancePayment = await getPaymentForBooking(booking.id, "balance");
-    const total = quotation?.status === "expired" ? null : (quotation?.total ?? null);
-    const bookingFeeSen = await getBookingFeeSen();
-
-    return NextResponse.json({
-      booking: {
-        id: booking.id,
-        artistId: booking.artist_id,
-        artistName: booking.artist_name,
-        service: booking.service,
-        price: booking.price,
-        date: booking.date,
         time: booking.time,
-        notes: booking.notes,
         status: result.status,
-        eventType: booking.event_type,
-        venue: booking.venue,
-        guestCount: booking.guest_count,
-        quotation: quotation ? serializeQuotation(quotation) : null,
-        totalPrice: total,
-        balanceDueDate: booking.date
-          ? new Date(
-              new Date(`${booking.date}T00:00:00`).getTime() - BALANCE_DUE_DAYS_BEFORE * 86_400_000,
-            )
-              .toISOString()
-              .slice(0, 10)
-          : null,
-        balanceAmount: total !== null ? Math.max(0, total - bookingFeeSen) : null,
-        payment: payment
-          ? {
-              amount: payment.amount,
-              type: payment.type,
-              status: payment.status,
-              provider: payment.provider,
-              reference: payment.provider_ref,
-              url: payment.provider_url,
-            }
-          : null,
-        balancePayment: balancePayment
-          ? {
-              amount: balancePayment.amount,
-              type: balancePayment.type,
-              status: balancePayment.status,
-              provider: balancePayment.provider,
-              reference: balancePayment.provider_ref,
-              url: balancePayment.provider_url,
-            }
-          : null,
-      },
-    });
+      });
+      if (parsed.data === "complete" && result.status === "completed") {
+        await sendInvoiceEmail({
+          bookingId: booking.id,
+          ownerUserId: booking.user_id,
+          artistName: booking.artist_name,
+          service: booking.service,
+          date: booking.date,
+        });
+      }
+
+      logger.info(
+        { bookingId: booking.id, action: parsed.data, status: result.status },
+        "booking updated",
+      );
+
+      const quotation = await getActiveQuotation(booking.id);
+      const payment = await getPaymentForBooking(booking.id, "deposit");
+      const balancePayment = await getPaymentForBooking(booking.id, "balance");
+      const total = quotation?.status === "expired" ? null : (quotation?.total ?? null);
+      const bookingFeeSen = await getBookingFeeSen();
+
+      interaction?.end(JSON.stringify({ bookingId: booking.id, action: parsed.data, newStatus: result.status }), true);
+      return NextResponse.json({
+        booking: {
+          id: booking.id,
+          artistId: booking.artist_id,
+          artistName: booking.artist_name,
+          service: booking.service,
+          price: booking.price,
+          date: booking.date,
+          time: booking.time,
+          notes: booking.notes,
+          status: result.status,
+          eventType: booking.event_type,
+          venue: booking.venue,
+          guestCount: booking.guest_count,
+          quotation: quotation ? serializeQuotation(quotation) : null,
+          totalPrice: total,
+          balanceDueDate: booking.date
+            ? new Date(
+                new Date(`${booking.date}T00:00:00`).getTime() - BALANCE_DUE_DAYS_BEFORE * 86_400_000,
+              )
+                .toISOString()
+                .slice(0, 10)
+            : null,
+          balanceAmount: total !== null ? Math.max(0, total - bookingFeeSen) : null,
+          payment: payment
+            ? {
+                amount: payment.amount,
+                type: payment.type,
+                status: payment.status,
+                provider: payment.provider,
+                reference: payment.provider_ref,
+                url: payment.provider_url,
+              }
+            : null,
+          balancePayment: balancePayment
+            ? {
+                amount: balancePayment.amount,
+                type: balancePayment.type,
+                status: balancePayment.status,
+                provider: balancePayment.provider,
+                reference: balancePayment.provider_ref,
+                url: balancePayment.provider_url,
+              }
+            : null,
+        },
+      });
+    } catch (err) {
+      interaction?.end(err instanceof Error ? err.message : String(err), false);
+      throw err;
+    }
   },
   { route: "PATCH /api/bookings/[id]" },
 );

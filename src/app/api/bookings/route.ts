@@ -11,6 +11,7 @@ import { getActiveQuotation, serializeQuotation } from "@/server/quotations";
 import { notifyBookingCreated } from "@/server/booking-emails";
 import { jsonError, readJson, statefulRoute, tryRoute } from "@/server/http";
 import { logger } from "@/server/logger";
+import { isAgnostEnabled, agnost } from "@/server/agnost";
 
 /** Require a valid session; returns { user } or a JSON error response. */
 async function requireUser(request: Request) {
@@ -170,75 +171,92 @@ export const POST = statefulRoute(
     const serviceDef = artist.services.find((s) => s.name === service);
     if (!serviceDef) return jsonError("Service not available for this artist", 400);
 
-    const db = await getDb();
-    const booking: BookingRow = {
-      id: randomUUID(),
-      user_id: user!.id,
-      artist_id: artist.id,
-      artist_name: artist.name,
-      service: serviceDef.name,
-      price: serviceDef.price,
-      date,
-      time,
-      notes: notes || null,
-      event_type: eventType,
-      venue: venue || null,
-      guest_count: guestCount || 0,
-      balance_reminder_at: null,
-      status: "requested",
-      created_at: new Date().toISOString(),
-    };
-
-    // Friendly pre-check (the unique partial index is the hard guarantee —
-    // cancelled/completed bookings don't block the slot).
-    const existing = (await db
-      .prepare(
-        "SELECT id FROM bookings WHERE artist_id = ? AND date = ? AND time = ? AND status IN ('requested','accepted','confirmed') LIMIT 1",
-      )
-      .get(artist.id, date, time)) as { id: string } | undefined;
-    if (existing) {
-      return jsonError(
-        "Sorry, this time slot has just been taken. Pick another time or artist.",
-        409,
-      );
-    }
+    // Begin Agnost tracking.
+    const interaction = isAgnostEnabled()
+      ? agnost.begin({
+          userId: user!.id,
+          agentName: "booking-create",
+          input: JSON.stringify({ artistId, service, date, time, eventType }),
+        })
+      : null;
 
     try {
-      await db
+      const db = await getDb();
+      const booking: BookingRow = {
+        id: randomUUID(),
+        user_id: user!.id,
+        artist_id: artist.id,
+        artist_name: artist.name,
+        service: serviceDef.name,
+        price: serviceDef.price,
+        date,
+        time,
+        notes: notes || null,
+        event_type: eventType,
+        venue: venue || null,
+        guest_count: guestCount || 0,
+        balance_reminder_at: null,
+        status: "requested",
+        created_at: new Date().toISOString(),
+      };
+
+      // Friendly pre-check (the unique partial index is the hard guarantee —
+      // cancelled/completed bookings don't block the slot).
+      const existing = (await db
         .prepare(
-          `INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, notes, event_type, venue, guest_count, status, balance_reminder_at, created_at)
-     VALUES (@id, @user_id, @artist_id, @artist_name, @service, @price, @date, @time, @notes, @event_type, @venue, @guest_count, @status, @balance_reminder_at, @created_at)`,
+          "SELECT id FROM bookings WHERE artist_id = ? AND date = ? AND time = ? AND status IN ('requested','accepted','confirmed') LIMIT 1",
         )
-        .run(bind(booking));
-    } catch (err) {
-      // Race-condition guard: the unique partial index rejected a second
-      // active booking for the same slot.
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("UNIQUE") || msg.includes("duplicate key")) {
+        .get(artist.id, date, time)) as { id: string } | undefined;
+      if (existing) {
+        interaction?.end("Time slot taken", false);
         return jsonError(
           "Sorry, this time slot has just been taken. Pick another time or artist.",
           409,
         );
       }
+
+      try {
+        await db
+          .prepare(
+            `INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, notes, event_type, venue, guest_count, status, balance_reminder_at, created_at)
+       VALUES (@id, @user_id, @artist_id, @artist_name, @service, @price, @date, @time, @notes, @event_type, @venue, @guest_count, @status, @balance_reminder_at, @created_at)`,
+          )
+          .run(bind(booking));
+      } catch (err) {
+        // Race-condition guard: the unique partial index rejected a second
+        // active booking for the same slot.
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("UNIQUE") || msg.includes("duplicate key")) {
+          interaction?.end("Slot conflict", false);
+          return jsonError(
+            "Sorry, this time slot has just been taken. Pick another time or artist.",
+            409,
+          );
+        }
+        throw err;
+      }
+
+      await notifyBookingCreated({
+        bookingId: booking.id,
+        ownerUserId: user!.id,
+        artistName: artist.name,
+        service: serviceDef.name,
+        date,
+        time,
+      });
+
+      interaction?.end(JSON.stringify({ bookingId: booking.id, artist: artist.name }), true);
+      return NextResponse.json(
+        {
+          booking: await serializeBooking(booking),
+          user: toPublicUser(user!),
+        },
+        { status: 201 },
+      );
+    } catch (err) {
+      interaction?.end(err instanceof Error ? err.message : String(err), false);
       throw err;
     }
-
-    await notifyBookingCreated({
-      bookingId: booking.id,
-      ownerUserId: user!.id,
-      artistName: artist.name,
-      service: serviceDef.name,
-      date,
-      time,
-    });
-
-    return NextResponse.json(
-      {
-        booking: await serializeBooking(booking),
-        user: toPublicUser(user!),
-      },
-      { status: 201 },
-    );
   },
   { route: "POST /api/bookings" },
 );

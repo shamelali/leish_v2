@@ -5,12 +5,52 @@ import pino from "pino";
  * Structured logging with pino.
  * - JSON lines in production, pretty-printed in development.
  * - Level: `LOG_LEVEL` env override, defaults to info.
+ * - PII redaction: emails, phone numbers, and sensitive fields are masked.
  * - When `LOG_WEBHOOK_URL` is set, every log line is also forwarded to the
  *   webhook (JSON POST, fire-and-forget with batching). Use it to stream
  *   logs into an observability sink (OTel/DataDog/self-hosted).
  */
 
 type FetchLike = typeof fetch;
+
+const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const PHONE_RE = /\+?\d{9,15}/g;
+const SENSITIVE_KEYS = ["password", "token", "secret", "authorization", "cookie", "session"];
+
+function redactPii(value: unknown): unknown {
+  if (typeof value === "string") {
+    let result = value;
+    result = result.replace(EMAIL_RE, (m) => {
+      const [local, domain] = m.split("@");
+      return `${local[0]}***@${domain}`;
+    });
+    result = result.replace(PHONE_RE, (m) => {
+      if (m.length < 6) return m;
+      return m.slice(0, 3) + "***" + m.slice(-2);
+    });
+    return result;
+  }
+  if (Array.isArray(value)) {
+    return value.map(redactPii);
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (SENSITIVE_KEYS.includes(k.toLowerCase())) {
+        out[k] = "[REDACTED]";
+      } else {
+        out[k] = redactPii(v);
+      }
+    }
+    return out;
+  }
+  return value;
+}
+
+/** PII-safe serialize hook for pino. */
+function piiRedactionHook(bindings: Record<string, unknown>) {
+  return redactPii(bindings) as Record<string, unknown>;
+}
 
 export function createForwardingSink(webhookUrl: string, fetchImpl: FetchLike): Writable {
   const buffer: string[] = [];
@@ -65,6 +105,22 @@ export function createLogger(opts?: {
   return pino({
     level: opts?.level ?? process.env.LOG_LEVEL ?? "info",
     base: { service: "leish-api" },
+    serializers: {
+      err: pino.stdSerializers.err,
+      req: pino.stdSerializers.req,
+      res: pino.stdSerializers.res,
+    },
+    hooks: {
+      logMethod(args, method) {
+        // Redact PII from all log arguments
+        for (let i = 0; i < args.length; i++) {
+          if (args[i] && typeof args[i] === "object") {
+            args[i] = redactPii(args[i]) as Record<string, unknown>;
+          }
+        }
+        method.apply(this, args);
+      },
+    },
     ...(webhookUrl
       ? { stream: createForwardingSink(webhookUrl, fetchImpl) }
       : {

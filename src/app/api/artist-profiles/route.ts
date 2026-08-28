@@ -6,6 +6,7 @@ import { getArtistById, updateArtist } from "@/server/catalog";
 import { enforceSameOrigin, jsonError, readJson } from "@/server/http";
 import { logger } from "@/server/logger";
 import { z } from "zod";
+import { isAgnostEnabled, agnost } from "@/server/agnost";
 
 const claimSchema = z.object({
   artistId: z.string().min(1, "Select an artist profile"),
@@ -123,12 +124,31 @@ export async function PATCH(request: Request) {
     return jsonError(parsed.error.issues[0]?.message ?? "Invalid input", 400);
   }
 
-  const updated = await updateArtist(profile.artist_id, parsed.data);
-  if (!updated) return jsonError("Artist not found", 404);
+  // Begin Agnost tracking.
+  const interaction = isAgnostEnabled()
+    ? agnost.begin({
+        userId: user!.id,
+        agentName: "artist-profile-update",
+        input: JSON.stringify({ artistId: profile.artist_id, fields: Object.keys(parsed.data) }),
+      })
+    : null;
 
-  logger.info(
-    { userId: user!.id, artistId: profile.artist_id, fields: Object.keys(parsed.data) },
-    "artist self-update",
-  );
-  return NextResponse.json({ ok: true, artist: updated });
+  try {
+    const updated = await updateArtist(profile.artist_id, parsed.data);
+    if (!updated) {
+      interaction?.end("Artist not found", false);
+      return jsonError("Artist not found", 404);
+    }
+
+    logger.info(
+      { userId: user!.id, artistId: profile.artist_id, fields: Object.keys(parsed.data) },
+      "artist self-update",
+    );
+
+    interaction?.end(JSON.stringify({ artistId: profile.artist_id, fields: Object.keys(parsed.data) }), true);
+    return NextResponse.json({ ok: true, artist: updated });
+  } catch (err) {
+    interaction?.end(err instanceof Error ? err.message : String(err), false);
+    throw err;
+  }
 }
