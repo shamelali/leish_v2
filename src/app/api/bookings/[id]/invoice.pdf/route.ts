@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDb, type BookingRow, type UserRow } from "@/server/db";
 import { verifySessionToken } from "@/server/session";
+import { getClaimedArtistIds } from "@/server/artist-profiles";
+import { getClaimedStudioIds } from "@/server/studio-profiles";
 import { buildInvoice } from "@/server/invoices";
 import { buildInvoicePdf } from "@/server/invoice-pdf";
 import { jsonError, tryRoute } from "@/server/http";
@@ -28,7 +30,16 @@ export const GET = tryRoute(
 
     const isArtistRole = user.role === "artist" || user.role === "studio";
     const isOwner = booking.user_id === user.id;
-    if (!isOwner && !isArtistRole) return jsonError("Not authorized", 403);
+    const [claimedArtists, claimedStudios] = isArtistRole
+      ? await Promise.all([getClaimedArtistIds(user.id), getClaimedStudioIds(user.id)])
+      : ([[], []] as unknown as [string[], string[]]);
+    const isStudio = user.role === "studio" && claimedStudios.length > 0;
+    const isClaimed = isStudio
+      ? claimedStudios.includes(booking.studio_id ?? "")
+      : claimedArtists.includes(booking.artist_id);
+    // Fallback: studio who legacy-claimed an artist can still access artist bookings
+    const isLegacyClaimed = !isStudio && user.role === "studio" && claimedArtists.includes(booking.artist_id);
+    if (!isOwner && !isClaimed && !isLegacyClaimed) return jsonError("Not authorized", 403);
 
     const invoice = await buildInvoice(booking);
     if (!invoice) return jsonError("No invoice available (quotation missing or expired)", 404);

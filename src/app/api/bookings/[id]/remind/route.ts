@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb, type BookingRow, type UserRow } from "@/server/db";
 import { verifySessionToken } from "@/server/session";
 import { getClaimedArtistIds } from "@/server/artist-profiles";
+import { getClaimedStudioIds } from "@/server/studio-profiles";
 import { getActiveQuotation } from "@/server/quotations";
 import { sendBalanceReminder } from "@/server/booking-emails";
 import { getBookingFeeSen } from "@/server/settings";
@@ -28,11 +29,18 @@ export const POST = statefulRoute(
     const isArtistRole = user.role === "artist" || user.role === "studio";
     if (!isArtistRole) return jsonError("Only artists can send reminders", 403);
 
-    const claimed = await getClaimedArtistIds(user.id);
+    const [claimedArtists, claimedStudios] = await Promise.all([
+      getClaimedArtistIds(user.id),
+      getClaimedStudioIds(user.id),
+    ]);
     const booking = (await db.prepare("SELECT * FROM bookings WHERE id = ?").get(id)) as
       BookingRow | undefined;
     if (!booking) return jsonError("Booking not found", 404);
-    if (!claimed.includes(booking.artist_id)) {
+    const isStudio = user.role === "studio" && claimedStudios.length > 0;
+    const claimed = isStudio ? claimedStudios : claimedArtists;
+    const bookingEntityId = isStudio ? (booking.studio_id ?? "") : booking.artist_id;
+    const isLegacyClaimed = user.role === "studio" && claimedArtists.includes(booking.artist_id);
+    if (!claimed.includes(bookingEntityId) && !isLegacyClaimed) {
       return jsonError("You can only manage bookings for your claimed artist profile", 403);
     }
     if (booking.status !== "confirmed") {

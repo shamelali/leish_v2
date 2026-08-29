@@ -26,6 +26,7 @@ declare global {
         },
       ) => string;
       reset: (widgetId?: string) => void;
+      remove: (widgetId: string) => void;
     };
   }
 }
@@ -57,7 +58,14 @@ export function TurnstileWidget({ onVerify }: { onVerify: (token: string | null)
     // synchronously — no state transition needed.
     if (window.turnstile && containerRef.current && widgetIdRef.current === null) {
       renderWidget();
-      return;
+      return () => {
+        if (widgetIdRef.current && window.turnstile?.remove) {
+          try {
+            window.turnstile.remove(widgetIdRef.current);
+          } catch {}
+          widgetIdRef.current = null;
+        }
+      };
     }
     if (document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]')) {
       // Script tag exists from another mount — poll until the API lands.
@@ -67,7 +75,15 @@ export function TurnstileWidget({ onVerify }: { onVerify: (token: string | null)
           renderWidget();
         }
       }, 100);
-      return () => clearInterval(timer);
+      return () => {
+        clearInterval(timer);
+        if (widgetIdRef.current && window.turnstile?.remove) {
+          try {
+            window.turnstile.remove(widgetIdRef.current);
+          } catch {}
+          widgetIdRef.current = null;
+        }
+      };
     }
     const script = document.createElement("script");
     script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
@@ -76,6 +92,14 @@ export function TurnstileWidget({ onVerify }: { onVerify: (token: string | null)
       if (containerRef.current) renderWidget();
     };
     document.head.appendChild(script);
+    return () => {
+      if (widgetIdRef.current && window.turnstile?.remove) {
+        try {
+          window.turnstile.remove(widgetIdRef.current);
+        } catch {}
+        widgetIdRef.current = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- renderWidget is stable per mount
   }, []);
 

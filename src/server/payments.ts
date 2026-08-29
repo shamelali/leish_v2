@@ -250,7 +250,7 @@ export async function handlePaymentPaid(payment: PaymentRecord): Promise<void> {
   const booking = (await getDb()
     .prepare("SELECT * FROM bookings WHERE id = ?")
     .get(payment.booking_id)) as
-    { status: string; artist_id: string; date: string | null } | undefined;
+    { status: string; artist_id: string; studio_id: string | null; date: string | null } | undefined;
   if (!booking) {
     logger.warn({ paymentId: payment.id }, "paid payment has no booking (ignored)");
     return;
@@ -277,6 +277,7 @@ export async function handlePaymentPaid(payment: PaymentRecord): Promise<void> {
   }
   await createPayoutForBooking(payment.booking_id, {
     artistId: booking.artist_id,
+    studioId: booking.studio_id,
     eventDate: booking.date,
     quoteTotalSen: quotation?.total ?? payment.amount,
   });

@@ -220,6 +220,7 @@ export const PG_SCHEMA = `
     id          TEXT PRIMARY KEY,
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     artist_id   TEXT NOT NULL,
+    studio_id   TEXT REFERENCES studios(id) ON DELETE SET NULL,
     artist_name TEXT NOT NULL,
     service     TEXT NOT NULL,
     price       INTEGER NOT NULL,
@@ -285,261 +286,9 @@ export const PG_SCHEMA = `
     artist_id  TEXT NOT NULL,
     claimed_at TEXT NOT NULL
   );
-  CREATE TABLE IF NOT EXISTS quotations (
-    id          TEXT PRIMARY KEY,
-    booking_id  TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
-    base_fee    INTEGER NOT NULL DEFAULT 0,
-    travel_fee  INTEGER NOT NULL DEFAULT 0,
-    early_call_fee INTEGER NOT NULL DEFAULT 0,
-    accommodation_fee INTEGER NOT NULL DEFAULT 0,
-    extras      TEXT NOT NULL DEFAULT '[]',
-    artist_note TEXT,
-    total       INTEGER NOT NULL,
-    status      TEXT NOT NULL DEFAULT 'pending'
-                CHECK (status IN ('pending','paid','expired','superseded')),
-    created_at  TEXT NOT NULL,
-    expires_at  TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS messages (
-    id         TEXT PRIMARY KEY,
-    booking_id TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
-    sender_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    body       TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS payments (
-    id           TEXT PRIMARY KEY,
-    booking_id   TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
-    type         TEXT NOT NULL DEFAULT 'deposit' CHECK (type IN ('deposit','balance')),
-    amount       INTEGER NOT NULL,
-    currency     TEXT NOT NULL DEFAULT 'MYR',
-    provider     TEXT NOT NULL DEFAULT 'dev',
-    status       TEXT NOT NULL DEFAULT 'required'
-                 CHECK (status IN ('required','paid','failed','refunded')),
-    provider_ref TEXT,
-    provider_url TEXT,
-    created_at   TEXT NOT NULL,
-    updated_at   TEXT NOT NULL
-  );
-  -- One payment per booking per type (deposit + balance), never two of the same.
-  CREATE TABLE IF NOT EXISTS payouts (
-    id             TEXT PRIMARY KEY,
-    artist_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-    booking_id     TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
-    gross_sen      INTEGER NOT NULL,
-    commission_sen INTEGER NOT NULL,
-    net_sen        INTEGER NOT NULL,
-    status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','settled','failed')),
-    settleable_at  TEXT,
-    settled_at     TEXT,
-    notes          TEXT,
-    created_at     TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS sessions (
-    jti        TEXT PRIMARY KEY,
-    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    revoked    INTEGER NOT NULL DEFAULT 0,
-    expires_at TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS admin_audit_log (
-    id            TEXT PRIMARY KEY,
-    admin_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-    action        TEXT NOT NULL,
-    target_table  TEXT NOT NULL,
-    target_id     TEXT,
-    details       TEXT NOT NULL DEFAULT '{}',
-    created_at    TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS catalog_overrides (
-    id          TEXT PRIMARY KEY,
-    entity_type TEXT NOT NULL CHECK (entity_type IN ('artist','studio')),
-    entity_id   TEXT NOT NULL,
-    field       TEXT NOT NULL,
-    value       TEXT NOT NULL,
-    updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
-    created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL,
-    UNIQUE(entity_type, entity_id, field)
-  );
-  CREATE TABLE IF NOT EXISTS platform_settings (
-    key         TEXT PRIMARY KEY,
-    value       TEXT NOT NULL,
-    updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
-    updated_at  TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS artists (
-    id            TEXT PRIMARY KEY,
-    slug          TEXT NOT NULL UNIQUE,
-    name          TEXT NOT NULL,
-    tagline       TEXT NOT NULL DEFAULT '',
-    bio           TEXT NOT NULL DEFAULT '',
-    image         TEXT NOT NULL DEFAULT '',
-    rating        REAL NOT NULL DEFAULT 0,
-    review_count  INTEGER NOT NULL DEFAULT 0,
-    state         TEXT NOT NULL DEFAULT '',
-    area          TEXT NOT NULL DEFAULT '',
-    price_from    INTEGER NOT NULL DEFAULT 0,
-    verified      INTEGER NOT NULL DEFAULT 0,
-    years_experience INTEGER NOT NULL DEFAULT 0,
-    specialties   TEXT NOT NULL DEFAULT '[]',
-    services      TEXT NOT NULL DEFAULT '[]',
-    bridal        TEXT NOT NULL DEFAULT '[]',
-    non_bridal    TEXT NOT NULL DEFAULT '[]',
-    availability  TEXT NOT NULL DEFAULT '[]',
-    portfolio     TEXT NOT NULL DEFAULT '[]',
-    referral_code TEXT NOT NULL DEFAULT '',
-    referred_by   TEXT REFERENCES artists(id) ON DELETE SET NULL,
-    referral_earnings INTEGER NOT NULL DEFAULT 0,
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS studios (
-    id            TEXT PRIMARY KEY,
-    slug          TEXT NOT NULL UNIQUE,
-    name          TEXT NOT NULL,
-    tagline       TEXT NOT NULL DEFAULT '',
-    description   TEXT NOT NULL DEFAULT '',
-    image         TEXT NOT NULL DEFAULT '',
-    rating        REAL NOT NULL DEFAULT 0,
-    review_count  INTEGER NOT NULL DEFAULT 0,
-    state         TEXT NOT NULL DEFAULT '',
-    area          TEXT NOT NULL DEFAULT '',
-    address       TEXT NOT NULL DEFAULT '',
-    services      TEXT NOT NULL DEFAULT '[]',
-    price_from    INTEGER NOT NULL DEFAULT 0,
-    hours         TEXT NOT NULL DEFAULT '',
-    phone         TEXT NOT NULL DEFAULT '',
-    referral_code TEXT NOT NULL DEFAULT '',
-    referred_by   TEXT REFERENCES studios(id) ON DELETE SET NULL,
-    referral_earnings INTEGER NOT NULL DEFAULT 0,
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS reviews (
-    id           TEXT PRIMARY KEY,
-    entity_type  TEXT NOT NULL CHECK (entity_type IN ('artist','studio')),
-    entity_id    TEXT NOT NULL,
-    booking_id   TEXT UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
-    user_id      TEXT REFERENCES users(id) ON DELETE SET NULL,
-    author_name  TEXT NOT NULL,
-    rating       INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
-    event        TEXT,
-    text         TEXT NOT NULL,
-    created_at   TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS referrals (
-    id              TEXT PRIMARY KEY,
-    referrer_type   TEXT NOT NULL CHECK (referrer_type IN ('artist','studio')),
-    referrer_id     TEXT NOT NULL,
-    referee_type    TEXT NOT NULL CHECK (referee_type IN ('artist','studio')),
-    referee_id      TEXT NOT NULL,
-    status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','qualified','paid')),
-    reward_sen      INTEGER NOT NULL DEFAULT 0,
-    qualified_at    TEXT,
-    paid_at         TEXT,
-    created_at      TEXT NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_artists_state_area ON artists(state, area);
-  CREATE INDEX IF NOT EXISTS idx_studios_state_area ON studios(state, area);
-  CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_type, referrer_id);
-  CREATE INDEX IF NOT EXISTS idx_referrals_referee ON referrals(referee_type, referee_id);
-  CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status);
-  CREATE INDEX IF NOT EXISTS idx_reviews_entity ON reviews(entity_type, entity_id);
-  CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
-  CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-  CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
-  CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id);
-  CREATE INDEX IF NOT EXISTS idx_messages_booking ON messages(booking_id);
-  CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
-  CREATE INDEX IF NOT EXISTS idx_payouts_status ON payouts(status);
-  CREATE INDEX IF NOT EXISTS idx_payouts_artist ON payouts(artist_user_id);
-  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
-  CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON admin_audit_log(admin_user_id);
-  CREATE INDEX IF NOT EXISTS idx_audit_log_created ON admin_audit_log(created_at);
-  CREATE INDEX IF NOT EXISTS idx_catalog_overrides_entity ON catalog_overrides(entity_type, entity_id);
-  -- One active booking per artist/date/time slot (cancelled/completed don't block).
-  CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_slot
-    ON bookings(artist_id, date, time)
-    WHERE status IN ('requested','accepted','confirmed');
-`;
-
-// ── Schema (SQLite) ─────────────────────────────────────────────────────────
-
-const SQLITE_SCHEMA = `
-  CREATE TABLE IF NOT EXISTS users (
-    id         TEXT PRIMARY KEY,
-    email      TEXT NOT NULL UNIQUE,
-    name       TEXT NOT NULL,
-    role       TEXT NOT NULL CHECK (role IN ('customer','artist','studio','admin')),
-    password   TEXT NOT NULL,
-    consent    INTEGER NOT NULL DEFAULT 0,
-    consent_timestamp TEXT,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS bookings (
-    id          TEXT PRIMARY KEY,
-    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    artist_id   TEXT NOT NULL,
-    artist_name TEXT NOT NULL,
-    service     TEXT NOT NULL,
-    price       INTEGER NOT NULL,
-    date        TEXT NOT NULL,
-    time        TEXT NOT NULL,
-    notes       TEXT,
-    status      TEXT NOT NULL DEFAULT 'requested'
-                CHECK (status IN ('requested','accepted','confirmed','cancelled','completed')),
-    created_at  TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS password_resets (
-    id         TEXT PRIMARY KEY,
-    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    used_at    TEXT,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS email_verifications (
-    id         TEXT PRIMARY KEY,
-    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    used_at    TEXT,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS email_outbox (
-    id         TEXT PRIMARY KEY,
-    to_email   TEXT NOT NULL,
-    subject    TEXT NOT NULL,
-    text       TEXT NOT NULL,
-    html       TEXT,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS email_preferences (
-    user_id          TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    booking_created  INTEGER NOT NULL DEFAULT 1,
-    quotation_sent   INTEGER NOT NULL DEFAULT 1,
-    invoice_sent     INTEGER NOT NULL DEFAULT 1,
-    quotation_expiry INTEGER NOT NULL DEFAULT 1,
-    balance_reminder INTEGER NOT NULL DEFAULT 1,
-    status_changed   INTEGER NOT NULL DEFAULT 1,
-    updated_at       TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS email_retries (
-    id           TEXT PRIMARY KEY,
-    to_email     TEXT NOT NULL,
-    subject      TEXT NOT NULL,
-    text         TEXT NOT NULL,
-    html         TEXT,
-    attempts     INTEGER NOT NULL DEFAULT 0,
-    max_attempts INTEGER NOT NULL DEFAULT 3,
-    next_retry   TEXT NOT NULL,
-    last_error   TEXT,
-    created_at   TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS artist_profiles (
+  CREATE TABLE IF NOT EXISTS studio_profiles (
     user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    artist_id  TEXT NOT NULL,
+    studio_id  TEXT NOT NULL,
     claimed_at TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS quotations (
@@ -715,6 +464,273 @@ const SQLITE_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON admin_audit_log(admin_user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_log_created ON admin_audit_log(created_at);
   CREATE INDEX IF NOT EXISTS idx_catalog_overrides_entity ON catalog_overrides(entity_type, entity_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_artist_profiles_artist_id ON artist_profiles(artist_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_studio_profiles_studio_id ON studio_profiles(studio_id);
+  -- One active booking per artist/date/time slot (cancelled/completed don't block).
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_slot
+    ON bookings(artist_id, date, time)
+    WHERE status IN ('requested','accepted','confirmed');
+`;
+
+// ── Schema (SQLite) ─────────────────────────────────────────────────────────
+
+const SQLITE_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS users (
+    id         TEXT PRIMARY KEY,
+    email      TEXT NOT NULL UNIQUE,
+    name       TEXT NOT NULL,
+    role       TEXT NOT NULL CHECK (role IN ('customer','artist','studio','admin')),
+    password   TEXT NOT NULL,
+    consent    INTEGER NOT NULL DEFAULT 0,
+    consent_timestamp TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS bookings (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    artist_id   TEXT NOT NULL,
+    studio_id   TEXT REFERENCES studios(id) ON DELETE SET NULL,
+    artist_name TEXT NOT NULL,
+    service     TEXT NOT NULL,
+    price       INTEGER NOT NULL,
+    date        TEXT NOT NULL,
+    time        TEXT NOT NULL,
+    notes       TEXT,
+    status      TEXT NOT NULL DEFAULT 'requested'
+                CHECK (status IN ('requested','accepted','confirmed','cancelled','completed')),
+    created_at  TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS password_resets (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS email_verifications (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS email_outbox (
+    id         TEXT PRIMARY KEY,
+    to_email   TEXT NOT NULL,
+    subject    TEXT NOT NULL,
+    text       TEXT NOT NULL,
+    html       TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS email_preferences (
+    user_id          TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    booking_created  INTEGER NOT NULL DEFAULT 1,
+    quotation_sent   INTEGER NOT NULL DEFAULT 1,
+    invoice_sent     INTEGER NOT NULL DEFAULT 1,
+    quotation_expiry INTEGER NOT NULL DEFAULT 1,
+    balance_reminder INTEGER NOT NULL DEFAULT 1,
+    status_changed   INTEGER NOT NULL DEFAULT 1,
+    updated_at       TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS email_retries (
+    id           TEXT PRIMARY KEY,
+    to_email     TEXT NOT NULL,
+    subject      TEXT NOT NULL,
+    text         TEXT NOT NULL,
+    html         TEXT,
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    next_retry   TEXT NOT NULL,
+    last_error   TEXT,
+    created_at   TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS artist_profiles (
+    user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    artist_id  TEXT NOT NULL,
+    claimed_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS studio_profiles (
+    user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    studio_id  TEXT NOT NULL,
+    claimed_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS quotations (
+    id          TEXT PRIMARY KEY,
+    booking_id  TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    base_fee    INTEGER NOT NULL DEFAULT 0,
+    travel_fee  INTEGER NOT NULL DEFAULT 0,
+    early_call_fee INTEGER NOT NULL DEFAULT 0,
+    accommodation_fee INTEGER NOT NULL DEFAULT 0,
+    extras      TEXT NOT NULL DEFAULT '[]',
+    artist_note TEXT,
+    total       INTEGER NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','paid','expired','superseded')),
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS messages (
+    id         TEXT PRIMARY KEY,
+    booking_id TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    sender_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    body       TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS payments (
+    id           TEXT PRIMARY KEY,
+    booking_id   TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    type         TEXT NOT NULL DEFAULT 'deposit' CHECK (type IN ('deposit','balance')),
+    amount       INTEGER NOT NULL,
+    currency     TEXT NOT NULL DEFAULT 'MYR',
+    provider     TEXT NOT NULL DEFAULT 'dev',
+    status       TEXT NOT NULL DEFAULT 'required'
+                 CHECK (status IN ('required','paid','failed','refunded')),
+    provider_ref TEXT,
+    provider_url TEXT,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+  );
+  -- One payment per booking per type (deposit + balance), never two of the same.
+  CREATE TABLE IF NOT EXISTS payouts (
+    id             TEXT PRIMARY KEY,
+    artist_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    booking_id     TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    gross_sen      INTEGER NOT NULL,
+    commission_sen INTEGER NOT NULL,
+    net_sen        INTEGER NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','settled','failed')),
+    settleable_at  TEXT,
+    settled_at     TEXT,
+    notes          TEXT,
+    created_at     TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS sessions (
+    jti        TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    revoked    INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id            TEXT PRIMARY KEY,
+    admin_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    action        TEXT NOT NULL,
+    target_table  TEXT NOT NULL,
+    target_id     TEXT,
+    details       TEXT NOT NULL DEFAULT '{}',
+    created_at    TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS catalog_overrides (
+    id          TEXT PRIMARY KEY,
+    entity_type TEXT NOT NULL CHECK (entity_type IN ('artist','studio')),
+    entity_id   TEXT NOT NULL,
+    field       TEXT NOT NULL,
+    value       TEXT NOT NULL,
+    updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    UNIQUE(entity_type, entity_id, field)
+  );
+  CREATE TABLE IF NOT EXISTS platform_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+    updated_at  TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS artists (
+    id            TEXT PRIMARY KEY,
+    slug          TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    tagline       TEXT NOT NULL DEFAULT '',
+    bio           TEXT NOT NULL DEFAULT '',
+    image         TEXT NOT NULL DEFAULT '',
+    rating        REAL NOT NULL DEFAULT 0,
+    review_count  INTEGER NOT NULL DEFAULT 0,
+    state         TEXT NOT NULL DEFAULT '',
+    area          TEXT NOT NULL DEFAULT '',
+    price_from    INTEGER NOT NULL DEFAULT 0,
+    verified      INTEGER NOT NULL DEFAULT 0,
+    years_experience INTEGER NOT NULL DEFAULT 0,
+    specialties   TEXT NOT NULL DEFAULT '[]',
+    services      TEXT NOT NULL DEFAULT '[]',
+    bridal        TEXT NOT NULL DEFAULT '[]',
+    non_bridal    TEXT NOT NULL DEFAULT '[]',
+    availability  TEXT NOT NULL DEFAULT '[]',
+    portfolio     TEXT NOT NULL DEFAULT '[]',
+    referral_code TEXT NOT NULL DEFAULT '',
+    referred_by   TEXT REFERENCES artists(id) ON DELETE SET NULL,
+    referral_earnings INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS studios (
+    id            TEXT PRIMARY KEY,
+    slug          TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    tagline       TEXT NOT NULL DEFAULT '',
+    description   TEXT NOT NULL DEFAULT '',
+    image         TEXT NOT NULL DEFAULT '',
+    rating        REAL NOT NULL DEFAULT 0,
+    review_count  INTEGER NOT NULL DEFAULT 0,
+    state         TEXT NOT NULL DEFAULT '',
+    area          TEXT NOT NULL DEFAULT '',
+    address       TEXT NOT NULL DEFAULT '',
+    services      TEXT NOT NULL DEFAULT '[]',
+    price_from    INTEGER NOT NULL DEFAULT 0,
+    hours         TEXT NOT NULL DEFAULT '',
+    phone         TEXT NOT NULL DEFAULT '',
+    referral_code TEXT NOT NULL DEFAULT '',
+    referred_by   TEXT REFERENCES studios(id) ON DELETE SET NULL,
+    referral_earnings INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS reviews (
+    id           TEXT PRIMARY KEY,
+    entity_type  TEXT NOT NULL CHECK (entity_type IN ('artist','studio')),
+    entity_id    TEXT NOT NULL,
+    booking_id   TEXT UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+    user_id      TEXT REFERENCES users(id) ON DELETE SET NULL,
+    author_name  TEXT NOT NULL,
+    rating       INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    event        TEXT,
+    text         TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS referrals (
+    id              TEXT PRIMARY KEY,
+    referrer_type   TEXT NOT NULL CHECK (referrer_type IN ('artist','studio')),
+    referrer_id     TEXT NOT NULL,
+    referee_type    TEXT NOT NULL CHECK (referee_type IN ('artist','studio')),
+    referee_id      TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','qualified','paid')),
+    reward_sen      INTEGER NOT NULL DEFAULT 0,
+    qualified_at    TEXT,
+    paid_at         TEXT,
+    created_at      TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_artists_state_area ON artists(state, area);
+  CREATE INDEX IF NOT EXISTS idx_studios_state_area ON studios(state, area);
+  CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_type, referrer_id);
+  CREATE INDEX IF NOT EXISTS idx_referrals_referee ON referrals(referee_type, referee_id);
+  CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status);
+  CREATE INDEX IF NOT EXISTS idx_reviews_entity ON reviews(entity_type, entity_id);
+  CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
+  CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+  CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
+  CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id);
+  CREATE INDEX IF NOT EXISTS idx_messages_booking ON messages(booking_id);
+  CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
+  CREATE INDEX IF NOT EXISTS idx_payouts_status ON payouts(status);
+  CREATE INDEX IF NOT EXISTS idx_payouts_artist ON payouts(artist_user_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON admin_audit_log(admin_user_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_log_created ON admin_audit_log(created_at);
+  CREATE INDEX IF NOT EXISTS idx_catalog_overrides_entity ON catalog_overrides(entity_type, entity_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_artist_profiles_artist_id ON artist_profiles(artist_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_studio_profiles_studio_id ON studio_profiles(studio_id);
   -- One active booking per artist/date/time slot (cancelled/completed don't block).
   CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_slot
     ON bookings(artist_id, date, time)
@@ -778,6 +794,7 @@ function migrateSqlite(db: DatabaseSync) {
     ["venue", "ALTER TABLE bookings ADD COLUMN venue TEXT"],
     ["guest_count", "ALTER TABLE bookings ADD COLUMN guest_count INTEGER NOT NULL DEFAULT 0"],
     ["balance_reminder_at", "ALTER TABLE bookings ADD COLUMN balance_reminder_at TEXT"],
+    ["studio_id", "ALTER TABLE bookings ADD COLUMN studio_id TEXT REFERENCES studios(id) ON DELETE SET NULL"],
   ] as const) {
     if (!bookingCols.some((c) => c.name === col)) {
       db.exec(ddl);
@@ -895,6 +912,7 @@ export interface BookingRow {
   id: string;
   user_id: string;
   artist_id: string;
+  studio_id: string | null;
   artist_name: string;
   service: string;
   price: number;

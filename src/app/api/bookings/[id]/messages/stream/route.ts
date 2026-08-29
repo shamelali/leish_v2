@@ -1,6 +1,7 @@
 import { getDb, type BookingRow, type UserRow } from "@/server/db";
 import { verifySessionToken } from "@/server/session";
 import { getClaimedArtistIds } from "@/server/artist-profiles";
+import { getClaimedStudioIds } from "@/server/studio-profiles";
 import { subscribeToBooking, type ChatMessageEvent } from "@/server/chat-bus";
 import { jsonError } from "@/server/http";
 
@@ -43,9 +44,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const isArtistRole = user.role === "artist" || user.role === "studio";
   const isOwner = booking.user_id === user.id;
-  const isClaimedArtist =
-    isArtistRole && (await getClaimedArtistIds(user.id)).includes(booking.artist_id);
-  if (!isOwner && !isClaimedArtist) return jsonError("Not authorized", 403);
+  const [claimedArtists, claimedStudios] = isArtistRole
+    ? await Promise.all([getClaimedArtistIds(user.id), getClaimedStudioIds(user.id)])
+    : ([[], []] as unknown as [string[], string[]]);
+  const isStudio = user.role === "studio" && claimedStudios.length > 0;
+  const isClaimed = isStudio
+    ? claimedStudios.includes(booking.studio_id ?? "")
+    : claimedArtists.includes(booking.artist_id);
+  // Fallback: studio who legacy-claimed an artist can still access artist bookings
+  const isLegacyClaimed = !isStudio && user.role === "studio" && claimedArtists.includes(booking.artist_id);
+  if (!isOwner && !isClaimed && !isLegacyClaimed) return jsonError("Not authorized", 403);
 
   // History first, oldest → newest.
   const history = (await db

@@ -103,6 +103,9 @@ export default function DashboardPage() {
   const [claimArtistId, setClaimArtistId] = useState("");
   const [claimMsg, setClaimMsg] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimedStudioProfile, setClaimedStudioProfile] = useState<{ studioId: string; studioName: string } | null>(null);
+  const [claimStudioId, setClaimStudioId] = useState("");
+  const [studios, setStudios] = useState<{ id: string; name: string; area: string; state: string }[]>([]);
   // Quotation builder state (MUA)
   const [quoteFor, setQuoteFor] = useState<string | null>(null);
   const [quoteForm, setQuoteForm] = useState({
@@ -165,6 +168,28 @@ useEffect(() => {
         if (!cancelled) setClaimedProfile(body.profile ?? null);
       })
       .catch(() => undefined);
+    if (user.role === "studio") {
+      fetch("/api/studio-profiles")
+        .then((res) =>
+          res.ok
+            ? (res.json() as Promise<{ profile: { studioId: string; studioName: string } | null }>)
+            : { profile: null },
+        )
+        .then((body) => {
+          if (!cancelled) setClaimedStudioProfile(body.profile ?? null);
+        })
+        .catch(() => undefined);
+      fetch("/api/catalog/studios")
+        .then((res) =>
+          res.ok
+            ? (res.json() as Promise<{ studios: { id: string; name: string; area: string; state: string }[] }>)
+            : { studios: [] },
+        )
+        .then((body) => {
+          if (!cancelled) setStudios(body.studios ?? []);
+        })
+        .catch(() => undefined);
+    }
     return () => {
       cancelled = true;
     };
@@ -353,17 +378,29 @@ useEffect(() => {
     e.preventDefault();
     setClaimMsg(null);
     setClaimError(null);
-    const res = await fetch("/api/artist-profiles", {
+    const isStudioClaim = user?.role === "studio" && claimStudioId;
+    const endpoint = isStudioClaim ? "/api/studio-profiles" : "/api/artist-profiles";
+    const payload = isStudioClaim ? { studioId: claimStudioId } : { artistId: claimArtistId };
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ artistId: claimArtistId }),
+      body: JSON.stringify(payload),
     });
     const body: { error?: string; profile?: ClaimedProfile | null } = await res.json();
     if (!res.ok) {
       setClaimError(body?.error ?? "Could not claim this profile.");
       return;
     }
-    setClaimedProfile(body.profile ?? null);
+    if (isStudioClaim) {
+      const studioBody = body as unknown as { profile: { studioId: string; studioName: string } | null };
+      setClaimedStudioProfile(studioBody.profile ?? null);
+      fetch("/api/studio-profiles")
+        .then((r) => r.json())
+        .then((b) => setClaimedStudioProfile(b.profile ?? null))
+        .catch(() => undefined);
+    } else {
+      setClaimedProfile(body.profile ?? null);
+    }
     setClaimMsg("Profile claimed — you can now manage its bookings.");
     refreshBookings();
   }
@@ -471,40 +508,78 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Artist profile claim */}
+      {/* Profile claim — artist vs studio (Option B) */}
       {isArtist && (
         <div className="mt-6 rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
-          <h2 className="font-semibold text-stone-900 dark:text-stone-100">Your artist profile</h2>
+          <h2 className="font-semibold text-stone-900 dark:text-stone-100">
+            {user.role === "studio" ? "Your studio profile" : "Your artist profile"}
+          </h2>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            {claimedProfile
-              ? `You are managing “${claimedProfile.artistName}”.`
-              : "Claim a catalog profile so bookings arrive in your dashboard."}
+            {user.role === "studio"
+              ? claimedStudioProfile
+                ? `You are managing “${claimedStudioProfile.studioName}”.`
+                : claimedProfile
+                  ? `You are managing artist “${claimedProfile.artistName}” (legacy). Claim a studio to manage studio bookings.`
+                  : "Claim a studio profile so bookings arrive in your dashboard."
+              : claimedProfile
+                ? `You are managing “${claimedProfile.artistName}”.`
+                : "Claim a catalog profile so bookings arrive in your dashboard."}
           </p>
-          {!claimedProfile && (
-            <form onSubmit={claimProfile} className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <label htmlFor="claim-artist" className="sr-only">
-                Artist profile
-              </label>
-              <select
-                id="claim-artist"
-                value={claimArtistId}
-                onChange={(e) => setClaimArtistId(e.target.value)}
-                required
-                className="h-11 flex-1 rounded-full border border-stone-300 bg-white px-4 text-sm text-stone-800 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
-              >
-                <option value="" disabled>
-                  Select your artist profile…
-                </option>
-                {catalog.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} — {a.area}, {a.state}
+          {user.role === "studio" ? (
+            !claimedStudioProfile &&
+            !claimedProfile && (
+              <form onSubmit={claimProfile} className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <label htmlFor="claim-studio" className="sr-only">
+                  Studio profile
+                </label>
+                <select
+                  id="claim-studio"
+                  value={claimStudioId}
+                  onChange={(e) => setClaimStudioId(e.target.value)}
+                  required
+                  className="h-11 flex-1 rounded-full border border-stone-300 bg-white px-4 text-sm text-stone-800 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                >
+                  <option value="" disabled>
+                    Select your studio…
                   </option>
-                ))}
-              </select>
-              <Button type="submit" size="sm">
-                Claim profile
-              </Button>
-            </form>
+                  {studios.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} — {s.area}, {s.state}
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit" size="sm">
+                  Claim studio
+                </Button>
+              </form>
+            )
+          ) : (
+            !claimedProfile && (
+              <form onSubmit={claimProfile} className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <label htmlFor="claim-artist" className="sr-only">
+                  Artist profile
+                </label>
+                <select
+                  id="claim-artist"
+                  value={claimArtistId}
+                  onChange={(e) => setClaimArtistId(e.target.value)}
+                  required
+                  className="h-11 flex-1 rounded-full border border-stone-300 bg-white px-4 text-sm text-stone-800 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                >
+                  <option value="" disabled>
+                    Select your artist profile…
+                  </option>
+                  {catalog.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} — {a.area}, {a.state}
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit" size="sm">
+                  Claim profile
+                </Button>
+              </form>
+            )
           )}
           {claimMsg && (
             <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-400">{claimMsg}</p>

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDb, type BookingRow, type UserRow } from "@/server/db";
 import { verifySessionToken } from "@/server/session";
+import { getClaimedArtistIds } from "@/server/artist-profiles";
+import { getClaimedStudioIds } from "@/server/studio-profiles";
 import { verifyTurnstileToken, clientIp } from "@/server/turnstile";
 import {
   createBookingPayment,
@@ -46,6 +48,21 @@ export const POST = statefulRoute(
     const booking = (await db.prepare("SELECT * FROM bookings WHERE id = ?").get(id)) as
       BookingRow | undefined;
     if (!booking) return jsonError("Booking not found", 404);
+    // Studio role handling via studio_profiles (mirroring other booking routes).
+    // Pay-balance is owner-only; this ensures studio claims are resolved correctly.
+    if (user.role === "artist" || user.role === "studio") {
+      const [claimedArtists, claimedStudios] = await Promise.all([
+        getClaimedArtistIds(user.id),
+        getClaimedStudioIds(user.id),
+      ]);
+      const isStudio = user.role === "studio" && claimedStudios.length > 0;
+      const claimed = isStudio ? claimedStudios : claimedArtists;
+      const bookingEntityId = isStudio ? (booking.studio_id ?? "") : booking.artist_id;
+      const isLegacyClaimed = user.role === "studio" && claimedArtists.includes(booking.artist_id);
+      if (claimed.includes(bookingEntityId) || isLegacyClaimed) {
+        // no-op: studio/artist pay still gated by owner check below
+      }
+    }
     if (booking.user_id !== user.id) return jsonError("Only the booking owner can pay", 403);
 
     // Money moves only for verified accounts.

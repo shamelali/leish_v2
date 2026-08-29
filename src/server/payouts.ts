@@ -41,12 +41,26 @@ export interface PayoutRow {
   created_at: string;
 }
 
-/** The claimed artist/studio user for a catalog entity, if any. */
-async function artistUserIdForBooking(artistId: string): Promise<string | null> {
+/** The claimed artist/studio user for a catalog entity, if any. Handles Option B studio_id. */
+async function artistUserIdForBooking(artistId: string, studioId?: string | null): Promise<string | null> {
+  if (studioId) {
+    const sRow = (await getDb()
+      .prepare("SELECT user_id FROM studio_profiles WHERE studio_id = ?")
+      .get(studioId)) as { user_id: string } | undefined;
+    if (sRow?.user_id) return sRow.user_id;
+  }
   const row = (await getDb()
     .prepare("SELECT user_id FROM artist_profiles WHERE artist_id = ?")
     .get(artistId)) as { user_id: string } | undefined;
-  return row?.user_id ?? null;
+  if (row?.user_id) return row.user_id;
+  // Legacy: studio claimed an artist — check studio_profiles for artist_id as studio_id fallback
+  if (studioId) {
+    const fallback = (await getDb()
+      .prepare("SELECT user_id FROM studio_profiles WHERE studio_id = ?")
+      .get(artistId)) as { user_id: string } | undefined;
+    return fallback?.user_id ?? null;
+  }
+  return null;
 }
 
 /**
@@ -57,6 +71,7 @@ export async function createPayoutForBooking(
   bookingId: string,
   input: {
     artistId: string;
+    studioId?: string | null;
     eventDate: string | null;
     quoteTotalSen: number;
   },
@@ -81,7 +96,7 @@ export async function createPayoutForBooking(
     ? new Date(new Date(`${input.eventDate}T00:00:00`).getTime() + 24 * 3_600_000).toISOString()
     : null;
 
-  const artistUserId = await artistUserIdForBooking(input.artistId);
+  const artistUserId = await artistUserIdForBooking(input.artistId, input.studioId ?? null);
 
   const row: PayoutRow = {
     id: randomUUID(),

@@ -30,16 +30,24 @@ export async function claimArtistProfile(
     claimed_at: new Date().toISOString(),
   };
 
-  // Atomic insert — relies on PRIMARY KEY(user_id) to prevent TOCTOU races
-  // where two concurrent claims both pass a prior SELECT check.
-  const result = await db
-    .prepare(
-      "INSERT INTO artist_profiles (user_id, artist_id, claimed_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING",
-    )
-    .run(row.user_id, row.artist_id, row.claimed_at);
+  // Atomic insert — relies on PRIMARY KEY(user_id) + UNIQUE(artist_id) to
+  // prevent TOCTOU races and double-claims of the same artist.
+  try {
+    const result = await db
+      .prepare(
+        "INSERT INTO artist_profiles (user_id, artist_id, claimed_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING",
+      )
+      .run(row.user_id, row.artist_id, row.claimed_at);
 
-  if (result.changes === 0) {
-    throw new Error("ALREADY_CLAIMED");
+    if (result.changes === 0) {
+      throw new Error("ALREADY_CLAIMED");
+    }
+  } catch (err) {
+    // UNIQUE(artist_id) violation → artist already claimed by another user.
+    if (err instanceof Error && /UNIQUE|unique|artist_id/i.test(err.message)) {
+      throw new Error("ALREADY_CLAIMED");
+    }
+    throw err;
   }
   return row;
 }
@@ -56,4 +64,11 @@ export async function getClaimedProfile(userId: string): Promise<ArtistProfileRo
     .prepare("SELECT * FROM artist_profiles WHERE user_id = ?")
     .get(userId)) as ArtistProfileRow | undefined;
   return row ?? null;
+}
+
+export async function unclaimArtistProfile(userId: string): Promise<boolean> {
+  const result = await getDb()
+    .prepare("DELETE FROM artist_profiles WHERE user_id = ?")
+    .run(userId);
+  return result.changes > 0;
 }

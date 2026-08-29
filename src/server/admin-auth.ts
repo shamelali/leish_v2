@@ -82,6 +82,7 @@ export async function isLastAdmin(userId: string): Promise<boolean> {
 export async function atomicAdminGuard(
   targetUserId: string,
   action: "demote" | "delete",
+  newRole: string = "customer",
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const db = getDb();
 
@@ -95,20 +96,23 @@ export async function atomicAdminGuard(
   }
 
   if (action === "demote") {
-    // Atomic: update role only if there's more than one admin.
-    // The WHERE clause includes (SELECT COUNT(*) ...) to make the check
-    // and mutation a single statement.
+    // Atomic: update role only if there's more than one admin. Single
+    // statement with the count subquery avoids the TOCTOU window and the
+    // double-write bug where the guard set role='customer' then the caller
+    // re-updated to the requested role without the guard.
     const result = await db
       .prepare(
-        `UPDATE users SET role = 'customer' WHERE id = ? AND (
+        `UPDATE users SET role = ? WHERE id = ? AND (
           SELECT COUNT(*) FROM users WHERE role = 'admin'
         ) > 1`,
       )
-      .run(targetUserId);
+      .run(newRole, targetUserId);
 
     if (result.changes === 0) {
       return { ok: false, reason: "Cannot demote the last remaining admin" };
     }
+    // Force re-login with new role — stale JWT would otherwise live 7 days.
+    await db.prepare("DELETE FROM sessions WHERE user_id = ?").run(targetUserId);
     return { ok: true };
   }
 

@@ -3,6 +3,7 @@ import { getDb, type BookingRow, type UserRow } from "@/server/db";
 import { verifySessionToken } from "@/server/session";
 import { bookingActionSchema, applyBookingTransition } from "@/server/bookings";
 import { getClaimedArtistIds } from "@/server/artist-profiles";
+import { getClaimedStudioIds } from "@/server/studio-profiles";
 import { getPaymentForBooking } from "@/server/payments";
 import { getBookingFeeSen } from "@/server/settings";
 import { getActiveQuotation, serializeQuotation } from "@/server/quotations";
@@ -44,12 +45,18 @@ export const PATCH = statefulRoute(
     const parsed = bookingActionSchema.safeParse((body.data as { action?: unknown })?.action);
     if (!parsed.success) return jsonError("Invalid action", 400);
 
-    // Ownership guard for artist roles: must have claimed the artist profile.
+    // Ownership guard for artist/studio roles: must have claimed the relevant profile.
     const isArtistRole = user.role === "artist" || user.role === "studio";
     if (isArtistRole) {
-      const claimed = await getClaimedArtistIds(user.id);
-      if (!claimed.includes(booking.artist_id)) {
-        return jsonError("You can only manage bookings for your claimed artist profile", 403);
+      const [claimedArtists, claimedStudios] = await Promise.all([
+        getClaimedArtistIds(user.id),
+        getClaimedStudioIds(user.id),
+      ]);
+      const isStudio = user.role === "studio" && claimedStudios.length > 0;
+      const claimed = isStudio ? claimedStudios : claimedArtists;
+      const bookingEntityId = isStudio ? (booking.studio_id ?? "") : booking.artist_id;
+      if (!claimed.includes(bookingEntityId)) {
+        return jsonError("You can only manage bookings for your claimed profile", 403);
       }
     }
 
@@ -111,6 +118,7 @@ export const PATCH = statefulRoute(
         booking: {
           id: booking.id,
           artistId: booking.artist_id,
+          studioId: booking.studio_id,
           artistName: booking.artist_name,
           service: booking.service,
           price: booking.price,

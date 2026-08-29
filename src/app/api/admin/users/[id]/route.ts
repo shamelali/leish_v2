@@ -48,12 +48,15 @@ export const PATCH = statefulRoute(
       return jsonError("Invalid role", 400);
     }
 
-    // Atomic lockout guard: demote only if >1 admin remains.
+    // Atomic lockout guard: demote only if >1 admin remains. Guard does
+    // the role update atomically with the new value to avoid double-write.
+    let demoteHandled = false;
     if (existing.role === "admin" && role !== undefined && role !== "admin") {
-      const guard = await atomicAdminGuard(id, "demote");
+      const guard = await atomicAdminGuard(id, "demote", role);
       if (!guard.ok) {
         return jsonError(guard.reason, 409);
       }
+      demoteHandled = true;
     }
 
     if (email && email !== existing.email) {
@@ -76,7 +79,7 @@ export const PATCH = statefulRoute(
       updates.push("email = @email");
       bindParams.email = email;
     }
-    if (role !== undefined) {
+    if (role !== undefined && !demoteHandled) {
       updates.push("role = @role");
       bindParams.role = role;
     }
@@ -90,12 +93,20 @@ export const PATCH = statefulRoute(
     }
 
     if (updates.length === 0) {
-      return jsonError("No fields to update", 400);
+      if (!demoteHandled) {
+        return jsonError("No fields to update", 400);
+      }
+      // Role already updated atomically via guard; no second UPDATE needed
+    } else {
+      await db
+        .prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = @id`)
+        .run({ ...bindParams, id });
+      // Promotions / non-admin role changes weren't covered by the demotion
+      // guard's revocation — force re-login with new role.
+      if (role !== undefined && role !== existing.role) {
+        await db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
+      }
     }
-
-    await db
-      .prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = @id`)
-      .run({ ...bindParams, id });
 
     const updated = await db.prepare("SELECT * FROM users WHERE id = ?").get<UserRow>(id);
     if (!updated) {

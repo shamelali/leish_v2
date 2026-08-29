@@ -5,6 +5,7 @@ import { verifySessionToken } from "@/server/session";
 import { bookingSchema } from "@/server/validation";
 import { getArtistById } from "@/server/catalog";
 import { getClaimedArtistIds } from "@/server/artist-profiles";
+import { getClaimedStudioIds } from "@/server/studio-profiles";
 import { getPaymentForBooking } from "@/server/payments";
 import { getBookingFeeSen } from "@/server/settings";
 import { getActiveQuotation, serializeQuotation } from "@/server/quotations";
@@ -44,6 +45,7 @@ async function serializeBooking(b: BookingRow) {
   return {
     id: b.id,
     artistId: b.artist_id,
+    studioId: b.studio_id,
     artistName: b.artist_name,
     service: b.service,
     price: b.price,
@@ -95,15 +97,24 @@ export const GET = tryRoute(
     let rows: BookingRow[];
     let total: number;
     if (isArtistRole) {
-      // Ownership: artists only see bookings for the catalog profiles they
-      // have claimed (empty when none claimed).
-      const claimed = await getClaimedArtistIds(user!.id);
+      // Ownership: artist/studio only see bookings for the catalog profiles
+      // they have claimed (empty when none claimed). With Option B, studio
+      // bookings use studio_id, artist bookings use artist_id.
+      const [claimedArtists, claimedStudios] = await Promise.all([
+        getClaimedArtistIds(user!.id),
+        getClaimedStudioIds(user!.id),
+      ]);
+      // Prefer studio_id for studio role when a studio is claimed; fall
+      // back to artist_id for legacy claims (studio previously claimed an artist).
+      const isStudio = user!.role === "studio";
+      const claimed = isStudio && claimedStudios.length > 0 ? claimedStudios : claimedArtists;
+      const column = isStudio && claimedStudios.length > 0 ? "studio_id" : "artist_id";
       if (claimed.length === 0) {
         rows = [];
         total = 0;
       } else {
         const placeholders = claimed.map(() => "?").join(",");
-        const baseSql = `FROM bookings WHERE artist_id IN (${placeholders})`;
+        const baseSql = `FROM bookings WHERE ${column} IN (${placeholders})`;
         const [countRow, page] = await Promise.all([
           getDb()
             .prepare(`SELECT COUNT(*) AS c ${baseSql}`)
@@ -186,6 +197,7 @@ export const POST = statefulRoute(
         id: randomUUID(),
         user_id: user!.id,
         artist_id: artist.id,
+        studio_id: null,
         artist_name: artist.name,
         service: serviceDef.name,
         price: serviceDef.price,
@@ -218,8 +230,8 @@ export const POST = statefulRoute(
       try {
         await db
           .prepare(
-            `INSERT INTO bookings (id, user_id, artist_id, artist_name, service, price, date, time, notes, event_type, venue, guest_count, status, balance_reminder_at, created_at)
-       VALUES (@id, @user_id, @artist_id, @artist_name, @service, @price, @date, @time, @notes, @event_type, @venue, @guest_count, @status, @balance_reminder_at, @created_at)`,
+            `INSERT INTO bookings (id, user_id, artist_id, studio_id, artist_name, service, price, date, time, notes, event_type, venue, guest_count, status, balance_reminder_at, created_at)
+       VALUES (@id, @user_id, @artist_id, @studio_id, @artist_name, @service, @price, @date, @time, @notes, @event_type, @venue, @guest_count, @status, @balance_reminder_at, @created_at)`,
           )
           .run(bind(booking));
       } catch (err) {
