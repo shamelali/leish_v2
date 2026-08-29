@@ -38,7 +38,8 @@ export interface SessionPayload {
 }
 
 export async function createSessionToken(payload: SessionPayload): Promise<string> {
-  const { sub, email, name, role, jti } = payload;
+  const { sub, email, name, role } = payload;
+  const jti = payload.jti ?? crypto.randomUUID();
 
   const jwt = await new SignJWT({ email, name, role, jti })
     .setProtectedHeader({ alg: "HS256" })

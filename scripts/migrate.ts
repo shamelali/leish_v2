@@ -32,6 +32,7 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
     ["venue", "ALTER TABLE bookings ADD COLUMN venue TEXT"],
     ["guest_count", "ALTER TABLE bookings ADD COLUMN guest_count INTEGER NOT NULL DEFAULT 0"],
     ["balance_reminder_at", "ALTER TABLE bookings ADD COLUMN balance_reminder_at TEXT"],
+    ["studio_id", "ALTER TABLE bookings ADD COLUMN studio_id TEXT REFERENCES studios(id) ON DELETE SET NULL"],
   ],
   email_outbox: [["html", "ALTER TABLE email_outbox ADD COLUMN html TEXT"]],
   email_preferences: [
@@ -199,6 +200,7 @@ async function main(): Promise<void> {
       "email_preferences",
       "email_retries",
       "artist_profiles",
+      "studio_profiles",
       "quotations",
       "messages",
       "payments",
