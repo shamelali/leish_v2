@@ -17,15 +17,29 @@ import { logger } from "@/server/logger";
  * 4. Redirect to the `next` destination (default: /dashboard)
  */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
+
+  // Validate next param to prevent open redirects
+  const safeNext =
+    next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
 
   if (code) {
     const supabase = await createServerSupabase();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (!error && data.user) {
+    if (error) {
+      logger.error(
+        { error: error.message },
+        "[auth/callback] code exchange failed",
+      );
+      return NextResponse.redirect(
+        `${origin}/login?error=oauth_exchange_failed`,
+      );
+    }
+
+    if (data.user) {
       try {
         // Check if a local user already exists with this supabase_id
         let localUser = await findUserBySupabaseId(data.user.id);
@@ -54,13 +68,13 @@ export async function GET(request: Request) {
           { err: err instanceof Error ? err.message : String(err) },
           "[auth/callback] failed to link/create OAuth user",
         );
+        // Still redirect — Supabase session is set, user can try again
       }
     }
+  } else {
+    // No code provided — redirect to login with error
+    return NextResponse.redirect(`${origin}/login?error=oauth_no_code`);
   }
 
-  // Redirect to destination — works whether code exchange succeeded or not
-  // (Supabase cookies are set by exchangeCodeForSession)
-  const redirectUrl = new URL(next, request.url);
-  redirectUrl.origin; // ensure absolute
-  return NextResponse.redirect(redirectUrl);
+  return NextResponse.redirect(`${origin}${safeNext}`);
 }
