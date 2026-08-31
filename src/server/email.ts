@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
 import { logger } from "./logger";
+import { getConnectToken } from "./connect";
 
 /**
  * Email delivery abstraction.
@@ -14,6 +15,9 @@ import { logger } from "./logger";
  *   EMAIL_PROVIDER=resend.
  * - "postmark": sends via the Postmark API. Configure POSTMARK_SERVER_TOKEN
  *   and EMAIL_FROM, set EMAIL_PROVIDER=postmark.
+ *
+ * API keys are resolved from Vercel Connect first (API-key connectors),
+ * falling back to environment variables for backward compatibility.
  * If a provider's key is missing we fall back to dev with a warning so
  * local/CI runs never fail on misconfiguration.
  *
@@ -28,6 +32,29 @@ export interface EmailMessage {
 }
 
 export type EmailProvider = "dev" | "resend" | "postmark" | "brevo";
+
+/**
+ * Connector names for Vercel Connect API-key connectors.
+ * These must match the connector IDs created in the Vercel Connect dashboard.
+ */
+const EMAIL_CONNECTORS: Record<string, string> = {
+  resend: "api-key/resend",
+  postmark: "api-key/postmark",
+  brevo: "api-key/brevo",
+} as const;
+
+/**
+ * Resolve an API key from Vercel Connect first, falling back to env var.
+ */
+async function resolveApiKey(connector: string, envKey: string): Promise<string | null> {
+  try {
+    const token = await getConnectToken({ connector });
+    if (token) return token;
+  } catch {
+    // Connect not available — fall through to env var
+  }
+  return process.env[envKey] ?? null;
+}
 
 export type EmailPreferenceKey =
   | "booking_created"
@@ -60,7 +87,7 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
   const provider = activeEmailProvider();
 
   if (provider === "resend") {
-    const apiKey = process.env.RESEND_API_KEY;
+    const apiKey = await resolveApiKey(EMAIL_CONNECTORS.resend, "RESEND_API_KEY");
     if (!apiKey) {
       logger.warn(
         { to: message.to },
@@ -79,7 +106,7 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
   }
 
   if (provider === "postmark") {
-    const serverToken = process.env.POSTMARK_SERVER_TOKEN;
+    const serverToken = await resolveApiKey(EMAIL_CONNECTORS.postmark, "POSTMARK_SERVER_TOKEN");
     if (!serverToken) {
       logger.warn(
         { to: message.to },
@@ -98,7 +125,7 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
   }
 
   if (provider === "brevo") {
-    const apiKey = process.env.BREVO_API_KEY;
+    const apiKey = await resolveApiKey(EMAIL_CONNECTORS.brevo, "BREVO_API_KEY");
     if (!apiKey) {
       logger.warn(
         { to: message.to },

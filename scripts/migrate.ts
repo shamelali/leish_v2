@@ -19,6 +19,7 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
     ["email_verified", "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0"],
     ["consent", "ALTER TABLE users ADD COLUMN consent INTEGER NOT NULL DEFAULT 0"],
     ["consent_timestamp", "ALTER TABLE users ADD COLUMN consent_timestamp TEXT"],
+    ["supabase_id", "ALTER TABLE users ADD COLUMN supabase_id TEXT"],
   ],
   payments: [
     ["provider_url", "ALTER TABLE payments ADD COLUMN provider_url TEXT"],
@@ -190,6 +191,12 @@ async function main(): Promise<void> {
         }
       }
     }
+
+    // Unique index for supabase_id — created after column backfill so it
+    // succeeds on legacy databases that didn't have the column originally.
+    await pool.query(
+      "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_supabase_id ON users(supabase_id)",
+    );
 
     const EXPECTED_TABLES = [
       "users",

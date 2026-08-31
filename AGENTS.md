@@ -103,9 +103,13 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 ### 8. Email (`src/server/email.ts`)
 
-- Provider abstraction: `sendEmail()` dispatches to dev outbox / Resend / Postmark
+- Provider abstraction: `sendEmail()` dispatches to dev outbox / Resend / Postmark / Brevo
 - Selected by `EMAIL_PROVIDER`; `resend` needs `RESEND_API_KEY`, `postmark` needs
-  `POSTMARK_SERVER_TOKEN`, and both use `EMAIL_FROM`
+  `POSTMARK_SERVER_TOKEN`, `brevo` needs `BREVO_API_KEY`, and all use `EMAIL_FROM`
+- **Vercel Connect support**: API keys are resolved from Connect API-key connectors
+  (`api-key/resend`, `api-key/postmark`, `api-key/brevo`) first, falling back to
+  env vars. This lets you manage email credentials centrally in the Vercel dashboard.
+- Failed emails are queued in `email_retries` with exponential backoff (1min, 5min, 25min)
 - Booking emails composed in `src/server/booking-emails.ts`
 
 ### 8b. Analytics (`src/server/agnost.ts` + `src/lib/agnost-client.ts`)
@@ -181,8 +185,9 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - `DATABASE_URL` — PostgreSQL connection string (Neon/Supabase pooler)
 - `BILLPLZ_API_KEY`, `BILLPLZ_COLLECTION_ID`, `BILLPLZ_X_SIGNATURE_KEY`
 - `EMAIL_PROVIDER` — `dev` | `resend` | `postmark` (default: `dev`)
-- `RESEND_API_KEY` — required when `EMAIL_PROVIDER=resend`
-- `POSTMARK_SERVER_TOKEN` — required when `EMAIL_PROVIDER=postmark`
+- `RESEND_API_KEY` — required when `EMAIL_PROVIDER=resend` (or use Vercel Connect API-key connector)
+- `POSTMARK_SERVER_TOKEN` — required when `EMAIL_PROVIDER=postmark` (or use Vercel Connect API-key connector)
+- `BREVO_API_KEY` — required when `EMAIL_PROVIDER=brevo` (or use Vercel Connect API-key connector)
 - `EMAIL_FROM` — sender address (default: `Leish! <no-reply@leish.my>`)
 - `LOG_LEVEL` — `info` | `debug` | `warn` | `error`
 - `PG_MAX` / `PG_CONNECTION_TIMEOUT_MS` / `PG_IDLE_TIMEOUT_MS` (optional pool tuning)
@@ -445,6 +450,8 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
 
 - Provider selected by `EMAIL_PROVIDER`: `dev` (default), `resend`, or `postmark`
 - `resend` needs `RESEND_API_KEY`; `postmark` needs `POSTMARK_SERVER_TOKEN`
+- **Vercel Connect**: If API-key connectors are configured, keys are resolved from
+  Connect first, falling back to env vars. This lets you manage credentials centrally.
 - Missing credentials fall back to the dev outbox with a warning (never silent)
 - Outbox stored in `email_outbox` table when using the dev provider (`/dev/emails`)
 

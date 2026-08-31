@@ -145,7 +145,7 @@ function createSqliteFacade(db: DatabaseSync): DbFacade {
  * Extract table name → column names from a SQL schema string.
  * Handles CREATE TABLE IF NOT EXISTS and inline CHECK/DEFAULT constraints.
  */
-function extractSchemaTables(schema: string): Map<string, Set<string>> {
+export function extractSchemaTables(schema: string): Map<string, Set<string>> {
   const tables = new Map<string, Set<string>>();
   const tableRe = /CREATE TABLE IF NOT EXISTS (\w+)\s*\(([\s\S]*?)\);\s*(?=CREATE|$)/gi;
   let match: RegExpExecArray | null;
@@ -176,7 +176,7 @@ function extractSchemaTables(schema: string): Map<string, Set<string>> {
 
 let driftChecked = false;
 
-function detectSchemaDrift() {
+export function detectSchemaDrift() {
   if (driftChecked) return;
   driftChecked = true;
 
@@ -211,6 +211,7 @@ export const PG_SCHEMA = `
     name          TEXT NOT NULL,
     role          TEXT NOT NULL CHECK (role IN ('customer','artist','studio','admin')),
     password      TEXT NOT NULL,
+    supabase_id   TEXT,
     email_verified INTEGER NOT NULL DEFAULT 0,
     consent       INTEGER NOT NULL DEFAULT 0,
     consent_timestamp TEXT,
@@ -481,6 +482,7 @@ const SQLITE_SCHEMA = `
     name       TEXT NOT NULL,
     role       TEXT NOT NULL CHECK (role IN ('customer','artist','studio','admin')),
     password   TEXT NOT NULL,
+    supabase_id TEXT,
     consent    INTEGER NOT NULL DEFAULT 0,
     consent_timestamp TEXT,
     created_at TEXT NOT NULL
@@ -737,7 +739,7 @@ const SQLITE_SCHEMA = `
     WHERE status IN ('requested','accepted','confirmed');
 `;
 
-function migrateSqlite(db: DatabaseSync) {
+export function migrateSqlite(db: DatabaseSync) {
   db.exec(SQLITE_SCHEMA);
 
   // Schema drift detection: warn if PG and SQLite diverge on critical columns.
@@ -753,6 +755,10 @@ function migrateSqlite(db: DatabaseSync) {
   if (!userCols.some((c) => c.name === "consent_timestamp")) {
     db.exec("ALTER TABLE users ADD COLUMN consent_timestamp TEXT");
   }
+  if (!userCols.some((c) => c.name === "supabase_id")) {
+    db.exec("ALTER TABLE users ADD COLUMN supabase_id TEXT");
+  }
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_supabase_id ON users(supabase_id)");
   const paymentCols = db.prepare("PRAGMA table_info(payments)").all() as { name: string }[];
   if (!paymentCols.some((c) => c.name === "provider_url")) {
     db.exec("ALTER TABLE payments ADD COLUMN provider_url TEXT");
@@ -861,6 +867,14 @@ export function getDb(): DbFacade {
           err instanceof Error ? err.message : err,
         );
       }
+      // supabase_id index — column added lazily on legacy databases by migrate.ts
+      try {
+        await pool.query(
+          "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_supabase_id ON users(supabase_id)",
+        );
+      } catch {
+        // Column may not exist yet on legacy databases — safe to skip.
+      }
     })().catch((err) => {
       console.error("[db] pg schema migration failed:", err instanceof Error ? err.message : err);
       throw err;
@@ -902,6 +916,7 @@ export interface UserRow {
   name: string;
   role: "customer" | "artist" | "studio" | "admin";
   password: string;
+  supabase_id: string | null;
   email_verified: number;
   consent: number;
   consent_timestamp: string | null;

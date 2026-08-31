@@ -8,6 +8,8 @@ import {
 } from "@/server/payments";
 import { tryRoute } from "@/server/http";
 import { isAgnostEnabled, agnost } from "@/server/agnost";
+import { notifySlackPayment } from "@/server/notifications";
+import { getDb } from "@/server/db";
 
 /**
  * POST /api/payments/webhook
@@ -69,6 +71,20 @@ export const POST = tryRoute(
           return new NextResponse("OK", { status: 200 });
         }
         await handlePaymentPaid(payment);
+
+        // Slack notification (best-effort)
+        const booking = (await getDb()
+          .prepare("SELECT artist_name FROM bookings WHERE id = ?")
+          .get(payment.booking_id)) as { artist_name: string } | undefined;
+        if (booking) {
+          notifySlackPayment({
+            bookingId: payment.booking_id,
+            artistName: booking.artist_name,
+            amountSen: payment.amount,
+            type: payment.type,
+          }).catch(() => {});
+        }
+
         interaction?.end(JSON.stringify({ billId: payload.id, bookingId: payment.booking_id, type: payment.type }), true);
       } else {
         logger.info({ billId: payload.id, changed }, "webhook for unknown bill (ignored)");

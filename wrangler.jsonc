@@ -1,26 +1,30 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "leish-my",
-  "compatibility_date": "2026-08-26",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
-  "main": "vinext/server/fetch-handler",
-  "assets": {
-    "directory": "dist/client",
-    "not_found_handling": "none",
-    "binding": "ASSETS"
+  "name": "leish-chat",
+  "main": "src/workers/chat/index.ts",
+  "compatibility_date": "2025-03-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
   },
-  "cache": {
-    "enabled": true
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHAT_ROOM",
+        "class_name": "ChatRoom"
+      }
+    ]
   },
-  "images": {
-    "binding": "IMAGES"
-  },
-  "kv_namespaces": [
+  "migrations": [
     {
-      "binding": "VINEXT_KV_CACHE",
-      "id": "5e38802efc7040c8b576f50a479ef3fc"
+      "tag": "v1",
+      "new_sqlite_classes": ["ChatRoom"]
     }
-  ]
+  ],
+  "vars": {
+    "MAX_MESSAGE_LENGTH": "5000",
+    "MAX_HISTORY_MESSAGES": "100",
+    "PRESENCE_TIMEOUT_MS": "30000",
+    "TYPING_TIMEOUT_MS": "5000"
+  }
 }

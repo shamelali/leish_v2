@@ -1,0 +1,30 @@
+{
+  "name": "leish-chat",
+  "main": "index.ts",
+  "compatibility_date": "2025-03-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHAT_ROOM",
+        "class_name": "ChatRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ChatRoom"]
+    }
+  ],
+  "vars": {
+    "MAX_MESSAGE_LENGTH": "5000",
+    "MAX_HISTORY_MESSAGES": "100",
+    "PRESENCE_TIMEOUT_MS": "30000",
+    "TYPING_TIMEOUT_MS": "5000"
+  }
+}

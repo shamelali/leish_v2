@@ -1,0 +1,9 @@
+{
+  "mcp": {
+    "cloudflare-builds": {
+      "type": "remote",
+      "url": "https://builds.mcp.cloudflare.com/mcp",
+      "enabled": true
+    }
+  }
+}

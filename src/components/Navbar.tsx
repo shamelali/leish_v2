@@ -134,33 +134,6 @@ export function Navbar() {
                 <Link href="/register" className={solidBtn}>
                   Sign up free
                 </Link>
-                <div className="mt-2 flex gap-2">
-                  {process.env.NEON_GOOGLE_CLIENT_ID ? (
-                    <a
-                      href="/api/auth/login/google"
-                      className="inline-flex h-9 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-700"
-                      style={{ whiteSpace: "nowrap" }}
-                    >
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 mr-2">
-                        <path d="M22.16 15.84a1 1 0 0 1-1.42 0l-7.17 7.17a1 1 0 0 1-1.42-1.42L12 16.16l-5.04-5.03a1 1 0 0 1 0-1.82l5.78-5.77a1 1 0 0 1 1.42 1.42l8.37 8.36a1 1 0 0 1-1.42z" />
-                        <path d="M9.5 3.59a5.97 5.97 0 0 1 0 8.57 5.97 5.97 0 0 1-8.57 0 5.97 5.97 0 0 1 0-8.57 5.97 5.97 0 0 1 8.57z" />
-                      </svg>
-                      Google
-                    </a>
-                  ) : null}
-                  {process.env.NEON_GITHUB_CLIENT_ID ? (
-                    <a
-                      href="/api/auth/login/github"
-                      className="inline-flex h-9 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-50 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-700"
-                      style={{ whiteSpace: "nowrap" }}
-                    >
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 mr-2">
-                        <path d="M18 2h-3a5 5 0 0 0-5 5v3h5v-3a5 5 0 0 0-5-5zm-3 4h3v-3h-3v3zm2-2h2v2h-2v-2zm6.96-4.92a2.02 2.02 0 0 1-2.83 0l-1.42 1.42a1.99 1.99 0 1 1-2.83-2.83l1.42-1.42a1.99 1.99 0 1 1 2.83 2.83l-1.42-1.42a1.99 1.99 0 0 1 2.83 2.83l-1.42 1.42a2.02 2.02 0 0 1 0 2.83zm-7.51 1.6a2.02 2.02 0 0 0 0 2.83l1.42 1.42a1.99 1.99 0 1 0 2.83-2.83l-1.42-1.42a1.99 1.99 0 0 0-2.83 0zm7.44 6.37a2.02 2.02 0 0 0-2.83 0l-1.42 1.42a1.99 1.99 0 1 0 2.83 2.83l1.42-1.42a1.99 1.99 0 0 0 0-2.83l-1.42 1.42zM i 9.5 3.59a5.97 5.97 0 0 1 0 8.57 5.97 5.97 0 0 1-8.57 0 5.97 5.97 0 0 1 0-8.57 5.97 5.97 0 0 1 8.57z" />
-                      </svg>
-                      GitHub
-                    </a>
-                  ) : null}
-                </div>
               </>
             ))}
         </div>

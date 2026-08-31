@@ -8,6 +8,7 @@ import { getPaymentForBooking } from "@/server/payments";
 import { getBookingFeeSen } from "@/server/settings";
 import { getActiveQuotation, serializeQuotation } from "@/server/quotations";
 import { notifyBookingStatusChanged, sendInvoiceEmail } from "@/server/booking-emails";
+import { notifySlackBookingStatus } from "@/server/notifications";
 import { jsonError, readJson, statefulRoute } from "@/server/http";
 import { logger } from "@/server/logger";
 import { isAgnostEnabled, agnost } from "@/server/agnost";
@@ -101,6 +102,16 @@ export const PATCH = statefulRoute(
           date: booking.date,
         });
       }
+
+      // Slack notification (best-effort, never blocks the response)
+      notifySlackBookingStatus({
+        bookingId: booking.id,
+        artistName: booking.artist_name,
+        service: booking.service,
+        date: booking.date,
+        time: booking.time,
+        status: result.status,
+      }).catch(() => {});
 
       logger.info(
         { bookingId: booking.id, action: parsed.data, status: result.status },

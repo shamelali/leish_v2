@@ -7,6 +7,7 @@ import { hashPassword } from "./password";
 import {
   addEntityReview,
   createArtist,
+  createStudio,
   findReviewableBooking,
   getArtistById,
   getArtistBySlug,
@@ -17,7 +18,9 @@ import {
   listArtists,
   listEntityReviews,
   resolveArtist,
+  resolveStudio,
   updateArtist,
+  updateStudio,
 } from "./catalog";
 import { seedCatalog } from "./catalog-seed";
 
@@ -125,6 +128,27 @@ describe("catalog repository", () => {
     expect((await resolveArtist(created!.id))?.slug).toBe(created!.slug);
   });
 
+  it("creates admin-onboarded studios with a UUID id and a separate slug", async () => {
+    await listAllStudios();
+    const suffix = randomUUID().slice(0, 8);
+    const created = await createStudio({
+      name: `Glam Studio ${suffix}`,
+      state: "Kuala Lumpur",
+      area: "Bangsar",
+      address: "123 Glam St",
+      priceFrom: 500,
+    });
+    expect(created).not.toBeNull();
+    expect(created!.slug).toBe(`glam-studio-${suffix}`);
+    expect(created!.id).not.toBe(created!.slug);
+    expect(created!.image).toBe("/images/hero.jpg");
+
+    // Profile pages look up by slug
+    expect((await getStudioBySlug(created!.slug!))?.id).toBe(created!.id);
+    expect((await resolveStudio(created!.slug!))?.id).toBe(created!.id);
+    expect((await resolveStudio(created!.id))?.slug).toBe(created!.slug);
+  });
+
   it("filters artists by state, budget and query", async () => {
     const johor = await listArtists({ state: "Johor" });
     expect(johor.map((a) => a.id)).toContain("sofia-rahim");
@@ -140,7 +164,7 @@ describe("catalog repository", () => {
     expect(bridal.every((a) => a.bridal.includes("full-package"))).toBe(true);
   });
 
-  it("updates whitelisted fields with JSON serialization", async () => {
+  it("updates whitelisted artist fields with JSON serialization", async () => {
     await listAllArtists();
     const updated = await updateArtist("nur-fatin", {
       tagline: "New tagline",
@@ -155,6 +179,26 @@ describe("catalog repository", () => {
 
     // Non-whitelisted fields are ignored entirely.
     const untouched = await updateArtist("nur-fatin", { rating: 1.0 } as never);
+    expect(untouched).toBeNull();
+  });
+
+  it("updates whitelisted studio fields with JSON serialization", async () => {
+    await listAllStudios();
+    const updated = await updateStudio("bangsar-beauty-bar", {
+      tagline: "Updated tagline",
+      priceFrom: 600,
+      services: ["Makeup", "Hair"],
+      hours: "10am-8pm",
+      phone: "+60198765432",
+    });
+    expect(updated?.tagline).toBe("Updated tagline");
+    expect(updated?.priceFrom).toBe(600);
+    expect(updated?.services).toEqual(["Makeup", "Hair"]);
+    expect(updated?.hours).toBe("10am-8pm");
+    expect(updated?.phone).toBe("+60198765432");
+
+    // Non-whitelisted fields are ignored entirely.
+    const untouched = await updateStudio("bangsar-beauty-bar", { rating: 1.0 } as never);
     expect(untouched).toBeNull();
   });
 
@@ -177,6 +221,45 @@ describe("catalog repository", () => {
       .get()) as { c: number };
     expect(remaining.c).toBe(0);
   });
+
+  it("listAllArtists supports pagination", async () => {
+    await listAllArtists(); // ensure seeded
+    const page1 = await listAllArtists({ limit: 3, offset: 0 });
+    const page2 = await listAllArtists({ limit: 3, offset: 3 });
+    expect(page1.length).toBeLessThanOrEqual(3);
+    expect(page2.length).toBeLessThanOrEqual(3);
+    // No overlap between pages
+    const page1Ids = new Set(page1.map((a) => a.id));
+    const page2Ids = new Set(page2.map((a) => a.id));
+    expect(page1Ids.size).toBe(page1.length);
+    for (const id of page2Ids) {
+      expect(page1Ids.has(id)).toBe(false);
+    }
+  });
+
+  it("listAllStudios supports pagination", async () => {
+    await listAllStudios(); // ensure seeded
+    const page1 = await listAllStudios({ limit: 2, offset: 0 });
+    const page2 = await listAllStudios({ limit: 2, offset: 2 });
+    expect(page1.length).toBeLessThanOrEqual(2);
+    expect(page2.length).toBeLessThanOrEqual(2);
+    const page1Ids = new Set(page1.map((s) => s.id));
+    const page2Ids = new Set(page2.map((s) => s.id));
+    expect(page1Ids.size).toBe(page1.length);
+    for (const id of page2Ids) {
+      expect(page1Ids.has(id)).toBe(false);
+    }
+  });
+
+  it("listAllArtists caps unpaginated results at 500", async () => {
+    const all = await listAllArtists();
+    expect(all.length).toBeLessThanOrEqual(500);
+  });
+
+  it("listAllStudios caps unpaginated results at 500", async () => {
+    const all = await listAllStudios();
+    expect(all.length).toBeLessThanOrEqual(500);
+  });
 });
 
 describe("catalog reviews", () => {
@@ -186,6 +269,8 @@ describe("catalog reviews", () => {
       await db.prepare(`DELETE FROM ${table}`).run();
     }
     await listAllArtists();
+    // Clear seeded reviews so tests start with a clean slate
+    await db.prepare("DELETE FROM reviews").run();
   });
 
   it("blends a live review into the seeded aggregate", async () => {
@@ -259,5 +344,53 @@ describe("catalog reviews", () => {
       text: "Wonderful experience overall.",
     });
     expect(await findReviewableBooking(userId, "artist", "aisha-azman")).toBeNull();
+  });
+
+  it("findReviewableBooking returns null for studio type (out of scope)", async () => {
+    const userId = await createUser();
+    expect(await findReviewableBooking(userId, "studio", "bangsar-beauty-bar")).toBeNull();
+  });
+
+  it("lists entity reviews for artists", async () => {
+    await listAllArtists();
+    await addEntityReview({
+      entityType: "artist",
+      entityId: "aisha-azman",
+      authorName: "Reviewer 1",
+      rating: 5,
+      text: "Excellent!",
+    });
+    // Small delay to ensure different timestamps
+    await new Promise((r) => setTimeout(r, 10));
+    await addEntityReview({
+      entityType: "artist",
+      entityId: "aisha-azman",
+      authorName: "Reviewer 2",
+      rating: 4,
+      text: "Good",
+    });
+
+    const reviews = await listEntityReviews("artist", "aisha-azman");
+    expect(reviews.length).toBe(2);
+    expect(reviews[0].rating).toBe(4); // Reviewer 2 (newer) first
+    expect(reviews[1].rating).toBe(5); // Reviewer 1 (older) second
+    // Ordered by created_at DESC
+    expect(reviews[0].author).toBe("Reviewer 2");
+  });
+
+  it("lists entity reviews for studios", async () => {
+    await listAllStudios();
+    await addEntityReview({
+      entityType: "studio",
+      entityId: "bangsar-beauty-bar",
+      authorName: "Studio Reviewer",
+      rating: 5,
+      text: "Great studio!",
+    });
+
+    const reviews = await listEntityReviews("studio", "bangsar-beauty-bar");
+    expect(reviews.length).toBe(1);
+    expect(reviews[0].rating).toBe(5);
+    expect(reviews[0].author).toBe("Studio Reviewer");
   });
 });

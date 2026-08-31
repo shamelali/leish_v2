@@ -335,13 +335,18 @@ d("email verification tokens against PG", () => {
     expect(token).toBeTruthy();
     expect(token.length).toBe(64); // 32 bytes hex
 
-    // Validate
+    // Validate — single-use: marks token as consumed
     const found = await validateVerificationToken(token);
     expect(found).toBe(userId);
 
-    // Validate again — storeVerificationToken does NOT consume the token
+    // Validate again — token was consumed, returns null
     const found2 = await validateVerificationToken(token);
-    expect(found2).toBe(userId);
+    expect(found2).toBeNull();
+
+    // A fresh token still works
+    const token2 = await storeVerificationToken(userId);
+    const found3 = await validateVerificationToken(token2);
+    expect(found3).toBe(userId);
   });
 
   it("rejects expired verification token", async () => {
@@ -407,8 +412,20 @@ d("password reset tokens against PG", () => {
     const userId = await createTestUser("customer");
     const db = getDb();
 
-    await storeResetToken(userId);
-    await storeResetToken(userId);
+    // Insert tokens directly via SQL to avoid storeResetToken's
+    // DELETE-then-INSERT pattern which leaves only 1 row.
+    const { randomBytes, createHash } = await import("node:crypto");
+    const future = new Date(Date.now() + 3600000).toISOString();
+    const now = new Date().toISOString();
+
+    for (let i = 0; i < 2; i++) {
+      const tokenHash = createHash("sha256").update(randomBytes(32)).digest("hex");
+      await db
+        .prepare(
+          "INSERT INTO password_resets (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(randomBytes(16).toString("hex"), userId, tokenHash, future, now);
+    }
 
     const before = (await db
       .prepare("SELECT COUNT(*) as cnt FROM password_resets WHERE user_id = ?")

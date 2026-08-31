@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       name,
       role,
       password: hashPassword(password),
+      supabase_id: null,
       email_verified: 0,
       consent: consent ? 1 : 0,
       consent_timestamp: consentTimestamp ?? new Date().toISOString(),

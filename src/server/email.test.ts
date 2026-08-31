@@ -43,6 +43,7 @@ describe("email service", () => {
     delete process.env.RESEND_API_KEY;
     delete process.env.POSTMARK_SERVER_TOKEN;
     delete process.env.BREVO_API_KEY;
+    delete process.env.EMAIL_FROM;
     await getDb().prepare("DELETE FROM email_outbox").run();
     await getDb().prepare("DELETE FROM email_retries").run();
     await getDb().prepare("DELETE FROM email_preferences").run();
@@ -127,9 +128,97 @@ describe("email service", () => {
       }
     });
 
+    it("sends via postmark and does not touch the outbox", async () => {
+      process.env.EMAIL_PROVIDER = "postmark";
+      process.env.POSTMARK_SERVER_TOKEN = "test-token";
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as typeof fetch;
+      try {
+        await sendEmail({ to: "a@b.c", subject: "Postmark!", text: "x" });
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+          "https://api.postmarkapp.com/email",
+          expect.objectContaining({ method: "POST" }),
+        );
+        expect(await getDb().prepare("SELECT COUNT(*) AS c FROM email_outbox").get()).toMatchObject(
+          {
+            c: 0,
+          },
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("sends via brevo and does not touch the outbox", async () => {
+      process.env.EMAIL_PROVIDER = "brevo";
+      process.env.BREVO_API_KEY = "test-key";
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as typeof fetch;
+      try {
+        await sendEmail({ to: "a@b.c", subject: "Brevo!", text: "x" });
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+          "https://api.brevo.com/v3/smtp/email",
+          expect.objectContaining({ method: "POST" }),
+        );
+        expect(await getDb().prepare("SELECT COUNT(*) AS c FROM email_outbox").get()).toMatchObject(
+          {
+            c: 0,
+          },
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
     it("queues a resend failure for retry and rethrows", async () => {
       process.env.EMAIL_PROVIDER = "resend";
       process.env.RESEND_API_KEY = "test-key";
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve("boom"),
+      }) as typeof fetch;
+      try {
+        await expect(sendEmail({ to: "a@b.c", subject: "Fail", text: "x" })).rejects.toThrow(
+          "Failed to send email",
+        );
+        const row = (await getDb()
+          .prepare("SELECT to_email, attempts, max_attempts FROM email_retries")
+          .get()) as Record<string, number>;
+        expect(row.to_email).toBe("a@b.c");
+        expect(row.max_attempts).toBe(3);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("queues a postmark failure for retry and rethrows", async () => {
+      process.env.EMAIL_PROVIDER = "postmark";
+      process.env.POSTMARK_SERVER_TOKEN = "test-token";
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve("boom"),
+      }) as typeof fetch;
+      try {
+        await expect(sendEmail({ to: "a@b.c", subject: "Fail", text: "x" })).rejects.toThrow(
+          "Failed to send email",
+        );
+        const row = (await getDb()
+          .prepare("SELECT to_email, attempts, max_attempts FROM email_retries")
+          .get()) as Record<string, number>;
+        expect(row.to_email).toBe("a@b.c");
+        expect(row.max_attempts).toBe(3);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("queues a brevo failure for retry and rethrows", async () => {
+      process.env.EMAIL_PROVIDER = "brevo";
+      process.env.BREVO_API_KEY = "test-key";
       const originalFetch = globalThis.fetch;
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
@@ -233,7 +322,7 @@ describe("email service", () => {
         .prepare(
           `INSERT INTO email_retries (id, to_email, subject, text, html, attempts, max_attempts, next_retry, last_error, created_at)
            VALUES (?, 'n@x.y', 'Not due', 't', NULL, 0, 3, ?, '', ?),
-                  ('exhausted-id', 'e@x.y', 'Exhausted', 't', NULL, 3, 3, ?, '', ?)`,
+                   ('exhausted-id', 'e@x.y', 'Exhausted', 't', NULL, 3, 3, ?, '', ?)`,
         )
         .run(randomUUID(), future, now, past, now);
 
