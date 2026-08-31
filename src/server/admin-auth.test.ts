@@ -1,8 +1,8 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { requireAdmin, logAdminAction, isLastAdmin } from "./admin-auth";
+import { requireAdmin, logAdminAction, isLastAdmin, atomicAdminGuard } from "./admin-auth";
 import { createSessionToken } from "./session";
 import { getDb } from "./db";
 
@@ -161,6 +161,25 @@ describe("logAdminAction", () => {
       )`);
     }
   });
+
+  it("throws when requireAudit is true and audit write fails", async () => {
+    getDb().exec("DROP TABLE admin_audit_log");
+    try {
+      await expect(
+        logAdminAction("audit-writer", "critical_action", "users", "id", {}, { requireAudit: true }),
+      ).rejects.toThrow(/critical: audit write failed/);
+    } finally {
+      getDb().exec(`CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id TEXT PRIMARY KEY,
+        admin_user_id TEXT NOT NULL REFERENCES users(id),
+        action TEXT NOT NULL,
+        target_table TEXT NOT NULL,
+        target_id TEXT,
+        details TEXT,
+        created_at TEXT NOT NULL
+      )`);
+    }
+  });
 });
 
 describe("isLastAdmin", () => {
@@ -217,5 +236,152 @@ describe("requireAdmin rate limiting", () => {
       if (lastStatus === 429) break;
     }
     expect(lastStatus).toBe(429);
+  });
+});
+
+describe("atomicAdminGuard", () => {
+  beforeEach(async () => {
+    await getDb().prepare("DELETE FROM users WHERE email LIKE ?").run("%@atomic-test.local");
+    await getDb().prepare("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE email LIKE ?)").run("%@atomic-test.local");
+  });
+
+  it("allows demoting non-admin user (no guard needed)", async () => {
+    const targetId = randomUUID();
+    await getDb()
+      .prepare(
+        "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(targetId, `${targetId}@atomic-test.local`, "Target", "customer", "x:y", new Date().toISOString());
+
+    const result = await atomicAdminGuard(targetId, "demote", "customer");
+    expect(result.ok).toBe(true);
+  });
+
+  it("blocks demotion of the last remaining admin", async () => {
+    const adminId = randomUUID();
+    await getDb()
+      .prepare(
+        "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(adminId, `${adminId}@atomic-test.local`, "Only Admin", "admin", "x:y", new Date().toISOString());
+
+    // Ensure this is the only admin
+    const otherAdmins = (await getDb()
+      .prepare("SELECT id FROM users WHERE role='admin' AND id != ?")
+      .all(adminId)) as { id: string }[];
+    for (const o of otherAdmins) {
+      await getDb().prepare("UPDATE users SET role='customer' WHERE id=?").run(o.id);
+    }
+
+    const result = await atomicAdminGuard(adminId, "demote", "customer");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("Cannot demote the last remaining admin");
+
+    // Verify role unchanged
+    const user = await getDb().prepare("SELECT role FROM users WHERE id = ?").get<{ role: string }>(adminId);
+    expect(user?.role).toBe("admin");
+  });
+
+  it("allows demotion when other admins exist", async () => {
+    const admin1 = randomUUID();
+    const admin2 = randomUUID();
+    await getDb()
+      .prepare(
+        "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(admin1, `${admin1}@atomic-test.local`, "Admin 1", "admin", "x:y", new Date().toISOString());
+    await getDb()
+      .prepare(
+        "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(admin2, `${admin2}@atomic-test.local`, "Admin 2", "admin", "x:y", new Date().toISOString());
+
+    const result = await atomicAdminGuard(admin1, "demote", "artist");
+    expect(result.ok).toBe(true);
+
+    // Verify role changed
+    const user = await getDb().prepare("SELECT role FROM users WHERE id = ?").get<{ role: string }>(admin1);
+    expect(user?.role).toBe("artist");
+  });
+
+  it("blocks deletion of the last remaining admin", async () => {
+    const adminId = randomUUID();
+    await getDb()
+      .prepare(
+        "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(adminId, `${adminId}@atomic-test.local`, "Only Admin", "admin", "x:y", new Date().toISOString());
+
+    // Ensure this is the only admin
+    const otherAdmins = (await getDb()
+      .prepare("SELECT id FROM users WHERE role='admin' AND id != ?")
+      .all(adminId)) as { id: string }[];
+    for (const o of otherAdmins) {
+      await getDb().prepare("UPDATE users SET role='customer' WHERE id=?").run(o.id);
+    }
+
+    const result = await atomicAdminGuard(adminId, "delete");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("Cannot delete the last remaining admin");
+
+    // Verify user still exists
+    const user = await getDb().prepare("SELECT id FROM users WHERE id = ?").get(adminId);
+    expect(user).toBeDefined();
+  });
+
+  it("allows deletion when other admins exist", async () => {
+    const admin1 = randomUUID();
+    const admin2 = randomUUID();
+    await getDb()
+      .prepare(
+        "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(admin1, `${admin1}@atomic-test.local`, "Admin 1", "admin", "x:y", new Date().toISOString());
+    await getDb()
+      .prepare(
+        "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(admin2, `${admin2}@atomic-test.local`, "Admin 2", "admin", "x:y", new Date().toISOString());
+
+    const result = await atomicAdminGuard(admin1, "delete");
+    expect(result.ok).toBe(true);
+
+    // Verify user deleted
+    const user = await getDb().prepare("SELECT id FROM users WHERE id = ?").get(admin1);
+    expect(user).toBeUndefined();
+  });
+
+  it("deletes sessions when demoting admin", async () => {
+    const admin1 = randomUUID();
+    const admin2 = randomUUID();
+    await getDb()
+      .prepare(
+        "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(admin1, `${admin1}@atomic-test.local`, "Admin 1", "admin", "x:y", new Date().toISOString());
+    await getDb()
+      .prepare(
+        "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(admin2, `${admin2}@atomic-test.local`, "Admin 2", "admin", "x:y", new Date().toISOString());
+
+    // Create a session for admin1
+    await getDb()
+      .prepare(
+        "INSERT INTO sessions (jti, user_id, revoked, expires_at, created_at) VALUES (?, ?, 0, ?, ?)",
+      )
+      .run("test-jti", admin1, new Date(Date.now() + 86400000).toISOString(), new Date().toISOString());
+
+    const result = await atomicAdminGuard(admin1, "demote", "artist");
+    expect(result.ok).toBe(true);
+
+    // Verify session was deleted
+    const session = await getDb().prepare("SELECT jti FROM sessions WHERE user_id = ?").get(admin1);
+    expect(session).toBeUndefined();
+  });
+
+  it("returns ok:true for non-existent user", async () => {
+    const result = await atomicAdminGuard("non-existent-id", "demote");
+    expect(result.ok).toBe(true);
   });
 });
