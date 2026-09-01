@@ -145,7 +145,6 @@ export async function validateChatSystem(bookingId: string, userToken: string): 
     errors.push(`History load: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // Test 3: Send/Receive (would need two tokens)
   let sendReceive = false;
   // ... implement with two test users
 

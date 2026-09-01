@@ -26,10 +26,15 @@ export default function BookingChatPage({ params }: BookingChatProps) {
   useEffect(() => {
     if (!loading && !session) {
       router.push(`/login?redirect=/bookings/${bookingId}`);
-    } else if (!loading && session) {
-      setShowChat(true);
     }
   }, [session, loading, router, bookingId]);
+
+  // Show chat after session is confirmed
+  useEffect(() => {
+    if (!loading && session) {
+      setShowChat(true);
+    }
+  }, [loading, session]);
 
   const wsUrl = process.env.NEXT_PUBLIC_CHAT_WS_URL;
 

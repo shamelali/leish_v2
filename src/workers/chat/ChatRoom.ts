@@ -262,7 +262,7 @@ export class ChatRoom extends DurableObject<Env> {
               bookingId: msg.booking_id,
               senderId: msg.sender_id,
               senderName: msg.sender_name,
-              senderRole: msg.sender_role as any,
+              senderRole: msg.sender_role,
               body: msg.body,
               createdAt: msg.created_at,
             });

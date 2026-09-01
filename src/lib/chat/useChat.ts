@@ -1,15 +1,14 @@
-/**
- * useChat — React hook for Leish real-time chat
- *
- * Features:
- * - WebSocket connection management with auto-reconnect
- * - Optimistic UI updates (instant message send)
- * - Message history with infinite scroll
- * - Presence & typing indicators
- * - Read receipts
- * - Connection state tracking
- * - Error handling & retry
- */
+/** useChat — React hook for Leish real-time chat
+
+* Features:
+* - WebSocket connection management with auto-reconnect
+* - Optimistic UI updates (instant message send)
+* - Message history with infinite scroll
+* - Presence & typing indicators
+* - Read receipts
+* - Connection state tracking
+* - Error handling & retry
+*/
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type {
@@ -110,19 +109,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const isMountedRef = useRef(true);
   const beforeMessageIdRef = useRef<string | null>(null);
 
-  // ── Cleanup ─────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-      if (wsRef.current) wsRef.current.close(1000, "Component unmounted");
-    };
-  }, []);
-
-  // ── WebSocket Connection ────────────────────────────────────────────────────
+  // ── useCallback declarations ────────────────────────────────────────────────
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -153,42 +140,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
       onConnect?.();
     };
-
-    ws.onmessage = (event) => {
-      if (!isMountedRef.current) return;
-      handleMessage(event.data);
-    };
-
-    ws.onclose = (event) => {
-      if (!isMountedRef.current) return;
-      setStatus("disconnected");
-      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-
-      const reason = event.reason || `Code: ${event.code}`;
-      onDisconnect?.(reason);
-
-      // Auto-reconnect
-      if (reconnectCountRef.current < reconnectAttempts) {
-        const delay = reconnectDelay * Math.pow(2, reconnectCountRef.current);
-        reconnectCountRef.current++;
-        reconnectTimeoutRef.current = setTimeout(() => {
-          if (isMountedRef.current) connect();
-        }, delay);
-      } else {
-        setError(new Error(`Max reconnection attempts reached: ${reason}`));
-        setStatus("error");
-      }
-    };
-
-    ws.onerror = (event) => {
-      if (!isMountedRef.current) return;
-      const err = new Error("WebSocket error");
-      setError(err);
-      onError?.(err);
-    };
-  }, [bookingId, token, wsUrl, reconnectAttempts, reconnectDelay, onConnect, onDisconnect, onError]);
-
-  // ── Message Handler ──────────────────────────────────────────────────────────
+  }, [bookingId, token, wsUrl, reconnectAttempts, reconnectDelay, onConnect, onDisconnect]);
 
   const handleMessage = useCallback((data: string) => {
     try {
@@ -290,8 +242,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
 
         case "error": {
-          const err = new Error(msg.message);
-          (err as any).code = msg.code;
+          const errMsg = msg.message;
+          const err = new Error(errMsg);
+          (err as any).code = Number(msg.code);
           setError(err);
           onError?.(err);
           break;
@@ -305,8 +258,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       console.error("Failed to parse chat message:", e);
     }
   }, [messages, users, onMessage, onPresenceChange, onTyping, onError]);
-
-  // ── Actions ──────────────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
     (body: string): Promise<ChatMessage | null> => {
@@ -412,7 +363,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     connect();
   }, [connect]);
 
-  const disconnect = useCallback(() => {
+  // ── disconnect function - must be declared before useEffects that reference it ──
+
+  const disconnectFunc = () => {
     if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
     if (wsRef.current) {
@@ -420,7 +373,64 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       wsRef.current = null;
     }
     setStatus("disconnected");
+  };
+
+  // ── WebSocket Connection ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+      if (wsRef.current) wsRef.current.close(1000, "Component unmounted");
+      disconnectFunc();
+    };
   }, []);
+
+  // ── WebSocket setup ────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (autoConnect) {
+      connect();
+    }
+  }, [autoConnect, connect]);
+
+  wsRef.current?.addEventListener("open", () => {
+    connect();
+  });
+
+  wsRef.current?.addEventListener("message", (event) => {
+    if (!isMountedRef.current) return;
+    handleMessage(event.data);
+  });
+
+  wsRef.current?.addEventListener("close", (event) => {
+    if (!isMountedRef.current) return;
+    setStatus("disconnected");
+    if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+    const reason = event.reason || `Code: ${event.code}`;
+    onDisconnect?.(reason);
+
+    // Auto-reconnect
+    if (reconnectCountRef.current < reconnectAttempts) {
+      const delay = reconnectDelay * Math.pow(2, reconnectCountRef.current);
+      reconnectCountRef.current++;
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) connect();
+      }, delay);
+    } else {
+      setError(new Error(`Max reconnection attempts reached: ${reason}`));
+      setStatus("error");
+    }
+  });
+
+  wsRef.current?.addEventListener("error", (event) => {
+    if (!isMountedRef.current) return;
+    const err = new Error("WebSocket error");
+    setError(err);
+    onError?.(err);
+  });
 
   // ── Auto-connect ────────────────────────────────────────────────────────────
 
@@ -428,10 +438,19 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     if (autoConnect) {
       connect();
     }
-    return () => disconnect();
-  }, [autoConnect, connect, disconnect]);
+  }, [autoConnect, connect]);
 
-  // ── Derived State ────────────────────────────────────────────────────────────
+  // ── Actions ──────────────────────────────────────────────────────────────────
+
+  // ── Auto-connect ────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (autoConnect) {
+      connect();
+    }
+  }, [autoConnect, connect]);
+
+  // ── Derived State ───────────────────────────────────────────────────────────
 
   const sortedMessages = useMemo(() => messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()), [messages]);
 
@@ -449,7 +468,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     markRead,
     loadMoreHistory,
     reconnect,
-    disconnect,
+    disconnect: disconnectFunc,
   };
 }
 
