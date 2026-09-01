@@ -1,0 +1,6 @@
+{
+    "dependencies": {
+      "@upstash/redis": "latest"
+    }
+  }
+  

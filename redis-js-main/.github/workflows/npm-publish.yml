@@ -1,0 +1,100 @@
+name: npm Publish
+
+on:
+  workflow_call:
+    inputs:
+      prerelease:
+        type: boolean
+        required: true
+      packages:
+        type: string
+        required: true
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: ${{ fromJson(inputs.packages) }}
+
+    steps:
+      - name: Parse package info
+        id: parse
+        run: |
+          PACKAGE="${{ matrix.package.name }}"
+          VERSION="${{ matrix.package.version }}"
+
+          case "$PACKAGE" in
+            "@upstash/redis")          PKG_DIR="packages/redis";          PUBLISH_DIR="packages/redis/dist" ;;
+            "@upstash/search-ioredis") PKG_DIR="packages/search-ioredis"; PUBLISH_DIR="packages/search-ioredis" ;;
+            "@upstash/search-redis")   PKG_DIR="packages/search-redis";   PUBLISH_DIR="packages/search-redis" ;;
+            *) echo "Unknown package: $PACKAGE"; exit 1 ;;
+          esac
+
+          echo "package=$PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "pkg_dir=$PKG_DIR" >> "$GITHUB_OUTPUT"
+          echo "publish_dir=$PUBLISH_DIR" >> "$GITHUB_OUTPUT"
+          echo "Package: $PACKAGE @ $VERSION (dir: $PKG_DIR, publish: $PUBLISH_DIR)"
+
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set package version
+        run: |
+          cd ${{ steps.parse.outputs.pkg_dir }}
+          npm version "${{ steps.parse.outputs.version }}" --no-git-tag-version --allow-same-version
+          echo "export const VERSION='v${{ steps.parse.outputs.version }}';" > ./version.ts
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Publish (canary)
+        if: ${{ inputs.prerelease && steps.parse.outputs.publish_dir == steps.parse.outputs.pkg_dir }}
+        run: pnpm --filter "${{ steps.parse.outputs.package }}" publish --tag canary --no-git-checks --access public
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish (canary, from dist)
+        if: ${{ inputs.prerelease && steps.parse.outputs.publish_dir != steps.parse.outputs.pkg_dir }}
+        working-directory: ./${{ steps.parse.outputs.publish_dir }}
+        run: |
+          npm pkg delete scripts.prepare 2>/dev/null || true
+          npm publish --provenance --access public --tag=canary
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish (stable)
+        if: ${{ !inputs.prerelease && steps.parse.outputs.publish_dir == steps.parse.outputs.pkg_dir }}
+        run: pnpm --filter "${{ steps.parse.outputs.package }}" publish --no-git-checks --access public
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish (stable, from dist)
+        if: ${{ !inputs.prerelease && steps.parse.outputs.publish_dir != steps.parse.outputs.pkg_dir }}
+        working-directory: ./${{ steps.parse.outputs.publish_dir }}
+        run: |
+          npm pkg delete scripts.prepare 2>/dev/null || true
+          npm publish --provenance --access public
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

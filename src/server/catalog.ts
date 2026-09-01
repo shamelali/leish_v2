@@ -3,6 +3,14 @@ import { getDb, bind } from "./db";
 import { ensureCatalogSeeded } from "./catalog-seed";
 import { filterArtists, type ArtistFilters } from "@/lib/artists";
 import type { Artist, Review, Service, Studio } from "@/lib/types";
+import { cacheGet, cacheSet, cacheDel, cacheDelPrefix } from "./redis";
+
+// ── Cache config ──────────────────────────────────────────────────────────────
+const CACHE_TTL_INDIVIDUAL = 300; // 5 min — single artist/studio by slug/id
+const CACHE_TTL_LIST = 120;       // 2 min — list queries
+const CACHE_PREFIX_ARTIST = "cat:a:";
+const CACHE_PREFIX_STUDIO = "cat:s:";
+const CACHE_PREFIX_LIST = "cat:list:";
 
 /**
  * DB-backed catalog repository — the single source of truth for artists,
@@ -174,20 +182,25 @@ const ARTIST_SELECT = `SELECT * FROM artists`;
  */
 export async function listAllArtists(opts?: { limit?: number; offset?: number }): Promise<Artist[]> {
   await ensureCatalogSeeded();
+  const cacheKey = `${CACHE_PREFIX_LIST}artists:${opts?.limit ?? "all"}:${opts?.offset ?? 0}`;
+  const cached = await cacheGet<Artist[]>(cacheKey);
+  if (cached) return cached;
+
+  let rows: ArtistRow[];
   if (opts) {
     const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
     const offset = Math.max(opts.offset ?? 0, 0);
-    const rows = (await getDb()
+    rows = (await getDb()
       .prepare(`${ARTIST_SELECT} ORDER BY rating DESC LIMIT ? OFFSET ?`)
       .all(limit, offset)) as unknown as ArtistRow[];
-    return rows.map(rowToArtist);
+  } else {
+    rows = (await getDb()
+      .prepare(`${ARTIST_SELECT} ORDER BY rating DESC LIMIT 500`)
+      .all()) as unknown as ArtistRow[];
   }
-  // Legacy unpaginated path — hard-capped at 500 to prevent OOM/timeout as
-  // the catalog scales. Prefer the paginated form for API routes.
-  const rows = (await getDb()
-    .prepare(`${ARTIST_SELECT} ORDER BY rating DESC LIMIT 500`)
-    .all()) as unknown as ArtistRow[];
-  return rows.map(rowToArtist);
+  const artists = rows.map(rowToArtist);
+  await cacheSet(cacheKey, artists, CACHE_TTL_LIST);
+  return artists;
 }
 
 /**
@@ -240,16 +253,26 @@ export async function listArtists(filters?: Partial<ArtistFilters>): Promise<Art
 
 export async function getArtistById(id: string): Promise<Artist | null> {
   await ensureCatalogSeeded();
+  const cacheKey = `${CACHE_PREFIX_ARTIST}id:${id}`;
+  const cached = await cacheGet<Artist>(cacheKey);
+  if (cached) return cached;
   const row = (await getDb().prepare(`${ARTIST_SELECT} WHERE id = ?`).get(id)) as unknown as
     ArtistRow | undefined;
-  return row ? rowToArtist(row) : null;
+  const artist = row ? rowToArtist(row) : null;
+  if (artist) await cacheSet(cacheKey, artist, CACHE_TTL_INDIVIDUAL);
+  return artist;
 }
 
 export async function getArtistBySlug(slug: string): Promise<Artist | null> {
   await ensureCatalogSeeded();
+  const cacheKey = `${CACHE_PREFIX_ARTIST}slug:${slug}`;
+  const cached = await cacheGet<Artist>(cacheKey);
+  if (cached) return cached;
   const row = (await getDb().prepare(`${ARTIST_SELECT} WHERE slug = ?`).get(slug)) as unknown as
     ArtistRow | undefined;
-  return row ? rowToArtist(row) : null;
+  const artist = row ? rowToArtist(row) : null;
+  if (artist) await cacheSet(cacheKey, artist, CACHE_TTL_INDIVIDUAL);
+  return artist;
 }
 
 /** Resolve a public catalog artist by slug first, then by primary key. */
@@ -267,32 +290,49 @@ const STUDIO_SELECT = `SELECT * FROM studios`;
  */
 export async function listAllStudios(opts?: { limit?: number; offset?: number }): Promise<Studio[]> {
   await ensureCatalogSeeded();
+  const cacheKey = `${CACHE_PREFIX_LIST}studios:${opts?.limit ?? "all"}:${opts?.offset ?? 0}`;
+  const cached = await cacheGet<Studio[]>(cacheKey);
+  if (cached) return cached;
+
+  let rows: StudioRow[];
   if (opts) {
     const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
     const offset = Math.max(opts.offset ?? 0, 0);
-    const rows = (await getDb()
+    rows = (await getDb()
       .prepare(`${STUDIO_SELECT} ORDER BY rating DESC LIMIT ? OFFSET ?`)
       .all(limit, offset)) as unknown as StudioRow[];
-    return rows.map(rowToStudio);
+  } else {
+    rows = (await getDb()
+      .prepare(`${STUDIO_SELECT} ORDER BY rating DESC LIMIT 500`)
+      .all()) as unknown as StudioRow[];
   }
-  const rows = (await getDb()
-    .prepare(`${STUDIO_SELECT} ORDER BY rating DESC LIMIT 500`)
-    .all()) as unknown as StudioRow[];
-  return rows.map(rowToStudio);
+  const studios = rows.map(rowToStudio);
+  await cacheSet(cacheKey, studios, CACHE_TTL_LIST);
+  return studios;
 }
 
 export async function getStudioById(id: string): Promise<Studio | null> {
   await ensureCatalogSeeded();
+  const cacheKey = `${CACHE_PREFIX_STUDIO}id:${id}`;
+  const cached = await cacheGet<Studio>(cacheKey);
+  if (cached) return cached;
   const row = (await getDb().prepare(`${STUDIO_SELECT} WHERE id = ?`).get(id)) as unknown as
     StudioRow | undefined;
-  return row ? rowToStudio(row) : null;
+  const studio = row ? rowToStudio(row) : null;
+  if (studio) await cacheSet(cacheKey, studio, CACHE_TTL_INDIVIDUAL);
+  return studio;
 }
 
 export async function getStudioBySlug(slug: string): Promise<Studio | null> {
   await ensureCatalogSeeded();
+  const cacheKey = `${CACHE_PREFIX_STUDIO}slug:${slug}`;
+  const cached = await cacheGet<Studio>(cacheKey);
+  if (cached) return cached;
   const row = (await getDb().prepare(`${STUDIO_SELECT} WHERE slug = ?`).get(slug)) as unknown as
     StudioRow | undefined;
-  return row ? rowToStudio(row) : null;
+  const studio = row ? rowToStudio(row) : null;
+  if (studio) await cacheSet(cacheKey, studio, CACHE_TTL_INDIVIDUAL);
+  return studio;
 }
 
 /** Resolve a public catalog studio by slug first, then by primary key. */
@@ -456,6 +496,8 @@ export async function createArtist(input: {
       now,
     );
 
+  // New entry invalidates list caches.
+  await cacheDelPrefix(CACHE_PREFIX_LIST);
   return getArtistById(id);
 }
 
@@ -475,6 +517,14 @@ export async function updateArtist(
   id: string,
   updates: Record<string, unknown>,
 ): Promise<Artist | null> {
+  // Invalidate caches before mutation.
+  const existing = (await getDb().prepare("SELECT slug FROM artists WHERE id = ?").get(id)) as
+    | { slug: string }
+    | undefined;
+  if (existing) {
+    await cacheDel(`${CACHE_PREFIX_ARTIST}id:${id}`, `${CACHE_PREFIX_ARTIST}slug:${existing.slug}`);
+    await cacheDelPrefix(CACHE_PREFIX_LIST);
+  }
   const ok = await applyUpdate("artists", ARTIST_UPDATE_FIELDS, id, updates);
   return ok ? getArtistById(id) : null;
 }
@@ -483,6 +533,13 @@ export async function updateStudio(
   id: string,
   updates: Record<string, unknown>,
 ): Promise<Studio | null> {
+  const existing = (await getDb().prepare("SELECT slug FROM studios WHERE id = ?").get(id)) as
+    | { slug: string }
+    | undefined;
+  if (existing) {
+    await cacheDel(`${CACHE_PREFIX_STUDIO}id:${id}`, `${CACHE_PREFIX_STUDIO}slug:${existing.slug}`);
+    await cacheDelPrefix(CACHE_PREFIX_LIST);
+  }
   const ok = await applyUpdate("studios", STUDIO_UPDATE_FIELDS, id, updates);
   return ok ? getStudioById(id) : null;
 }
@@ -570,6 +627,7 @@ export async function createStudio(input: {
       now,
     );
 
+  await cacheDelPrefix(CACHE_PREFIX_LIST);
   return getStudioById(id);
 }
 
@@ -664,6 +722,14 @@ export async function addEntityReview(input: NewReviewInput): Promise<Review> {
     );
 
   await blendAggregate(input.entityType, input.entityId, Math.round(input.rating));
+
+  // Invalidate caches for the reviewed entity and list pages.
+  if (input.entityType === "artist") {
+    await cacheDel(`${CACHE_PREFIX_ARTIST}id:${input.entityId}`);
+  } else {
+    await cacheDel(`${CACHE_PREFIX_STUDIO}id:${input.entityId}`);
+  }
+  await cacheDelPrefix(CACHE_PREFIX_LIST);
 
   const row = (await db.prepare("SELECT * FROM reviews WHERE id = ?").get(id)) as unknown as
     ReviewRow | undefined;

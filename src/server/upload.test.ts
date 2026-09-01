@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
 import { hashPassword } from "./password";
-import { uploadFileDirect, deleteFile, uploadArtistPortfolio, uploadStudioPortfolio } from "./upload";
+import {
+  uploadFileDirect,
+  deleteFile,
+  uploadArtistPortfolio,
+  uploadStudioPortfolio,
+} from "./upload";
 import { getArtistById } from "./catalog";
 
 async function createTestUser(role = "artist") {
@@ -13,7 +18,7 @@ async function createTestUser(role = "artist") {
     .prepare(
       "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
-    .run(userId, `${userId}@test.local`, "Test User", role, hashPassword("password123"), new Date().toISOString());
+    .run(userId, `${userId}@test.local}`, "Test User", role, hashPassword("password123"), new Date().toISOString());
   return userId;
 }
 
@@ -49,6 +54,46 @@ describe("uploadArtistPortfolio", () => {
     const result = await uploadArtistPortfolio(userId, []);
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBe(0);
+  });
+
+  it("filters non-image file types", async () => {
+    const userId = await createTestUser();
+    const nonImageFile: File = {
+      name: "test.txt",
+      type: "text/plain",
+      size: 100,
+      webkitRelativePath: "",
+      arrayBuffer: async () => new ArrayBuffer(0),
+      text: async () => "",
+      slice: [],
+      byteLength: 0,
+      stream: null,
+    } as unknown as File;
+    const result = await uploadArtistPortfolio(userId, [nonImageFile]);
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBe(0);
+  });
+
+  it("limits files to MAX_FILES_PER_UPLOAD", async () => {
+    const userId = await createTestUser();
+    const manyFiles: File[] = [];
+    for (let i = 0; i < 30; i++) {
+      const f: File = {
+        name: `file-${i}.jpg`,
+        type: "image/jpeg",
+        size: 100,
+        webkitRelativePath: "",
+        arrayBuffer: async () => new ArrayBuffer(0),
+        text: async () => "",
+        slice: [],
+        byteLength: 0,
+        stream: null,
+      } as unknown as File;
+      manyFiles.push(f);
+    }
+    const result = await uploadArtistPortfolio(userId, manyFiles);
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeLessThanOrEqual(20); // MAX_FILES_PER_UPLOAD
   });
 });
 

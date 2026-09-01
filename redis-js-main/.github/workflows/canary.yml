@@ -1,0 +1,82 @@
+name: Canary Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to release
+        required: true
+        type: choice
+        options:
+          - "@upstash/redis"
+          - "@upstash/search-ioredis"
+          - "@upstash/search-redis"
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Version snapshot
+        run: pnpm changeset version --snapshot canary
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve package directory
+        id: resolve
+        run: |
+          case "${{ inputs.package }}" in
+            "@upstash/redis")          PKG_DIR="packages/redis" ;;
+            "@upstash/search-ioredis") PKG_DIR="packages/search-ioredis" ;;
+            "@upstash/search-redis")   PKG_DIR="packages/search-redis" ;;
+            *) echo "Unknown package: ${{ inputs.package }}"; exit 1 ;;
+          esac
+          echo "pkg_dir=$PKG_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Read snapshot version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./${{ steps.resolve.outputs.pkg_dir }}/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Snapshot version: $VERSION"
+
+      - run: pnpm -r build
+
+      - name: Create GitHub prerelease
+        run: |
+          TAG="${{ inputs.package }}@${{ steps.version.outputs.version }}"
+          gh release create "$TAG" \
+            --prerelease \
+            --target "${{ github.sha }}" \
+            --title "$TAG" \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release metadata
+        run: |
+          jq -n \
+            --arg name "${{ inputs.package }}" \
+            --arg version "${{ steps.version.outputs.version }}" \
+            '{packages: [{name: $name, version: $version}], prerelease: true}' > release-meta.json
+
+      - name: Upload release metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-meta
+          path: release-meta.json

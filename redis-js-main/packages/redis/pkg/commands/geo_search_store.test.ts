@@ -1,0 +1,151 @@
+import { afterAll, describe, expect, test } from "bun:test";
+import { keygen, newHttpClient } from "../test-utils.ts";
+
+import { GeoAddCommand } from "./geo_add.ts";
+import { GeoSearchStoreCommand } from "./geo_search_store.ts";
+import { ZRangeCommand } from "./zrange.ts";
+
+const client = newHttpClient();
+const { newKey, cleanup } = keygen();
+afterAll(cleanup);
+
+describe("GEOSSEARCHSTORE tests", () => {
+  test("should return members within the radius and store them in sorted set", async () => {
+    const key = newKey();
+    const destination = newKey();
+
+    await new GeoAddCommand([
+      key,
+      { longitude: -73.9857, latitude: 40.7488, member: "Empire State Building" },
+      { longitude: -74.0445, latitude: 40.6892, member: "Statue of Liberty" },
+      { longitude: -73.9632, latitude: 40.7789, member: "Central Park" },
+      { longitude: -73.873, latitude: 40.7769, member: "LaGuardia Airport" },
+      { longitude: -74.177, latitude: 40.6413, member: "JFK Airport" },
+      { longitude: -73.9772, latitude: 40.7527, member: "Grand Central Terminal" },
+    ]).exec(client);
+
+    const res = await new GeoSearchStoreCommand([
+      destination,
+      key,
+      { type: "FROMMEMBER", member: "Empire State Building" },
+      { type: "BYRADIUS", radius: 5, radiusType: "KM" },
+      "ASC",
+    ]).exec(client);
+    const zrangeRes = await new ZRangeCommand([destination, 0, -1, { withScores: true }]).exec(
+      client
+    );
+    expect(zrangeRes).toEqual([
+      "Empire State Building",
+      1_791_875_672_666_387,
+      "Grand Central Terminal",
+      1_791_875_708_058_440,
+      "Central Park",
+      1_791_875_790_048_608,
+    ]);
+    expect(res).toEqual(zrangeRes.length / 2);
+  });
+
+  test("should store geosearch in sorted set with distances", async () => {
+    const key = newKey();
+    const destination = newKey();
+
+    await new GeoAddCommand([
+      key,
+      { longitude: -73.9857, latitude: 40.7488, member: "Empire State Building" },
+      { longitude: -74.0445, latitude: 40.6892, member: "Statue of Liberty" },
+      { longitude: -73.9632, latitude: 40.7789, member: "Central Park" },
+      { longitude: -73.873, latitude: 40.7769, member: "LaGuardia Airport" },
+      { longitude: -74.177, latitude: 40.6413, member: "JFK Airport" },
+      { longitude: -73.9772, latitude: 40.7527, member: "Grand Central Terminal" },
+    ]).exec(client);
+
+    const res = await new GeoSearchStoreCommand([
+      destination,
+      key,
+      { type: "FROMMEMBER", member: "Empire State Building" },
+      { type: "BYRADIUS", radius: 5, radiusType: "KM" },
+      "ASC",
+      { storeDist: true },
+    ]).exec(client);
+    const zrangeRes = await new ZRangeCommand([destination, 0, -1, { withScores: true }]).exec(
+      client
+    );
+    expect(zrangeRes.length).toEqual(6);
+    expect(zrangeRes[0]).toEqual("Empire State Building");
+    expect(Number(zrangeRes[1])).toBeCloseTo(0, 4);
+    expect(zrangeRes[2]).toEqual("Grand Central Terminal");
+    expect(Number(zrangeRes[3])).toBeCloseTo(0.837_574_474_383_9, 4);
+    expect(zrangeRes[4]).toEqual("Central Park");
+    expect(Number(zrangeRes[5])).toBeCloseTo(3.847_390_522_181_6, 4);
+    expect(res).toEqual(zrangeRes.length / 2);
+  });
+
+  test("should return object members within the radius and store them in sorted set with distance and members", async () => {
+    const key = newKey();
+    const destination = newKey();
+
+    await new GeoAddCommand<{ name: string }>([
+      key,
+      { longitude: -73.9857, latitude: 40.7488, member: { name: "Empire State Building" } },
+      { longitude: -74.0445, latitude: 40.6892, member: { name: "Statue of Liberty" } },
+      { longitude: -73.9632, latitude: 40.7789, member: { name: "Central Park" } },
+      { longitude: -73.873, latitude: 40.7769, member: { name: "LaGuardia Airport" } },
+      { longitude: -74.177, latitude: 40.6413, member: { name: "JFK Airport" } },
+      { longitude: -73.9772, latitude: 40.7527, member: { name: "Grand Central Terminal" } },
+    ]).exec(client);
+
+    const res = await new GeoSearchStoreCommand([
+      destination,
+      key,
+      { type: "FROMMEMBER", member: { name: "Empire State Building" } },
+      { type: "BYRADIUS", radius: 5, radiusType: "KM" },
+      "DESC",
+      { storeDist: true },
+    ]).exec(client);
+    const zrangeRes = await new ZRangeCommand([destination, 0, -1, { withScores: true }]).exec(
+      client
+    );
+    expect(zrangeRes.length).toEqual(6);
+    expect(zrangeRes[0]).toEqual({ name: "Empire State Building" });
+    expect(Number(zrangeRes[1])).toBeCloseTo(0, 4);
+    expect(zrangeRes[2]).toEqual({ name: "Grand Central Terminal" });
+    expect(Number(zrangeRes[3])).toBeCloseTo(0.837_574_474_383_9, 4);
+    expect(zrangeRes[4]).toEqual({ name: "Central Park" });
+    expect(Number(zrangeRes[5])).toBeCloseTo(3.847_390_522_181_6, 4);
+    expect(res).toEqual(zrangeRes.length / 2);
+  });
+
+  test("should return limited amount of members and store them in sorted set", async () => {
+    const key = newKey();
+    const destination = newKey();
+
+    await new GeoAddCommand([
+      key,
+      { longitude: -73.9857, latitude: 40.7488, member: "Empire State Building" },
+      { longitude: -74.0445, latitude: 40.6892, member: "Statue of Liberty" },
+      { longitude: -73.9632, latitude: 40.7789, member: "Central Park" },
+      { longitude: -73.873, latitude: 40.7769, member: "LaGuardia Airport" },
+      { longitude: -74.177, latitude: 40.6413, member: "JFK Airport" },
+      { longitude: -73.9772, latitude: 40.7527, member: "Grand Central Terminal" },
+    ]).exec(client);
+
+    const res = await new GeoSearchStoreCommand([
+      destination,
+      key,
+      { type: "FROMMEMBER", member: "Empire State Building" },
+      { type: "BYRADIUS", radius: 5, radiusType: "KM" },
+      "ASC",
+      { count: { limit: 2 } },
+    ]).exec(client);
+    const zrangeRes = await new ZRangeCommand([destination, 0, -1, { withScores: true }]).exec(
+      client
+    );
+    expect(zrangeRes).toEqual([
+      "Empire State Building",
+      1_791_875_672_666_387,
+      "Grand Central Terminal",
+      1_791_875_708_058_440,
+    ]);
+    expect(res).toEqual(zrangeRes.length / 2);
+  });
+});
