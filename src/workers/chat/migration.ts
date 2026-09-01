@@ -145,7 +145,7 @@ export async function validateChatSystem(bookingId: string, userToken: string): 
     errors.push(`History load: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  let sendReceive = false;
+  const sendReceive = false;
   // ... implement with two test users
 
   // Test 4: Presence

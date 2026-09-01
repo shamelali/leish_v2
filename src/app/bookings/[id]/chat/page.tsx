@@ -31,10 +31,10 @@ export default function BookingChatPage({ params }: BookingChatProps) {
 
   // Show chat after session is confirmed
   useEffect(() => {
-    if (!loading && session) {
+    if (session) {
       setShowChat(true);
     }
-  }, [loading, session]);
+  }, [session]);
 
   const wsUrl = process.env.NEXT_PUBLIC_CHAT_WS_URL;
 

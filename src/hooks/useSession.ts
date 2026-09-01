@@ -6,7 +6,9 @@ import { useAuth } from "@/lib/auth";
  * Get the current session token from the auth cookie
  * This reads the httpOnly cookie via the browser's cookie API
  */
-export function useSession(): { session: { token: string; user: any } | null; loading: boolean } {
+import type { User } from "@/lib/types";
+
+export function useSession(): { session: { token: string; user: User } | null; loading: boolean } {
   const { user, loading } = useAuth();
 
   // Extract token from cookie
