@@ -9,6 +9,11 @@ const securityHeaders = [
     value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
   },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+  // Cloudflare Turnstile CSP — must allow challenges.cloudflare.com
+  {
+    key: "Content-Security-Policy",
+    value: "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src https://challenges.cloudflare.com; img-src data: https:; style-src 'self' 'unsafe-inline';",
+  },
 ];
 
 const supabasePattern = {
