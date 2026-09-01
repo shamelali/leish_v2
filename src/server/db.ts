@@ -483,6 +483,7 @@ const SQLITE_SCHEMA = `
     role       TEXT NOT NULL CHECK (role IN ('customer','artist','studio','admin')),
     password   TEXT NOT NULL,
     supabase_id TEXT,
+    email_verified INTEGER NOT NULL DEFAULT 0,
     consent    INTEGER NOT NULL DEFAULT 0,
     consent_timestamp TEXT,
     created_at TEXT NOT NULL
@@ -498,8 +499,12 @@ const SQLITE_SCHEMA = `
     date        TEXT NOT NULL,
     time        TEXT NOT NULL,
     notes       TEXT,
+    event_type  TEXT,
+    venue       TEXT,
+    guest_count INTEGER NOT NULL DEFAULT 0,
     status      TEXT NOT NULL DEFAULT 'requested'
                 CHECK (status IN ('requested','accepted','confirmed','cancelled','completed')),
+    balance_reminder_at TEXT,
     created_at  TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS password_resets (

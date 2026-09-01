@@ -1,5 +1,3 @@
-"use server";
-
 import { verifySessionToken } from "./session";
 import { getDb, type UserRow } from "./db";
 import { jsonError, readJson } from "./http";
@@ -17,37 +15,28 @@ const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avi
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_FILES_PER_UPLOAD = 20;
 
-// ── Magic byte signatures ───────────────────────────────────────────────────
-
-const MAGIC_BYTES: Record<string, number[][]> = {
-  "image/jpeg": [[0xff, 0xd8, 0xff]],
-  "image/png": [[0x89, 0x50, 0x4e, 0x47]],
-  "image/webp": [
-    [0x52, 0x49, 0x46, 0x46], // RIFF header
-  ],
-  "image/avif": [
-    [0x00, 0x00, 0x00], // ftyp box (partial)
-  ],
+const MAGIC_BYTES: Record<string, number[]> = {
+  "image/jpeg": [0xff, 0xd8, 0xff],
+  "image/png": [0x89, 0x50, 0x4e, 0x47],
+  "image/webp": [0x52, 0x49, 0x46, 0x46],
+  "image/avif": [0x00, 0x00, 0x00],
 };
 
-function validateMagicBytes(buffer: Buffer, expectedType: string): boolean {
-  const signatures = MAGIC_BYTES[expectedType];
-  if (!signatures) return false;
-  return signatures.some((sig) =>
-    sig.every((byte, i) => buffer[i] === byte),
-  );
+export { ALLOWED_IMAGE_TYPES, MAX_FILE_SIZE, MAX_FILES_PER_UPLOAD, MAGIC_BYTES };
+
+export function sanitizeFilename(name: string): string {
+  return name
+    .replace(/\0/g, "")
+    .replace(/[/\\]/g, "_")
+    .replace(/[<>"|?*]/g, "_")
+    .replace(/\.{2,}/g, ".")
+    .substring(0, 100);
 }
 
-// ── Filename sanitization ───────────────────────────────────────────────────
-
-function sanitizeFilename(name: string): string {
-  // Remove path separators, null bytes, and dangerous characters.
-  return name
-    .replace(/[/\\:]/g, "_")
-    .replace(/\0/g, "")
-    .replace(/[<>"|?*]/g, "_")
-    .replace(/\.{2,}/g, ".") // collapse multiple dots
-    .slice(0, 100); // limit length
+function validateMagicBytes(buffer: Buffer, expectedType: string): boolean {
+  const sig = MAGIC_BYTES[expectedType];
+  if (!sig) return false;
+  return sig.every((byte: number, i: number) => buffer[i] === byte);
 }
 
 async function requireAuth(request: Request): Promise<{ user: UserRow; payload: { sub: string } } | { error: Response }> {

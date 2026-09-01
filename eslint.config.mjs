@@ -16,6 +16,11 @@ const eslintConfig = defineConfig([
     "coverage/**",
     "playwright-report/**",
     "test-results/**",
+    // Unrelated directories:
+    "my-app/**",
+    "my-first-worker/**",
+    ".agents/**",
+    ".claude/**",
   ]),
 ]);
 
