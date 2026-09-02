@@ -78,6 +78,7 @@ export async function GET(request: Request) {
     quotation_expiry: true,
     balance_reminder: true,
     status_changed: true,
+    review_request: true,
   };
 
   if (!row) {

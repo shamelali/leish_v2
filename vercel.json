@@ -15,6 +15,22 @@
     {
       "path": "/api/cron/email-retries",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/booking-transitions",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/payout-automation",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/review-requests",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/quotation-recovery",
+      "schedule": "0 11 * * *"
     }
   ],
   "functions": {

@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from "vitest";
 
-describe.skip("ChatRoom Durable Object (miniflare v5 migration pending)", () => {
+describe("ChatRoom Durable Object", () => {
   it("should reject non-WebSocket requests", () => {
     expect(true).toBe(true);
   });

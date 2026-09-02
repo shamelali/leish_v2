@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
+import { randomUUID } from "node:crypto";
 import type { Role } from "@/lib/types";
 import { getDb } from "@/server/db";
 import { logger } from "@/server/logger";
@@ -34,12 +35,12 @@ export interface SessionPayload {
   email: string;
   name: string;
   role: Role;
-  jti: string;
+  jti?: string;
 }
 
 export async function createSessionToken(payload: SessionPayload): Promise<string> {
   const { sub, email, name, role } = payload;
-  const jti = payload.jti ?? crypto.randomUUID();
+  const jti = payload.jti ?? randomUUID();
 
   const jwt = await new SignJWT({ email, name, role, jti })
     .setProtectedHeader({ alg: "HS256" })
@@ -128,10 +129,12 @@ export async function rotateSessionIfNeeded(
     if (age < ROTATE_AFTER_SECONDS) return null;
 
     // Revoke old JTI
-    await revokeSession(payload.jti);
+    if (payload.jti) {
+      await revokeSession(payload.jti);
+    }
 
     // Issue new token with fresh JTI
-    const newJti = crypto.randomUUID();
+    const newJti = randomUUID();
     return createSessionToken({
       sub: payload.sub,
       email: payload.email,

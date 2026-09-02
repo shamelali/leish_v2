@@ -62,7 +62,8 @@ export type EmailPreferenceKey =
   | "invoice_sent"
   | "quotation_expiry"
   | "balance_reminder"
-  | "status_changed";
+  | "status_changed"
+  | "review_request";
 
 /**
  * Check if a user has a specific email preference enabled.

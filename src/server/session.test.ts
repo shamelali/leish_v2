@@ -2,7 +2,14 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { createSessionToken, verifySessionToken, revokeSession, rotateSessionIfNeeded, sessionCookieOptions, SESSION_TTL_SECONDS } from "./session";
+import {
+  createSessionToken,
+  verifySessionToken,
+  revokeSession,
+  rotateSessionIfNeeded,
+  sessionCookieOptions,
+  SESSION_TTL_SECONDS,
+} from "./session";
 import { getDb } from "./db";
 
 async function seedUser(id: string) {
@@ -79,7 +86,7 @@ describe("session tokens (JWT)", () => {
       email: "a@b.com",
       name: "Aina",
       role: "customer",
-      jti: crypto.randomUUID(),
+      jti: randomUUID(),
     });
     const payload = await verifySessionToken(token);
     expect(payload?.jti).toBeDefined();

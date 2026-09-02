@@ -312,7 +312,7 @@ d("session management against PG", () => {
     expect(payload!.role).toBe("customer");
 
     // Revoke
-    await revokeSession(payload!.jti);
+    await revokeSession(payload!.jti!);
 
     // Verify revoked
     const revoked = await verifySessionToken(token);

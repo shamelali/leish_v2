@@ -15,6 +15,14 @@
       }
     ]
   },
+  "queues": {
+    "producers": [
+      {
+        "queue": "leish-email-queue",
+        "binding": "leish_email_queue"
+      }
+    ]
+  },
   "migrations": [
     {
       "tag": "v1",

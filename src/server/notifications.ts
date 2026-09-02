@@ -153,3 +153,84 @@ export async function notifySlackPayment(params: {
     text: `💰 ${label}: ${params.artistName} — RM ${(params.amountSen / 100).toFixed(2)} (${params.type}) ${ref}`,
   });
 }
+
+export async function notifySlackOverdueBalance(params: {
+  bookingId: string;
+  artistName: string;
+  service: string;
+  clientName?: string;
+  balanceAmount: number;
+}): Promise<void> {
+  const ref = `#${params.bookingId.slice(0, 8)}`;
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://leish.my"}/admin/bookings`;
+
+  await postToSlack({
+    blocks: [
+      {
+        type: "header",
+        text: { type: "plain_text", text: `🚨 Balance overdue: ${ref}`, emoji: true },
+      },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Artist:*\n${params.artistName}` },
+          { type: "mrkdwn", text: `*Service:*\n${params.service}` },
+          { type: "mrkdwn", text: `*Amount due:*\nRM ${(params.balanceAmount / 100).toFixed(2)}` },
+          { type: "mrkdwn", text: `*Reference:*\n${ref}` },
+          ...(params.clientName
+            ? [{ type: "mrkdwn" as const, text: `*Client:*\n${params.clientName}` }]
+            : []),
+        ],
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "View in Admin", emoji: true },
+            url: dashboardUrl,
+          },
+        ],
+      },
+    ],
+    text: `🚨 Balance overdue: ${params.artistName} — ${params.service} — RM ${(params.balanceAmount / 100).toFixed(2)} ${ref}`,
+  });
+}
+
+export async function notifySlackPayoutSummary(params: {
+  settled: number;
+  failed: number;
+  pendingRemaining: number;
+}): Promise<void> {
+  if (params.settled === 0 && params.failed === 0) return;
+
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://leish.my"}/admin/payouts`;
+
+  await postToSlack({
+    blocks: [
+      {
+        type: "header",
+        text: { type: "plain_text", text: "💰 Payout Automation Summary", emoji: true },
+      },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Auto-settled:*\n${params.settled}` },
+          { type: "mrkdwn", text: `*Failed:*\n${params.failed}` },
+          { type: "mrkdwn", text: `*Still pending:*\n${params.pendingRemaining}` },
+        ],
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "View Payouts", emoji: true },
+            url: dashboardUrl,
+          },
+        ],
+      },
+    ],
+    text: `💰 Payout automation: ${params.settled} settled, ${params.failed} failed, ${params.pendingRemaining} pending`,
+  });
+}

@@ -181,6 +181,30 @@ export function quotationExpiredHtml(params: {
   });
 }
 
+export function quotationRecoveryHtml(params: {
+  artistName: string;
+  service: string;
+  date: string;
+  time: string;
+  dashboardUrl: string;
+}): string {
+  return layout({
+    title: "Still interested?",
+    content: `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Still interested?</h2>
+      <p style="margin:0 0 24px;font-size:14px;color:#374151;">
+        Your quotation from <strong>${params.artistName}</strong> for ${params.service}
+        (${params.date} at ${params.time}) has expired without payment.
+      </p>
+      <p style="margin:0 0 24px;font-size:14px;color:#374151;">
+        If you're still interested, you can request a fresh quotation anytime — your booking
+        details are saved and the slot is still being held for you.
+      </p>
+      ${ctaButton(params.dashboardUrl, "Reopen My Booking")}
+    `,
+  });
+}
+
 export function balanceReminderHtml(params: {
   artistName: string;
   service: string;
@@ -205,6 +229,36 @@ export function balanceReminderHtml(params: {
       </div>
       <p style="margin:0 0 24px;font-size:14px;color:#374151;">
         Please complete the payment before the due date to secure your booking.
+      </p>
+      ${ctaButton(params.dashboardUrl, "View Booking")}
+    `,
+  });
+}
+
+export function balanceOverdueHtml(params: {
+  artistName: string;
+  service: string;
+  date: string;
+  balanceAmount: string;
+  bookingId: string;
+  dashboardUrl: string;
+}): string {
+  return layout({
+    title: "Balance overdue",
+    content: `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Balance overdue</h2>
+      <p style="margin:0 0 24px;font-size:14px;color:#374151;">
+        Your remaining balance for the booking with <strong>${params.artistName}</strong> is still outstanding:
+      </p>
+      <div style="background-color:#f9fafb;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+        ${infoRow("Service", params.service)}
+        ${infoRow("Event date", params.date)}
+        ${infoRow("Balance due", `RM ${params.balanceAmount}`)}
+        ${infoRow("Reference", `#${params.bookingId.slice(0, 8)}`)}
+      </div>
+      <p style="margin:0 0 24px;font-size:14px;color:#9f1239;">
+        Please settle this balance as soon as possible. If you believe this is a mistake, contact us at
+        <a href="mailto:support@leish.my" style="color:#7c3aed;">support@leish.my</a>.
       </p>
       ${ctaButton(params.dashboardUrl, "View Booking")}
     `,
@@ -313,6 +367,30 @@ export function verifyEmailHtml(params: { name: string; verifyUrl: string }): st
       ${ctaButton(params.verifyUrl, "Verify Email")}
       <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">
         If you didn't create an account, you can safely ignore this email.
+      </p>
+    `,
+  });
+}
+
+export function reviewRequestHtml(params: {
+  artistName: string;
+  service: string;
+  date: string;
+  reviewUrl: string;
+}): string {
+  return layout({
+    title: "How was your experience?",
+    content: `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">How was your experience?</h2>
+      <p style="margin:0 0 24px;font-size:14px;color:#374151;">
+        We hope you loved your recent <strong>${params.service}</strong> with <strong>${params.artistName}</strong> on ${params.date}!
+      </p>
+      <p style="margin:0 0 24px;font-size:14px;color:#374151;">
+        Your feedback helps other clients find great artists. Would you mind leaving a quick review?
+      </p>
+      ${ctaButton(params.reviewUrl, "Leave a Review")}
+      <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">
+        Thank you for using Leish!
       </p>
     `,
   });

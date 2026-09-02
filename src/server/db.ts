@@ -234,6 +234,9 @@ export const PG_SCHEMA = `
     status      TEXT NOT NULL DEFAULT 'requested'
                 CHECK (status IN ('requested','accepted','confirmed','cancelled','completed')),
     balance_reminder_at TEXT,
+    balance_escalated_at TEXT,
+    review_requested_at TEXT,
+    quotation_recovery_sent_at TEXT,
     created_at  TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS password_resets (
@@ -268,6 +271,7 @@ export const PG_SCHEMA = `
     quotation_expiry INTEGER NOT NULL DEFAULT 1,
     balance_reminder INTEGER NOT NULL DEFAULT 1,
     status_changed   INTEGER NOT NULL DEFAULT 1,
+    review_request   INTEGER NOT NULL DEFAULT 1,
     updated_at       TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS email_retries (
@@ -505,6 +509,9 @@ const SQLITE_SCHEMA = `
     status      TEXT NOT NULL DEFAULT 'requested'
                 CHECK (status IN ('requested','accepted','confirmed','cancelled','completed')),
     balance_reminder_at TEXT,
+    balance_escalated_at TEXT,
+    review_requested_at TEXT,
+    quotation_recovery_sent_at TEXT,
     created_at  TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS password_resets (
@@ -539,6 +546,7 @@ const SQLITE_SCHEMA = `
     quotation_expiry INTEGER NOT NULL DEFAULT 1,
     balance_reminder INTEGER NOT NULL DEFAULT 1,
     status_changed   INTEGER NOT NULL DEFAULT 1,
+    review_request   INTEGER NOT NULL DEFAULT 1,
     updated_at       TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS email_retries (
@@ -805,7 +813,10 @@ export function migrateSqlite(db: DatabaseSync) {
     ["venue", "ALTER TABLE bookings ADD COLUMN venue TEXT"],
     ["guest_count", "ALTER TABLE bookings ADD COLUMN guest_count INTEGER NOT NULL DEFAULT 0"],
     ["balance_reminder_at", "ALTER TABLE bookings ADD COLUMN balance_reminder_at TEXT"],
-    ["studio_id", "ALTER TABLE bookings ADD COLUMN studio_id TEXT REFERENCES studios(id) ON DELETE SET NULL"],
+    [
+      "studio_id",
+      "ALTER TABLE bookings ADD COLUMN studio_id TEXT REFERENCES studios(id) ON DELETE SET NULL",
+    ],
   ] as const) {
     if (!bookingCols.some((c) => c.name === col)) {
       db.exec(ddl);
@@ -817,7 +828,9 @@ export function migrateSqlite(db: DatabaseSync) {
       db.exec(`ALTER TABLE ${table} ADD COLUMN referral_code TEXT NOT NULL DEFAULT ''`);
     }
     if (!cols.some((c) => c.name === "referred_by")) {
-      db.exec(`ALTER TABLE ${table} ADD COLUMN referred_by TEXT REFERENCES ${table}(id) ON DELETE SET NULL`);
+      db.exec(
+        `ALTER TABLE ${table} ADD COLUMN referred_by TEXT REFERENCES ${table}(id) ON DELETE SET NULL`,
+      );
     }
     if (!cols.some((c) => c.name === "referral_earnings")) {
       db.exec(`ALTER TABLE ${table} ADD COLUMN referral_earnings INTEGER NOT NULL DEFAULT 0`);
@@ -943,6 +956,9 @@ export interface BookingRow {
   venue: string | null;
   guest_count: number;
   balance_reminder_at: string | null;
+  balance_escalated_at: string | null;
+  review_requested_at: string | null;
+  quotation_recovery_sent_at: string | null;
   status: "requested" | "accepted" | "confirmed" | "cancelled" | "completed";
   created_at: string;
 }

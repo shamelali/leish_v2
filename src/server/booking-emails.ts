@@ -6,10 +6,13 @@ import {
   quotationEmailHtml,
   invoiceEmailHtml,
   quotationExpiredHtml,
+  quotationRecoveryHtml,
   balanceReminderHtml,
+  balanceOverdueHtml,
   balanceBillHtml,
   payoutSettledHtml,
   bookingStatusChangedHtml,
+  reviewRequestHtml,
 } from "./email-templates";
 
 /**
@@ -173,6 +176,43 @@ export async function sendQuotationExpiredEmail(params: {
   });
 }
 
+export async function sendQuotationRecoveryEmail(params: {
+  bookingId: string;
+  ownerUserId: string;
+  artistName: string;
+  service: string;
+  date: string;
+  time: string;
+}) {
+  if (!(await isEmailEnabled(params.ownerUserId, "quotation_expiry"))) return;
+  const email = await getOwnerEmail(params.ownerUserId);
+  if (!email) return;
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/dashboard?booking=${params.bookingId}`;
+  await sendEmail({
+    to: email,
+    subject: `Still interested in ${params.artistName}? — Leish!`,
+    text: [
+      `Hi,`,
+      ``,
+      `Your quotation from ${params.artistName} for ${params.service}`,
+      `(${params.date} at ${params.time}) has expired without payment.`,
+      ``,
+      `If you're still interested, you can request a fresh quotation anytime —`,
+      `your booking details are saved and the slot is still being held for you:`,
+      dashboardUrl,
+      ``,
+      `— The Leish! team`,
+    ].join("\n"),
+    html: quotationRecoveryHtml({
+      artistName: params.artistName,
+      service: params.service,
+      date: params.date,
+      time: params.time,
+      dashboardUrl,
+    }),
+  });
+}
+
 export async function sendBalanceReminder(params: {
   bookingId: string;
   ownerUserId: string;
@@ -215,6 +255,45 @@ export async function sendBalanceReminder(params: {
   });
 }
 
+export async function sendBalanceOverdueEmail(params: {
+  bookingId: string;
+  ownerUserId: string;
+  artistName: string;
+  service: string;
+  date: string;
+  balanceAmount: number; // sen
+}) {
+  if (!(await isEmailEnabled(params.ownerUserId, "balance_reminder"))) return;
+  const email = await getOwnerEmail(params.ownerUserId);
+  if (!email) return;
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/dashboard?booking=${params.bookingId}`;
+  await sendEmail({
+    to: email,
+    subject: `Balance overdue — Leish!`,
+    text: [
+      `Hi,`,
+      ``,
+      `Your remaining balance for the booking with ${params.artistName} is still outstanding:`,
+      `  • Service: ${params.service}`,
+      `  • Event date: ${params.date}`,
+      `  • Balance due: RM ${(params.balanceAmount / 100).toFixed(2)}`,
+      `  • Reference: #${params.bookingId.slice(0, 8)}`,
+      ``,
+      `Please settle this balance as soon as possible:`,
+      dashboardUrl,
+      ``,
+      `— The Leish! team`,
+    ].join("\n"),
+    html: balanceOverdueHtml({
+      artistName: params.artistName,
+      service: params.service,
+      date: params.date,
+      balanceAmount: (params.balanceAmount / 100).toFixed(2),
+      bookingId: params.bookingId,
+      dashboardUrl,
+    }),
+  });
+}
 export async function sendBalanceBillEmail(params: {
   bookingId: string;
   ownerUserId: string;
@@ -335,6 +414,47 @@ export async function notifyBookingStatusChanged(params: {
       headline: headline[params.status],
       bookingId: params.bookingId,
       dashboardUrl,
+    }),
+  });
+}
+
+export async function sendReviewRequestEmail(params: {
+  bookingId: string;
+  ownerUserId: string;
+  artistName: string;
+  service: string;
+  date: string;
+  entityId: string;
+  entityType: "artist" | "studio";
+}) {
+  if (!(await isEmailEnabled(params.ownerUserId, "review_request"))) return;
+  const email = await getOwnerEmail(params.ownerUserId);
+  if (!email) return;
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const reviewUrl = `${siteUrl}/dashboard?booking=${params.bookingId}&action=review`;
+
+  await sendEmail({
+    to: email,
+    subject: `How was your experience with ${params.artistName}? — Leish!`,
+    text: [
+      `Hi,`,
+      ``,
+      `We hope you loved your recent ${params.service} with ${params.artistName} on ${params.date}!`,
+      ``,
+      `Your feedback helps other clients find great artists. Would you mind leaving a quick review?`,
+      ``,
+      `Leave a review: ${reviewUrl}`,
+      ``,
+      `Thank you for using Leish!`,
+      ``,
+      `— The Leish! team`,
+    ].join("\n"),
+    html: reviewRequestHtml({
+      artistName: params.artistName,
+      service: params.service,
+      date: params.date,
+      reviewUrl,
     }),
   });
 }

@@ -208,6 +208,9 @@ export const POST = statefulRoute(
         venue: venue || null,
         guest_count: guestCount || 0,
         balance_reminder_at: null,
+        balance_escalated_at: null,
+        review_requested_at: null,
+        quotation_recovery_sent_at: null,
         status: "requested",
         created_at: new Date().toISOString(),
       };

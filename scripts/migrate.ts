@@ -33,7 +33,16 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
     ["venue", "ALTER TABLE bookings ADD COLUMN venue TEXT"],
     ["guest_count", "ALTER TABLE bookings ADD COLUMN guest_count INTEGER NOT NULL DEFAULT 0"],
     ["balance_reminder_at", "ALTER TABLE bookings ADD COLUMN balance_reminder_at TEXT"],
-    ["studio_id", "ALTER TABLE bookings ADD COLUMN studio_id TEXT REFERENCES studios(id) ON DELETE SET NULL"],
+    ["balance_escalated_at", "ALTER TABLE bookings ADD COLUMN balance_escalated_at TEXT"],
+    [
+      "studio_id",
+      "ALTER TABLE bookings ADD COLUMN studio_id TEXT REFERENCES studios(id) ON DELETE SET NULL",
+    ],
+    ["review_requested_at", "ALTER TABLE bookings ADD COLUMN review_requested_at TEXT"],
+    [
+      "quotation_recovery_sent_at",
+      "ALTER TABLE bookings ADD COLUMN quotation_recovery_sent_at TEXT",
+    ],
   ],
   email_outbox: [["html", "ALTER TABLE email_outbox ADD COLUMN html TEXT"]],
   email_preferences: [
@@ -61,6 +70,7 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
       "status_changed",
       "ALTER TABLE email_preferences ADD COLUMN status_changed INTEGER NOT NULL DEFAULT 1",
     ],
+    ["review_request", "ALTER TABLE email_preferences ADD COLUMN review_request INTEGER NOT NULL DEFAULT 1"],
   ],
   email_retries: [
     ["html", "ALTER TABLE email_retries ADD COLUMN html TEXT"],
@@ -68,13 +78,25 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
   ],
   artists: [
     ["referral_code", "ALTER TABLE artists ADD COLUMN referral_code TEXT NOT NULL DEFAULT ''"],
-    ["referred_by", "ALTER TABLE artists ADD COLUMN referred_by TEXT REFERENCES artists(id) ON DELETE SET NULL"],
-    ["referral_earnings", "ALTER TABLE artists ADD COLUMN referral_earnings INTEGER NOT NULL DEFAULT 0"],
+    [
+      "referred_by",
+      "ALTER TABLE artists ADD COLUMN referred_by TEXT REFERENCES artists(id) ON DELETE SET NULL",
+    ],
+    [
+      "referral_earnings",
+      "ALTER TABLE artists ADD COLUMN referral_earnings INTEGER NOT NULL DEFAULT 0",
+    ],
   ],
   studios: [
     ["referral_code", "ALTER TABLE studios ADD COLUMN referral_code TEXT NOT NULL DEFAULT ''"],
-    ["referred_by", "ALTER TABLE studios ADD COLUMN referred_by TEXT REFERENCES studios(id) ON DELETE SET NULL"],
-    ["referral_earnings", "ALTER TABLE studios ADD COLUMN referral_earnings INTEGER NOT NULL DEFAULT 0"],
+    [
+      "referred_by",
+      "ALTER TABLE studios ADD COLUMN referred_by TEXT REFERENCES studios(id) ON DELETE SET NULL",
+    ],
+    [
+      "referral_earnings",
+      "ALTER TABLE studios ADD COLUMN referral_earnings INTEGER NOT NULL DEFAULT 0",
+    ],
   ],
 };
 

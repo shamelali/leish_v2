@@ -1,0 +1,63 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Trigger Vercel Deploy
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip deploy]')"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trigger Vercel deployment
+        id: deploy
+        run: |
+          RESPONSE=$(curl -s --max-time 30 -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}" \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "source": "github-actions",
+              "branch": "${{ github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "deployer": "${{ github.actor }}"
+            }' \
+            -w '\n%{http_code}')
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
+          echo "response=$BODY" >> $GITHUB_OUTPUT
+
+          if [[ "$HTTP_CODE" == "201" || "$HTTP_CODE" == "200" ]]; then
+            JOB_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+            echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+            echo "✅ Deployment triggered (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Deployment trigger failed (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+
+      - name: Deployment summary
+        if: always() && steps.deploy.outputs.http_code
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Project** | [duta-integra/leishv2](https://vercel.com/duta-integra/leishv2/deployments) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | [\`${{ github.sha }}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered by** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ steps.deploy.outputs.http_code == '201' && '✅ Triggered' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "${{ steps.deploy.outputs.job_id }}" ]]; then
+            echo "| **Job ID** | \`${{ steps.deploy.outputs.job_id }}\` |" >> $GITHUB_STEP_SUMMARY
+          fi

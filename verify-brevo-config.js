@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
  * Verification script to confirm Brevo email configuration
+ *
+ * Run with: node --experimental-strip-types verify-brevo-config.js
+ * (imports the TypeScript module src/server/integrations.ts directly)
  */
 
-const { getActiveEmailProvider, isEmailConfigured } = require('./src/server/integrations');
+import { getActiveEmailProvider, isEmailConfigured } from "./src/server/integrations.ts";
 
 console.log('🔍 Verifying Leish! v2 Email Configuration\n');
 

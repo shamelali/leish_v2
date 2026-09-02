@@ -42,7 +42,10 @@ export interface PayoutRow {
 }
 
 /** The claimed artist/studio user for a catalog entity, if any. Handles Option B studio_id. */
-async function artistUserIdForBooking(artistId: string, studioId?: string | null): Promise<string | null> {
+async function artistUserIdForBooking(
+  artistId: string,
+  studioId?: string | null,
+): Promise<string | null> {
   if (studioId) {
     const sRow = (await getDb()
       .prepare("SELECT user_id FROM studio_profiles WHERE studio_id = ?")

@@ -14,7 +14,9 @@ export default function BookingChatPage({ params }: BookingChatProps) {
   const { session, loading } = useSession();
   const router = useRouter();
   const [bookingId, setBookingId] = useState("");
-  const [showChat, setShowChat] = useState(false);
+
+  // Show chat as soon as the session is confirmed (derived — no effect needed).
+  const showChat = Boolean(session);
 
   useEffect(() => {
     (async () => {
@@ -29,12 +31,7 @@ export default function BookingChatPage({ params }: BookingChatProps) {
     }
   }, [session, loading, router, bookingId]);
 
-  // Show chat after session is confirmed
-  useEffect(() => {
-    if (session) {
-      setShowChat(true);
-    }
-  }, [session]);
+  
 
   const wsUrl = process.env.NEXT_PUBLIC_CHAT_WS_URL;
 
