@@ -181,22 +181,32 @@ const ARTIST_SELECT = `SELECT * FROM artists`;
  * unbounded `SELECT *` scans flagged in the performance audit.
  */
 export async function listAllArtists(opts?: { limit?: number; offset?: number }): Promise<Artist[]> {
-  await ensureCatalogSeeded();
+  try {
+    await ensureCatalogSeeded();
+  } catch (err) {
+    console.error("[catalog] failed to seed, returning empty list:", err instanceof Error ? err.message : err);
+    return [];
+  }
   const cacheKey = `${CACHE_PREFIX_LIST}artists:${opts?.limit ?? "all"}:${opts?.offset ?? 0}`;
   const cached = await cacheGet<Artist[]>(cacheKey);
   if (cached) return cached;
 
   let rows: ArtistRow[];
-  if (opts) {
-    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
-    const offset = Math.max(opts.offset ?? 0, 0);
-    rows = (await getDb()
-      .prepare(`${ARTIST_SELECT} ORDER BY rating DESC LIMIT ? OFFSET ?`)
-      .all(limit, offset)) as unknown as ArtistRow[];
-  } else {
-    rows = (await getDb()
-      .prepare(`${ARTIST_SELECT} ORDER BY rating DESC LIMIT 500`)
-      .all()) as unknown as ArtistRow[];
+  try {
+    if (opts) {
+      const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
+      const offset = Math.max(opts.offset ?? 0, 0);
+      rows = (await getDb()
+        .prepare(`${ARTIST_SELECT} ORDER BY rating DESC LIMIT ? OFFSET ?`)
+        .all(limit, offset)) as unknown as ArtistRow[];
+    } else {
+      rows = (await getDb()
+        .prepare(`${ARTIST_SELECT} ORDER BY rating DESC LIMIT 500`)
+        .all()) as unknown as ArtistRow[];
+    }
+  } catch (err) {
+    console.error("[catalog] failed to list artists:", err instanceof Error ? err.message : err);
+    return [];
   }
   const artists = rows.map(rowToArtist);
   await cacheSet(cacheKey, artists, CACHE_TTL_LIST);
@@ -209,7 +219,12 @@ export async function listAllArtists(opts?: { limit?: number; offset?: number })
  * query and event-tag matching over the reduced set.
  */
 export async function listArtists(filters?: Partial<ArtistFilters>): Promise<Artist[]> {
-  await ensureCatalogSeeded();
+  try {
+    await ensureCatalogSeeded();
+  } catch (err) {
+    console.error("[catalog] failed to seed, returning empty list:", err instanceof Error ? err.message : err);
+    return [];
+  }
   const where: string[] = [];
   const params: (string | number)[] = [];
 
@@ -227,11 +242,17 @@ export async function listArtists(filters?: Partial<ArtistFilters>): Promise<Art
   }
 
   const sql = `${ARTIST_SELECT}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY rating DESC`;
-  let artists = (
-    (await getDb()
-      .prepare(sql)
-      .all(...params)) as unknown as ArtistRow[]
-  ).map(rowToArtist);
+  let artists: Artist[];
+  try {
+    artists = (
+      (await getDb()
+        .prepare(sql)
+        .all(...params)) as unknown as ArtistRow[]
+    ).map(rowToArtist);
+  } catch (err) {
+    console.error("[catalog] failed to list artists:", err instanceof Error ? err.message : err);
+    return [];
+  }
 
   if (
     filters &&
@@ -252,27 +273,47 @@ export async function listArtists(filters?: Partial<ArtistFilters>): Promise<Art
 }
 
 export async function getArtistById(id: string): Promise<Artist | null> {
-  await ensureCatalogSeeded();
+  try {
+    await ensureCatalogSeeded();
+  } catch (err) {
+    console.error("[catalog] failed to seed:", err instanceof Error ? err.message : err);
+    return null;
+  }
   const cacheKey = `${CACHE_PREFIX_ARTIST}id:${id}`;
   const cached = await cacheGet<Artist>(cacheKey);
   if (cached) return cached;
-  const row = (await getDb().prepare(`${ARTIST_SELECT} WHERE id = ?`).get(id)) as unknown as
-    ArtistRow | undefined;
-  const artist = row ? rowToArtist(row) : null;
-  if (artist) await cacheSet(cacheKey, artist, CACHE_TTL_INDIVIDUAL);
-  return artist;
+  try {
+    const row = (await getDb().prepare(`${ARTIST_SELECT} WHERE id = ?`).get(id)) as unknown as
+      ArtistRow | undefined;
+    const artist = row ? rowToArtist(row) : null;
+    if (artist) await cacheSet(cacheKey, artist, CACHE_TTL_INDIVIDUAL);
+    return artist;
+  } catch (err) {
+    console.error("[catalog] failed to get artist:", err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 export async function getArtistBySlug(slug: string): Promise<Artist | null> {
-  await ensureCatalogSeeded();
+  try {
+    await ensureCatalogSeeded();
+  } catch (err) {
+    console.error("[catalog] failed to seed:", err instanceof Error ? err.message : err);
+    return null;
+  }
   const cacheKey = `${CACHE_PREFIX_ARTIST}slug:${slug}`;
   const cached = await cacheGet<Artist>(cacheKey);
   if (cached) return cached;
-  const row = (await getDb().prepare(`${ARTIST_SELECT} WHERE slug = ?`).get(slug)) as unknown as
-    ArtistRow | undefined;
-  const artist = row ? rowToArtist(row) : null;
-  if (artist) await cacheSet(cacheKey, artist, CACHE_TTL_INDIVIDUAL);
-  return artist;
+  try {
+    const row = (await getDb().prepare(`${ARTIST_SELECT} WHERE slug = ?`).get(slug)) as unknown as
+      ArtistRow | undefined;
+    const artist = row ? rowToArtist(row) : null;
+    if (artist) await cacheSet(cacheKey, artist, CACHE_TTL_INDIVIDUAL);
+    return artist;
+  } catch (err) {
+    console.error("[catalog] failed to get artist:", err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 /** Resolve a public catalog artist by slug first, then by primary key. */
@@ -289,22 +330,32 @@ const STUDIO_SELECT = `SELECT * FROM studios`;
  * offset } for paginated access; unpaginated callers are capped at 500.
  */
 export async function listAllStudios(opts?: { limit?: number; offset?: number }): Promise<Studio[]> {
-  await ensureCatalogSeeded();
+  try {
+    await ensureCatalogSeeded();
+  } catch (err) {
+    console.error("[catalog] failed to seed, returning empty list:", err instanceof Error ? err.message : err);
+    return [];
+  }
   const cacheKey = `${CACHE_PREFIX_LIST}studios:${opts?.limit ?? "all"}:${opts?.offset ?? 0}`;
   const cached = await cacheGet<Studio[]>(cacheKey);
   if (cached) return cached;
 
   let rows: StudioRow[];
-  if (opts) {
-    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
-    const offset = Math.max(opts.offset ?? 0, 0);
-    rows = (await getDb()
-      .prepare(`${STUDIO_SELECT} ORDER BY rating DESC LIMIT ? OFFSET ?`)
-      .all(limit, offset)) as unknown as StudioRow[];
-  } else {
-    rows = (await getDb()
-      .prepare(`${STUDIO_SELECT} ORDER BY rating DESC LIMIT 500`)
-      .all()) as unknown as StudioRow[];
+  try {
+    if (opts) {
+      const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
+      const offset = Math.max(opts.offset ?? 0, 0);
+      rows = (await getDb()
+        .prepare(`${STUDIO_SELECT} ORDER BY rating DESC LIMIT ? OFFSET ?`)
+        .all(limit, offset)) as unknown as StudioRow[];
+    } else {
+      rows = (await getDb()
+        .prepare(`${STUDIO_SELECT} ORDER BY rating DESC LIMIT 500`)
+        .all()) as unknown as StudioRow[];
+    }
+  } catch (err) {
+    console.error("[catalog] failed to list studios:", err instanceof Error ? err.message : err);
+    return [];
   }
   const studios = rows.map(rowToStudio);
   await cacheSet(cacheKey, studios, CACHE_TTL_LIST);
@@ -312,27 +363,47 @@ export async function listAllStudios(opts?: { limit?: number; offset?: number })
 }
 
 export async function getStudioById(id: string): Promise<Studio | null> {
-  await ensureCatalogSeeded();
+  try {
+    await ensureCatalogSeeded();
+  } catch (err) {
+    console.error("[catalog] failed to seed:", err instanceof Error ? err.message : err);
+    return null;
+  }
   const cacheKey = `${CACHE_PREFIX_STUDIO}id:${id}`;
   const cached = await cacheGet<Studio>(cacheKey);
   if (cached) return cached;
-  const row = (await getDb().prepare(`${STUDIO_SELECT} WHERE id = ?`).get(id)) as unknown as
-    StudioRow | undefined;
-  const studio = row ? rowToStudio(row) : null;
-  if (studio) await cacheSet(cacheKey, studio, CACHE_TTL_INDIVIDUAL);
-  return studio;
+  try {
+    const row = (await getDb().prepare(`${STUDIO_SELECT} WHERE id = ?`).get(id)) as unknown as
+      StudioRow | undefined;
+    const studio = row ? rowToStudio(row) : null;
+    if (studio) await cacheSet(cacheKey, studio, CACHE_TTL_INDIVIDUAL);
+    return studio;
+  } catch (err) {
+    console.error("[catalog] failed to get studio:", err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 export async function getStudioBySlug(slug: string): Promise<Studio | null> {
-  await ensureCatalogSeeded();
+  try {
+    await ensureCatalogSeeded();
+  } catch (err) {
+    console.error("[catalog] failed to seed:", err instanceof Error ? err.message : err);
+    return null;
+  }
   const cacheKey = `${CACHE_PREFIX_STUDIO}slug:${slug}`;
   const cached = await cacheGet<Studio>(cacheKey);
   if (cached) return cached;
-  const row = (await getDb().prepare(`${STUDIO_SELECT} WHERE slug = ?`).get(slug)) as unknown as
-    StudioRow | undefined;
-  const studio = row ? rowToStudio(row) : null;
-  if (studio) await cacheSet(cacheKey, studio, CACHE_TTL_INDIVIDUAL);
-  return studio;
+  try {
+    const row = (await getDb().prepare(`${STUDIO_SELECT} WHERE slug = ?`).get(slug)) as unknown as
+      StudioRow | undefined;
+    const studio = row ? rowToStudio(row) : null;
+    if (studio) await cacheSet(cacheKey, studio, CACHE_TTL_INDIVIDUAL);
+    return studio;
+  } catch (err) {
+    console.error("[catalog] failed to get studio:", err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 /** Resolve a public catalog studio by slug first, then by primary key. */
