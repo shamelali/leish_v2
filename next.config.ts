@@ -12,7 +12,7 @@ const securityHeaders = [
   // Cloudflare Turnstile CSP — must allow challenges.cloudflare.com
   {
     key: "Content-Security-Policy",
-    value: "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src https://challenges.cloudflare.com; img-src data: https:; style-src 'self' 'unsafe-inline';",
+    value: "default-src 'self'; script-src 'self' 'sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=' 'sha256-35cLDmLFwhkossgndXMP8iTa3kLiLccFvfwRJe6XWuM=' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src https://challenges.cloudflare.com; img-src data: https:; style-src 'self' 'unsafe-inline';",
   },
 ];
 
