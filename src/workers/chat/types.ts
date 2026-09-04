@@ -1,126 +1,47 @@
 /**
- * Shared types for the Leish Chat system (Durable Objects + Client)
+ * Worker-side chat types.
+ *
+ * The wire protocol itself is defined once in `src/lib/chat/types.ts` and
+ * re-exported here, so the Durable Object and the browser client cannot drift
+ * apart — they previously did, and a `readBy` field existed on only one side.
+ *
+ * Only Cloudflare-specific bindings are declared in this file, because
+ * `src/workers` is excluded from the app tsconfig and `@cloudflare/workers-types`
+ * is not installed; keeping the protocol out of here means it still gets
+ * typechecked by `pnpm typecheck`.
  */
 
-// ── Core Message Types ────────────────────────────────────────────────────────
+export type {
+  ChatMessage,
+  ChatMessageInput,
+  UserPresence,
+  PresenceUpdate,
+  TypingUpdate,
+  ClientToServerMessage,
+  ServerToClientMessage,
+  BookingContext,
+  ChatRoomState,
+  ModerationAction,
+  ChatConfig,
+} from "@/lib/chat/types";
 
-export interface ChatMessage {
-  id: string;
-  bookingId: string;
-  senderId: string;
-  senderName: string;
-  senderRole: "client" | "artist" | "studio" | "admin";
-  body: string;
-  createdAt: string;
-  // Client-side only
-  optimistic?: boolean;
-  pending?: boolean;
-  failed?: boolean;
-  /** Client-assigned id for an optimistic message, echoed back on ack. */
-  tempId?: string;
-  readBy?: string[];
+export { DEFAULT_CHAT_CONFIG } from "@/lib/chat/types";
+
+// ── Worker Environment & Bindings ────────────────────────────────────────────
+
+/**
+ * The Durable Object's public surface, kept deliberately loose: typing the
+ * namespace as `DurableObjectNamespace<ChatRoom>` here would make types.ts
+ * import ChatRoom.ts, which imports types.ts back.
+ */
+export interface ChatRoomStub {
+  fetch(request: Request): Promise<Response>;
 }
 
-export interface ChatMessageInput {
-  bookingId: string;
-  body: string;
+export interface Env {
+  CHAT_ROOM: DurableObjectNamespace<ChatRoomStub>;
+  /** Auth validation — a service binding or an HTTP call to the main app. */
+  AUTH_SERVICE?: Fetcher;
+  /** Optional Analytics Engine dataset for chat metrics. */
+  CHAT_ANALYTICS?: AnalyticsEngineDataset;
 }
-
-// ── Presence Types ────────────────────────────────────────────────────────────
-
-export interface UserPresence {
-  userId: string;
-  name: string;
-  role: "client" | "artist" | "studio" | "admin";
-  status: "online" | "away" | "offline";
-  lastSeen: string;
-  isTyping: boolean;
-  typingAt?: string;
-}
-
-export interface PresenceUpdate {
-  type: "presence";
-  bookingId: string;
-  users: UserPresence[];
-}
-
-export interface TypingUpdate {
-  type: "typing";
-  bookingId: string;
-  userId: string;
-  userName: string;
-  isTyping: boolean;
-}
-
-// ── WebSocket Message Types (Client ↔ Server) ────────────────────────────────
-
-export type ClientToServerMessage =
-  | { type: "join"; bookingId: string; token: string }
-  | { type: "message"; bookingId: string; body: string; tempId: string }
-  | { type: "typing"; bookingId: string; isTyping: boolean }
-  | { type: "read"; bookingId: string; messageId: string }
-  | { type: "ping" }
-  | { type: "history"; bookingId: string; before?: string; limit?: number };
-
-export type ServerToClientMessage =
-  | { type: "welcome"; bookingId: string; user: UserPresence; users: UserPresence[] }
-  | { type: "history"; messages: ChatMessage[]; hasMore: boolean }
-  | { type: "message"; message: ChatMessage }
-  | { type: "messageAck"; tempId: string; messageId: string }
-  | { type: "messageFailed"; tempId: string; error: string }
-  | { type: "presence"; users: UserPresence[] }
-  | { type: "userJoined"; user: UserPresence }
-  | { type: "userLeft"; userId: string }
-  | { type: "typing"; typing: TypingUpdate }
-  | { type: "read"; messageId: string; userId: string }
-  | { type: "error"; code: string; message: string }
-  | { type: "pong" };
-
-// ── Booking Context (for auth validation) ────────────────────────────────────
-
-export interface BookingContext {
-  id: string;
-  userId: string; // Client who booked
-  artistId: string | null; // Artist assigned
-  studioId: string | null; // Studio assigned
-  status: string;
-}
-
-// ── Durable Object State ──────────────────────────────────────────────────────
-
-export interface ChatRoomState {
-  bookingId: string;
-  messages: ChatMessage[];
-  presence: Map<string, UserPresence>;
-  typingUsers: Map<string, number>; // userId -> timeout handle
-  messageSeq: number;
-}
-
-// ── Admin/Moderation ──────────────────────────────────────────────────────────
-
-export interface ModerationAction {
-  type: "delete" | "flag" | "ban";
-  messageId: string;
-  moderatorId: string;
-  reason?: string;
-}
-
-// ── Configuration ─────────────────────────────────────────────────────────────
-
-export interface ChatConfig {
-  maxMessageLength: number;
-  maxHistoryMessages: number;
-  presenceTimeoutMs: number;
-  typingTimeoutMs: number;
-  rateLimitPerMinute: number;
-  rateLimitBurst: number;
-}
-
-export const DEFAULT_CHAT_CONFIG: ChatConfig = {
-  maxMessageLength: 5000,
-  maxHistoryMessages: 100,
-  presenceTimeoutMs: 30_000,
-  typingTimeoutMs: 5_000,
-  rateLimitPerMinute: 30,
-  rateLimitBurst: 5,
-};

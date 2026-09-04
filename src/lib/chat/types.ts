@@ -1,5 +1,15 @@
 /**
- * Shared types for the Leish Chat system (Durable Objects + Client)
+ * Chat wire protocol — the single definition shared by the browser client and
+ * the Cloudflare Durable Object that implements it.
+ *
+ * This lives under src/lib (not src/workers) because src/workers is excluded
+ * from the app tsconfig, so anything defined there is never typechecked by
+ * `pnpm typecheck`. Keeping the protocol here means both sides of the wire are
+ * checked against one definition. The Worker re-exports it from
+ * src/workers/chat/types.ts, alongside its Cloudflare-only bindings.
+ *
+ * These types must stay platform-neutral: no Cloudflare globals, no DOM-only
+ * types, so that both the Worker and the browser can compile against them.
  */
 
 // ── Core Message Types ────────────────────────────────────────────────────────

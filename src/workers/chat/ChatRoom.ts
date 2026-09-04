@@ -22,18 +22,8 @@ import type {
   BookingContext,
   ChatRoomState,
   ChatConfig,
-  DEFAULT_CHAT_CONFIG,
+  Env,
 } from "./types";
-
-// ── Environment & Bindings ────────────────────────────────────────────────────
-
-interface Env {
-  CHAT_ROOM: DurableObjectNamespace<ChatRoom>;
-  // For auth validation (can be a service binding or HTTP call to main app)
-  AUTH_SERVICE?: Fetcher;
-  // Optional: Analytics Engine for chat metrics
-  CHAT_ANALYTICS?: AnalyticsEngineDataset;
-}
 
 // ── Helper Functions ──────────────────────────────────────────────────────────
 
