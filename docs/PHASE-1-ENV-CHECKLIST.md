@@ -142,10 +142,28 @@ serve images from Supabase Storage instead, that code path does not exist yet.
 | --------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `SENTRY_DSN`                                              | Sentry → new project → DSN | Roadmap step 11. Confirm errors arrive from `webhook/route.ts` and `email.ts`.                           |
 | `PEPPER_SECRET`                                           | `openssl rand -hex 16`     | HMAC pepper before scrypt. **Set at launch or never** — changing it invalidates every existing password. |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` | Cloudflare → Turnstile     | Bot protection. Inactive unless both are set.                                                            |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` | Cloudflare → Turnstile     | Bot protection. Inactive unless both are set. **Must be Cloudflare-issued — see below.**                 |
 | `ALLOWED_ORIGINS`                                         | comma-separated            | Extra CORS origins beyond the site URL.                                                                  |
 | `LOG_LEVEL`                                               | `info`                     | Default is `info`.                                                                                       |
 | `AGNOST_ORG_ID` + `NEXT_PUBLIC_AGNOST_ORG_ID`             | Agnost dashboard           | Analytics; no-ops when unset.                                                                            |
+
+> **🔴 `TURNSTILE_SECRET_KEY` cannot be self-generated.** It is a shared secret
+> issued by Cloudflare and paired with `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.
+> Rotate it in **Cloudflare → Turnstile → your widget → Rotate secret**, never
+> with `openssl rand`. A locally generated value is non-empty and plausible, so
+> it silently switches the app from "skip verification" to "attempt
+> verification", and Cloudflare rejects every call.
+>
+> Real Cloudflare secrets begin `0x`; documented testing keys begin `1x`/`2x`/`3x`.
+> As of `src/server/turnstile.ts` the app validates this format and **degrades
+> to skipping verification** (with a `malformed_secret` alert) rather than
+> failing closed, because failing closed on a bad secret rejects 100% of logins
+> and registrations. Do not "fix" that by failing closed — see the rationale in
+> that file's header.
+>
+> The same applies to the other third-party shared secrets: `BILLPLZ_API_KEY`
+> rotates at Billplz, OAuth keys at Supabase/Google/Facebook. Only
+> `SESSION_SECRET`, `CRON_SECRET`, and `PEPPER_SECRET` are yours to generate.
 
 ### Supabase client keys
 
@@ -262,6 +280,19 @@ Recommended, in order:
 
 Since the Billplz key doubles as the webhook HMAC secret, item 1 is the
 highest-priority action in this entire document.
+
+### 7.1 Rotation status — updated 2026-09-04
+
+| Secret                 | Status                        | Note                                                                                                                                                                                    |
+| ---------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BILLPLZ_API_KEY`      | ✅ Rotated at Billplz         | Live key on production, **sandbox key on preview** with `BILLPLZ_BASE_URL` pointed at sandbox. Correct split — keep it.                                                                 |
+| `SESSION_SECRET`       | ✅ Rotated                    | Self-generated is correct here. Invalidates all existing sessions on deploy.                                                                                                            |
+| `CRON_SECRET`          | ✅ Rotated                    | Self-generated is correct here.                                                                                                                                                         |
+| `TURNSTILE_SECRET_KEY` | ⚠️ Needs a **Cloudflare** key | Was set to a self-generated value, which is never valid. Re-issue in the Cloudflare dashboard, or unset it to disable Turnstile.                                                        |
+| `DATABASE_URL`         | 🔴 **Still outstanding**      | Being marked "sensitive" in Vercel does not help: the password is in `deploy-env.md`'s git history. Rotate the Neon password and update `DATABASE_URL` **and** `DATABASE_URL_UNPOOLED`. |
+
+Steps 2 and 3 above (untracking the file, history rewrite) remain open and are
+owner decisions.
 
 ---
 
