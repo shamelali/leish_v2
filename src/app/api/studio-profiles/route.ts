@@ -25,10 +25,7 @@ const profileUpdateSchema = z
     priceFrom: z.number().int().min(0).optional(),
     hours: z.string().max(200).optional(),
     phone: z.string().max(30).optional(),
-    services: z
-      .array(z.string().max(120))
-      .max(30)
-      .optional(),
+    services: z.array(z.string().max(120)).max(30).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No updates provided" });
 
@@ -140,7 +137,10 @@ export async function PATCH(request: Request) {
       "studio self-update",
     );
 
-    interaction?.end(JSON.stringify({ studioId: profile.studio_id, fields: Object.keys(parsed.data) }), true);
+    interaction?.end(
+      JSON.stringify({ studioId: profile.studio_id, fields: Object.keys(parsed.data) }),
+      true,
+    );
     return NextResponse.json({ ok: true, studio: updated });
   } catch (err) {
     interaction?.end(err instanceof Error ? err.message : String(err), false);

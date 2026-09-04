@@ -39,12 +39,15 @@ function validateMagicBytes(buffer: Buffer, expectedType: string): boolean {
   return sig.every((byte: number, i: number) => buffer[i] === byte);
 }
 
-async function requireAuth(request: Request): Promise<{ user: UserRow; payload: { sub: string } } | { error: Response }> {
+async function requireAuth(
+  request: Request,
+): Promise<{ user: UserRow; payload: { sub: string } } | { error: Response }> {
   const token = request.headers.get("cookie")?.match(/(?:^|;\s*)leish_session=([^;]+)/)?.[1];
   const payload = token ? await verifySessionToken(token) : null;
   if (!payload) return { error: jsonError("Not authenticated", 401) };
 
-  const user = (await getDb().prepare("SELECT * FROM users WHERE id = ?").get(payload.sub)) as UserRow | undefined;
+  const user = (await getDb().prepare("SELECT * FROM users WHERE id = ?").get(payload.sub)) as
+    UserRow | undefined;
   if (!user) return { error: jsonError("Not authenticated", 401) };
   return { user, payload };
 }
@@ -77,7 +80,10 @@ export async function uploadFileDirect(request: Request) {
 
     // Validate magic bytes match claimed content type.
     if (!validateMagicBytes(buffer, contentType)) {
-      logger.warn({ userId: auth.user.id, key, contentType }, "upload rejected: magic bytes mismatch");
+      logger.warn(
+        { userId: auth.user.id, key, contentType },
+        "upload rejected: magic bytes mismatch",
+      );
       return jsonError("File content does not match declared type", 400);
     }
 

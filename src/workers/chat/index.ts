@@ -112,11 +112,7 @@ export default {
 
 // ── Route Handlers ────────────────────────────────────────────────────────────
 
-async function handleHistory(
-  request: Request,
-  env: ExtendedEnv,
-  path: string
-): Promise<Response> {
+async function handleHistory(request: Request, env: ExtendedEnv, path: string): Promise<Response> {
   const bookingId = path.slice("/api/chat/history/".length);
   const url = new URL(request.url);
   const before = url.searchParams.get("before");
@@ -136,7 +132,7 @@ async function handleHistory(
       method: "POST",
       headers: { Authorization: authHeader, "Content-Type": "application/json" },
       body: JSON.stringify({ bookingId, action: "history", before, limit }),
-    })
+    }),
   );
 
   if (!validation.ok) {
@@ -147,11 +143,7 @@ async function handleHistory(
   return corsResponse(data);
 }
 
-async function handlePresence(
-  request: Request,
-  env: ExtendedEnv,
-  path: string
-): Promise<Response> {
+async function handlePresence(request: Request, env: ExtendedEnv, path: string): Promise<Response> {
   const bookingId = path.slice("/api/chat/presence/".length);
   const authHeader = request.headers.get("Authorization");
   if (!authHeader) {
@@ -165,7 +157,7 @@ async function handlePresence(
     new Request("https://internal/presence", {
       method: "GET",
       headers: { Authorization: authHeader },
-    })
+    }),
   );
 
   if (!validation.ok) {
@@ -241,7 +233,7 @@ async function handleSendMessage(request: Request, env: ExtendedEnv): Promise<Re
       method: "POST",
       headers: { Authorization: authHeader, "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    })
+    }),
   );
 
   if (!result.ok) {
@@ -259,7 +251,16 @@ async function handleBatchInsert(request: Request, env: ExtendedEnv): Promise<Re
     return errorResponse("Authorization required", 401);
   }
 
-  let body: { bookingId: string; messages: Array<{ id: string; booking_id: string; sender_id: string; body: string; created_at: string }> };
+  let body: {
+    bookingId: string;
+    messages: Array<{
+      id: string;
+      booking_id: string;
+      sender_id: string;
+      body: string;
+      created_at: string;
+    }>;
+  };
   try {
     body = await request.json();
   } catch {
@@ -279,7 +280,7 @@ async function handleBatchInsert(request: Request, env: ExtendedEnv): Promise<Re
       method: "POST",
       headers: { Authorization: authHeader, "Content-Type": "application/json" },
       body: JSON.stringify({ messages: body.messages }),
-    })
+    }),
   );
 
   if (!result.ok) {
@@ -293,7 +294,7 @@ async function handleBatchInsert(request: Request, env: ExtendedEnv): Promise<Re
 async function handleBookingContext(
   request: Request,
   env: ExtendedEnv,
-  path: string
+  path: string,
 ): Promise<Response> {
   const bookingId = path.slice("/api/chat/booking/".length);
   const authHeader = request.headers.get("Authorization");
@@ -302,9 +303,12 @@ async function handleBookingContext(
   }
 
   try {
-    const res = await env.LEISH_APP.fetch(`${new URL(request.url).origin}/api/bookings/${bookingId}`, {
-      headers: { Authorization: authHeader },
-    });
+    const res = await env.LEISH_APP.fetch(
+      `${new URL(request.url).origin}/api/bookings/${bookingId}`,
+      {
+        headers: { Authorization: authHeader },
+      },
+    );
 
     if (!res.ok) {
       return errorResponse("Booking not found", res.status);
@@ -349,7 +353,12 @@ async function handleAdmin(request: Request, env: ExtendedEnv, path: string): Pr
 
   // POST /api/admin/chat/moderate - Moderation actions
   if (adminPath === "moderate" && request.method === "POST") {
-    let body: { bookingId: string; action: "delete" | "flag" | "ban"; messageId: string; reason?: string };
+    let body: {
+      bookingId: string;
+      action: "delete" | "flag" | "ban";
+      messageId: string;
+      reason?: string;
+    };
     try {
       body = await request.json();
     } catch {
@@ -364,10 +373,13 @@ async function handleAdmin(request: Request, env: ExtendedEnv, path: string): Pr
         method: "POST",
         headers: { Authorization: authHeader, "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      })
+      }),
     );
 
-    return new Response(result.body, { status: result.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(result.body, {
+      status: result.status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   return errorResponse("Admin endpoint not found", 404);

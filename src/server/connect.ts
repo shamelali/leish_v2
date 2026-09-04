@@ -30,19 +30,14 @@ export interface ConnectTokenOptions {
  * Get a short-lived provider access token from Vercel Connect.
  * Returns null if Connect is not configured or the request fails.
  */
-export async function getConnectToken(
-  options: ConnectTokenOptions = {},
-): Promise<string | null> {
+export async function getConnectToken(options: ConnectTokenOptions = {}): Promise<string | null> {
   const connector = options.connector ?? CONNECT_CONNECTOR_SLACK;
 
   try {
-    const token = await getToken(
-      connector,
-      {
-        subject: options.subject ?? { type: "app" },
-        scopes: options.scopes ?? ["*"],
-      },
-    );
+    const token = await getToken(connector, {
+      subject: options.subject ?? { type: "app" },
+      scopes: options.scopes ?? ["*"],
+    });
     return token;
   } catch (err) {
     // Don't throw — notifications are best-effort. Log and return null.

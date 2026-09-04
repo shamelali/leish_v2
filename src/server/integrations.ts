@@ -14,7 +14,12 @@ export type EmailProvider = "dev" | "resend" | "postmark" | "brevo";
 
 export function getActiveEmailProvider(): EmailProvider {
   const explicit = process.env.EMAIL_PROVIDER;
-  if (explicit === "resend" || explicit === "postmark" || explicit === "brevo" || explicit === "dev") {
+  if (
+    explicit === "resend" ||
+    explicit === "postmark" ||
+    explicit === "brevo" ||
+    explicit === "dev"
+  ) {
     return explicit;
   }
 

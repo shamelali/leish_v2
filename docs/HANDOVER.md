@@ -18,8 +18,11 @@ RM 200 fee → webhook). The public loop was unified onto the db-facade path:
 - Removed: `src/lib/actions/*`, `src/lib/payments/*`,
   `src/app/api/payments/billplz/*` (legacy slot-based billing path).
 - The single Billplz webhook is `POST /api/payments/webhook`.
-- `/admin/**` and `src/proxy.ts` remain Supabase-based (internal tooling);
-  they require `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- `/admin/**` recognises OAuth sign-ins via the Supabase client, so
+  `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` are needed for
+  that path. **Note (2026-09-04):** `src/proxy.ts` no longer exists, and admin
+  pages read their data through `getDb()`, not Supabase — Supabase is an OAuth
+  provider only.
 
 ## Why this rebuild happened
 
@@ -37,16 +40,16 @@ so launch isn't blocked on features that don't need to exist yet.
 
 ## What's explicitly fixed vs. the old codebase
 
-| Old problem                                                                            | Fix in this repo                                                                                                                                                        |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lib/supabase/server.ts` silently returned `null` on missing env vars → invisible 404s | `src/lib/supabase/server.ts` throws loudly instead                                                                                                                      |
-| Admin layout let `studio_manager` role into `/admin`                                   | `src/app/admin/layout.tsx` checks `role === "admin"` explicitly, backed by an `is_admin()` RLS function so a UI bug can't leak data                                     |
-| `/api/debug/env` exposed env var names in prod                                         | Not present in this repo. Don't add a debug route without an auth check and a plan to delete it before launch.                                                          |
-| Booking `amount`/`depositAmount` could theoretically be sent from client               | `src/lib/payments/commission.ts` + `src/lib/actions/bookings.ts` resolve both server-side from DB records only                                                          |
-| Leaflet SSR crash (`L.Icon.Default.mergeOptions` outside browser context)              | No map dependency in v1. See comment in `src/components/booking-calendar.tsx` for how to add one back safely later.                                                     |
-| Booking success page used a `setTimeout` mock instead of checking real payment status  | `src/app/booking/success/page.tsx` queries the actual booking status                                                                                                    |
-| Neon Auth + dual-connection sync cron                                                  | Gone. Supabase Auth only, no sync job needed.                                                                                                                           |
-| `db:push` used for prod schema changes, causing drift                                  | Use `supabase db push` against migration files only — see `docs/DEPLOY.md`. Never hand-edit the live schema in the Supabase dashboard for anything that should persist. |
+| Old problem                                                                            | Fix in this repo                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/supabase/server.ts` silently returned `null` on missing env vars → invisible 404s | `src/lib/supabase/server.ts` throws loudly instead                                                                                                                                                                                                                                                                                                                                                                         |
+| Admin layout let `studio_manager` role into `/admin`                                   | `src/app/admin/layout.tsx` checks `role === "admin"` explicitly, and `src/server/admin-auth.ts` re-checks on every admin API call. **Note (2026-09-04):** the `is_admin()` RLS function referenced here was never implemented, and RLS would not apply anyway — all queries go through `getDb()` on a direct connection, which bypasses row-level policies. Authorization is application-level. See `docs/ARCHITECTURE.md` |
+| `/api/debug/env` exposed env var names in prod                                         | Not present in this repo. Don't add a debug route without an auth check and a plan to delete it before launch.                                                                                                                                                                                                                                                                                                             |
+| Booking `amount`/`depositAmount` could theoretically be sent from client               | `src/lib/payments/commission.ts` + `src/lib/actions/bookings.ts` resolve both server-side from DB records only                                                                                                                                                                                                                                                                                                             |
+| Leaflet SSR crash (`L.Icon.Default.mergeOptions` outside browser context)              | No map dependency in v1. See comment in `src/components/booking-calendar.tsx` for how to add one back safely later.                                                                                                                                                                                                                                                                                                        |
+| Booking success page used a `setTimeout` mock instead of checking real payment status  | `src/app/booking/success/page.tsx` queries the actual booking status                                                                                                                                                                                                                                                                                                                                                       |
+| Neon Auth + dual-connection sync cron                                                  | Gone. Supabase Auth only, no sync job needed.                                                                                                                                                                                                                                                                                                                                                                              |
+| `db:push` used for prod schema changes, causing drift                                  | Use `supabase db push` against migration files only — see `docs/DEPLOY.md`. Never hand-edit the live schema in the Supabase dashboard for anything that should persist.                                                                                                                                                                                                                                                    |
 
 ## What's deliberately out of scope for v1 launch
 
@@ -71,7 +74,7 @@ All launch stubs have been implemented and verified:
 - `src/app/api/payments/webhook/route.ts` — transactional booking confirmation email dispatch wired via Brevo with client/provider/service metadata.
 - `src/app/api/email/send/route.ts` — secured with internal shared-secret authorization.
 - `src/components/booking-calendar.tsx` — styled booking component with service selection, deposit/balance calculations, slot conflict retry UX, and loading indicators.
-- `src/lib/types/database.ts` — full Supabase Database TypeScript definitions matching `0001_core_schema.sql` and `0002_rls_policies.sql`.
+- ~~`src/lib/types/database.ts`~~ — **removed.** These Supabase table typings, and the `0001_core_schema.sql` / `0002_rls_policies.sql` migrations they mirrored, are not in the repo. The schema of record is `PG_SCHEMA` in `src/server/db.ts`.
 - `src/app/artists/[slug]/page.tsx` — styled responsive MUA profile page with verified status, services breakdown, and booking integration.
 
 ## Non-negotiables carried over from v1 learnings

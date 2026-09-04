@@ -65,7 +65,10 @@ describe("upstash rate limit store", () => {
     let zcard = 0;
     const store = mockUpstash((path) => {
       if (path.startsWith("ZREMRANGEBYSCORE")) return { result: 0 };
-      if (path.startsWith("ZADD")) { zcard += 1; return { result: 1 }; }
+      if (path.startsWith("ZADD")) {
+        zcard += 1;
+        return { result: 1 };
+      }
       if (path.startsWith("ZCARD")) return { result: zcard };
       if (path.startsWith("EXPIRE")) return { result: 1 };
       return { result: null };
@@ -80,11 +83,17 @@ describe("upstash rate limit store", () => {
     let zcard = 0;
     const store = mockUpstash((path) => {
       if (path.startsWith("ZREMRANGEBYSCORE")) return { result: 0 };
-      if (path.startsWith("ZADD")) { zcard += 1; return { result: 1 }; }
+      if (path.startsWith("ZADD")) {
+        zcard += 1;
+        return { result: 1 };
+      }
       if (path.startsWith("ZCARD")) return { result: zcard };
       if (path.startsWith("EXPIRE")) return { result: 1 };
       if (path.startsWith("ZRANGE")) return { result: ["1000:abc", "1000"] };
-      if (path.startsWith("ZREM")) { zcard -= 1; return { result: 1 }; }
+      if (path.startsWith("ZREM")) {
+        zcard -= 1;
+        return { result: 1 };
+      }
       return { result: null };
     });
     // First two calls set zcard to 2.
@@ -100,11 +109,17 @@ describe("upstash rate limit store", () => {
     let zcard = 0;
     const store = mockUpstash((path) => {
       if (path.startsWith("ZREMRANGEBYSCORE")) return { result: 0 };
-      if (path.startsWith("ZADD")) { zcard += 1; return { result: 1 }; }
+      if (path.startsWith("ZADD")) {
+        zcard += 1;
+        return { result: 1 };
+      }
       if (path.startsWith("ZCARD")) return { result: zcard };
       if (path.startsWith("EXPIRE")) return { result: 1 };
       if (path.startsWith("ZRANGE")) return { result: ["1000:abc", "1000"] };
-      if (path.startsWith("ZREM")) { zcard -= 1; return { result: 1 }; }
+      if (path.startsWith("ZREM")) {
+        zcard -= 1;
+        return { result: 1 };
+      }
       return { result: null };
     });
     const blocked = await store!.checkAndIncrement("k", 0, 60_000);

@@ -7,7 +7,7 @@ import { cacheGet, cacheSet, cacheDel, cacheDelPrefix } from "./redis";
 
 // ── Cache config ──────────────────────────────────────────────────────────────
 const CACHE_TTL_INDIVIDUAL = 300; // 5 min — single artist/studio by slug/id
-const CACHE_TTL_LIST = 120;       // 2 min — list queries
+const CACHE_TTL_LIST = 120; // 2 min — list queries
 const CACHE_PREFIX_ARTIST = "cat:a:";
 const CACHE_PREFIX_STUDIO = "cat:s:";
 const CACHE_PREFIX_LIST = "cat:list:";
@@ -180,11 +180,17 @@ const ARTIST_SELECT = `SELECT * FROM artists`;
  * cursor-based pagination. Keeps existing call sites working while preventing
  * unbounded `SELECT *` scans flagged in the performance audit.
  */
-export async function listAllArtists(opts?: { limit?: number; offset?: number }): Promise<Artist[]> {
+export async function listAllArtists(opts?: {
+  limit?: number;
+  offset?: number;
+}): Promise<Artist[]> {
   try {
     await ensureCatalogSeeded();
   } catch (err) {
-    console.error("[catalog] failed to seed, returning empty list:", err instanceof Error ? err.message : err);
+    console.error(
+      "[catalog] failed to seed, returning empty list:",
+      err instanceof Error ? err.message : err,
+    );
     return [];
   }
   const cacheKey = `${CACHE_PREFIX_LIST}artists:${opts?.limit ?? "all"}:${opts?.offset ?? 0}`;
@@ -222,7 +228,10 @@ export async function listArtists(filters?: Partial<ArtistFilters>): Promise<Art
   try {
     await ensureCatalogSeeded();
   } catch (err) {
-    console.error("[catalog] failed to seed, returning empty list:", err instanceof Error ? err.message : err);
+    console.error(
+      "[catalog] failed to seed, returning empty list:",
+      err instanceof Error ? err.message : err,
+    );
     return [];
   }
   const where: string[] = [];
@@ -329,11 +338,17 @@ const STUDIO_SELECT = `SELECT * FROM studios`;
  * Full studio listing — same OOM guard as listAllArtists. Pass { limit,
  * offset } for paginated access; unpaginated callers are capped at 500.
  */
-export async function listAllStudios(opts?: { limit?: number; offset?: number }): Promise<Studio[]> {
+export async function listAllStudios(opts?: {
+  limit?: number;
+  offset?: number;
+}): Promise<Studio[]> {
   try {
     await ensureCatalogSeeded();
   } catch (err) {
-    console.error("[catalog] failed to seed, returning empty list:", err instanceof Error ? err.message : err);
+    console.error(
+      "[catalog] failed to seed, returning empty list:",
+      err instanceof Error ? err.message : err,
+    );
     return [];
   }
   const cacheKey = `${CACHE_PREFIX_LIST}studios:${opts?.limit ?? "all"}:${opts?.offset ?? 0}`;
@@ -590,8 +605,7 @@ export async function updateArtist(
 ): Promise<Artist | null> {
   // Invalidate caches before mutation.
   const existing = (await getDb().prepare("SELECT slug FROM artists WHERE id = ?").get(id)) as
-    | { slug: string }
-    | undefined;
+    { slug: string } | undefined;
   if (existing) {
     await cacheDel(`${CACHE_PREFIX_ARTIST}id:${id}`, `${CACHE_PREFIX_ARTIST}slug:${existing.slug}`);
     await cacheDelPrefix(CACHE_PREFIX_LIST);
@@ -605,8 +619,7 @@ export async function updateStudio(
   updates: Record<string, unknown>,
 ): Promise<Studio | null> {
   const existing = (await getDb().prepare("SELECT slug FROM studios WHERE id = ?").get(id)) as
-    | { slug: string }
-    | undefined;
+    { slug: string } | undefined;
   if (existing) {
     await cacheDel(`${CACHE_PREFIX_STUDIO}id:${id}`, `${CACHE_PREFIX_STUDIO}slug:${existing.slug}`);
     await cacheDelPrefix(CACHE_PREFIX_LIST);

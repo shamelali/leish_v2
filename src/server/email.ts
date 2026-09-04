@@ -215,9 +215,7 @@ async function resendSend(message: EmailMessage, apiKey: string) {
 async function brevoSend(message: EmailMessage, apiKey: string) {
   const from = process.env.EMAIL_FROM ?? "Leish! <no-reply@leish.my>";
   const nameMatch = from.match(/^(.*?)\s*<(.+?)>$/);
-  const sender = nameMatch
-    ? { email: nameMatch[2], name: nameMatch[1].trim() }
-    : { email: from };
+  const sender = nameMatch ? { email: nameMatch[2], name: nameMatch[1].trim() } : { email: from };
 
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",

@@ -19,7 +19,10 @@ export async function requireAdmin(request: Request) {
     return {
       error: NextResponse.json(
         { error: "Too many requests. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(Math.ceil(preAuthResult.retryAfterMs / 1000)) } },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(preAuthResult.retryAfterMs / 1000)) },
+        },
       ),
     };
   }
@@ -48,7 +51,10 @@ export async function requireAdmin(request: Request) {
     return {
       error: NextResponse.json(
         { error: "Too many requests. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(Math.ceil(postAuthResult.retryAfterMs / 1000)) } },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(postAuthResult.retryAfterMs / 1000)) },
+        },
       ),
     };
   }

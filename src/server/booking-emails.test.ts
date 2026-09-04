@@ -14,6 +14,7 @@ import {
   notifyPayoutSettled,
   notifyBookingStatusChanged,
 } from "./booking-emails";
+import type { BookingStatus } from "./bookings";
 
 async function createTestUser(emailPrefs?: Record<string, number>) {
   const userId = randomUUID();
@@ -289,7 +290,14 @@ describe("booking-emails", () => {
         .prepare(
           "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         )
-        .run(artistId, `${artistId}@test.local`, "Test Artist", "artist", "x:y", new Date().toISOString());
+        .run(
+          artistId,
+          `${artistId}@test.local`,
+          "Test Artist",
+          "artist",
+          "x:y",
+          new Date().toISOString(),
+        );
 
       await notifyPayoutSettled({
         artistUserId: artistId,
@@ -321,7 +329,14 @@ describe("booking-emails", () => {
         .prepare(
           "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         )
-        .run(artistId, `${artistId}@test.local`, "Test Artist", "artist", "x:y", new Date().toISOString());
+        .run(
+          artistId,
+          `${artistId}@test.local`,
+          "Test Artist",
+          "artist",
+          "x:y",
+          new Date().toISOString(),
+        );
       await getDb()
         .prepare(
           `INSERT INTO email_preferences (user_id, booking_created, quotation_sent, invoice_sent, 
@@ -376,16 +391,19 @@ describe("booking-emails", () => {
 
     it("uses correct headline for each status", async () => {
       const { userId } = await createTestUser();
-      const headlines: Record<string, string> = {
+      const headlines: Record<BookingStatus, string> = {
         requested: "is awaiting the artist's response",
         accepted: "has been accepted — a quotation is waiting for your review",
         confirmed: "has been confirmed 🎉 (deposit paid)",
         completed: "has been completed — enjoy your look!",
         cancelled: "has been cancelled",
       };
-      for (const [status, expectedHeadline] of Object.entries(headlines)) {
+      for (const [status, expectedHeadline] of Object.entries(headlines) as [
+        BookingStatus,
+        string,
+      ][]) {
         await getDb().prepare("DELETE FROM email_outbox").run();
-        await notifyBookingStatusChanged({ ...baseParams, ownerUserId: userId, status: status as any });
+        await notifyBookingStatusChanged({ ...baseParams, ownerUserId: userId, status });
         const outbox = await getLastOutboxEmail();
         expect(outbox!.text).toContain(expectedHeadline);
       }

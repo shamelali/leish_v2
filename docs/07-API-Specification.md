@@ -1,88 +1,88 @@
 # API Specification — Leish! v2
 
-| Field | Value |
-|-------|-------|
-| **Document ID** | LEISH-API-v2.0 |
-| **Version** | 2.0.0 |
-| **Date** | 2026-08-29 |
-| **Base URL** | `https://leish.my` (prod) / `http://localhost:3000` (dev) — `NEXT_PUBLIC_SITE_URL` |
-| **Auth** | `Cookie: leish_session=<JWT>` (httpOnly, SameSite=lax); no Bearer header |
-| **Content-Type** | `application/json` unless noted (`text/event-stream`, `application/pdf`, `text/html`) |
-| **Errors** | JSON envelope `{error: string}` with appropriate HTTP status; zod validation returns first issue message |
-| **Helpers** | `src/server/http.ts` — `jsonError(message,status)`, `readJson(req)`, `tryRoute`/`statefulRoute` wrappers that log `pino` + normalize errors |
+| Field            | Value                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Document ID**  | LEISH-API-v2.0                                                                                                                              |
+| **Version**      | 2.0.0                                                                                                                                       |
+| **Date**         | 2026-08-29                                                                                                                                  |
+| **Base URL**     | `https://leish.my` (prod) / `http://localhost:3000` (dev) — `NEXT_PUBLIC_SITE_URL`                                                          |
+| **Auth**         | `Cookie: leish_session=<JWT>` (httpOnly, SameSite=lax); no Bearer header                                                                    |
+| **Content-Type** | `application/json` unless noted (`text/event-stream`, `application/pdf`, `text/html`)                                                       |
+| **Errors**       | JSON envelope `{error: string}` with appropriate HTTP status; zod validation returns first issue message                                    |
+| **Helpers**      | `src/server/http.ts` — `jsonError(message,status)`, `readJson(req)`, `tryRoute`/`statefulRoute` wrappers that log `pino` + normalize errors |
 
 ---
 
 ### 1. Conventions
 
-| Item | Rule |
-|------|------|
+| Item             | Rule                                                                                                                                                                                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Status codes** | 200 OK, 201 Created, 400 Bad Request (validation), 401 Unauthorized (missing/bad session), 403 Forbidden (role mismatch), 404 Not Found, 409 Conflict (duplicate/slot), 429 Too Many Requests, 500 Internal |
-| **Timestamps** | ISO-8601 strings `YYYY-MM-DDTHH:mm:ss.sssZ` (UTC) |
-| **Money** | Integer **sen** (cents). Presented as `formatRM(sen) → "RM X.XX"` client-side |
-| **Pagination** | `?limit=1..100 default 20, ?offset=0.. default 0` → response `{pagination:{total,limit,offset,hasMore}}` + array |
-| **Rate limit** | `429` + `Retry-After: <seconds>` when exceeded; Sliding window via Upstash or in-memory fallback |
-| **CSR** | `ALLOWED_ORIGINS` checked for state-changing (`POST/PATCH/DELETE`) cross-origin; otherwise standard `SRS-F-12` |
-| **Validation** | Zod schemas in `src/server/validation.ts` enforce on every mutating endpoint |
+| **Timestamps**   | ISO-8601 strings `YYYY-MM-DDTHH:mm:ss.sssZ` (UTC)                                                                                                                                                           |
+| **Money**        | Integer **sen** (cents). Presented as `formatRM(sen) → "RM X.XX"` client-side                                                                                                                               |
+| **Pagination**   | `?limit=1..100 default 20, ?offset=0.. default 0` → response `{pagination:{total,limit,offset,hasMore}}` + array                                                                                            |
+| **Rate limit**   | `429` + `Retry-After: <seconds>` when exceeded; Sliding window via Upstash or in-memory fallback                                                                                                            |
+| **CSR**          | `ALLOWED_ORIGINS` checked for state-changing (`POST/PATCH/DELETE`) cross-origin; otherwise standard `SRS-F-12`                                                                                              |
+| **Validation**   | Zod schemas in `src/server/validation.ts` enforce on every mutating endpoint                                                                                                                                |
 
 ---
 
 ### 2. Endpoint Index
 
-| Group | Method | Path | Auth | Route handler |
-|-------|--------|------|------|---------------|
-| **Health** | GET | `/api/health` | No | `src/app/api/health/route.ts` |
-| **Auth — Register** | POST | `/api/auth/register` | No | `src/app/api/auth/register/route.ts` |
-| **Auth — Login** | POST | `/api/auth/login` | No | `src/app/api/auth/login/route.ts` |
-| **Auth — Logout** | POST | `/api/auth/logout` | Cookie | `src/app/api/auth/logout/route.ts` |
-| **Auth — Me** | GET | `/api/auth/me` | Cookie (soft) | `src/app/api/auth/me/route.ts` or `GET /api/me` variant |
-| **Auth — Verify Email** | GET | `/api/auth/verify-email?token=` | No | `src/app/api/auth/verify-email/route.ts` |
-| **Auth — Resend Verify** | POST | `/api/auth/resend-verification` | Cookie | `src/app/api/auth/resend-verification/route.ts` |
-| **Auth — Forgot** | POST | `/api/auth/forgot-password` | No (rate-limited) | `src/app/api/auth/forgot-password/route.ts` |
-| **Auth — Reset** | POST | `/api/auth/reset-password` | No | `src/app/api/auth/reset-password/route.ts` |
-| **Auth — Errors** | POST | `/api/errors` | No (rate-limited) | `src/app/api/errors/route.ts` |
-| **Catalog — Artists** | GET | `/api/artists?query&state&area&bridal&nonBridal&budget` | No | `src/app/api/artists/route.ts` |
-| **Catalog — Artists (client)** | GET | `/api/catalog/artists` | No | `src/app/api/catalog/artists/route.ts` |
-| **Catalog — Studios** | GET | `/api/catalog/studios` (or `/api/studios`) | No | `src/app/api/catalog/studios/route.ts` |
-| **Catalog — Artist by slug** | GET | `/artists/[slug]` (RSC, not API) | No | `src/app/artists/[slug]/page.tsx` (`resolveArtist`) |
-| **Bookings — List** | GET | `/api/bookings?limit&offset` | Cookie | `src/app/api/bookings/route.ts:86` |
-| **Bookings — Create** | POST | `/api/bookings` | Cookie | `src/app/api/bookings/route.ts:151` |
-| **Bookings — Transition** | PATCH | `/api/bookings/[id]` | Cookie | `src/app/api/bookings/[id]/route.ts` |
-| **Bookings — Quotation** | POST | `/api/bookings/[id]/quotation` | Cookie (claimed artist) | `src/app/api/bookings/[id]/quotation/route.ts` |
-| **Bookings — Pay Fee** | POST | `/api/bookings/[id]/pay-fee` | Cookie (owner) | `src/app/api/bookings/[id]/pay-fee/route.ts` |
-| **Bookings — Pay Balance** | POST | `/api/bookings/[id]/pay-balance` | Cookie (owner) | `src/app/api/bookings/[id]/pay-balance/route.ts` |
-| **Bookings — Remind** | POST | `/api/bookings/[id]/remind` | Cookie (claimed artist) | `src/app/api/bookings/[id]/remind/route.ts` |
-| **Bookings — Refund** | POST | `/api/bookings/[id]/refund` | Cookie (owner) | `src/app/api/bookings/[id]/refund/route.ts` |
-| **Bookings — Invoice HTML** | GET | `/api/bookings/[id]/invoice` | Cookie (owner|artist) | `src/app/api/bookings/[id]/invoice/route.ts` |
-| **Bookings — Invoice PDF** | GET | `/api/bookings/[id]/invoice.pdf` | Cookie (owner|artist) | `src/app/api/bookings/[id]/invoice.pdf/route.ts` |
-| **Messages — List** | GET | `/api/bookings/[id]/messages` | Cookie (participant) | `src/app/api/bookings/[id]/messages/route.ts` |
-| **Messages — Create** | POST | `/api/bookings/[id]/messages` | Cookie (participant) | `src/app/api/bookings/[id]/messages/route.ts` |
-| **Messages — Stream** | GET | `/api/bookings/[id]/messages/stream` | Cookie (participant) | `src/app/api/bookings/[id]/messages/stream/route.ts` (SSE) |
-| **Payments — Webhook** | POST | `/api/payments/webhook` | HMAC (`X-Billplz-Signature`) | `src/app/api/payments/webhook/route.ts` |
-| **Artists — Claimed** | GET | `/api/artist-profiles` | Cookie | `src/app/api/artist-profiles/route.ts` |
-| **Artists — Claim** | POST | `/api/artist-profiles` | Cookie (artist/studio) | `src/app/api/artist-profiles/route.ts` |
-| **Artists — Edit Self** | PATCH | `/api/artist-profiles` | Cookie (claimed) | `src/app/api/artist-profiles/route.ts` |
-| **Studios — Claim** | POST/GET/PATCH | `/api/studio-profiles` | Cookie | `src/app/api/studio-profiles/route.ts` |
-| **Reviews — Add** | POST | `/api/artists/[slug]/reviews` | Cookie | `src/app/api/artists/[slug]/reviews/route.ts` (or via `src/server/catalog.ts` helper) |
-| **Me — Export** | GET | `/api/me/export` | Cookie | `src/app/api/me/export/route.ts` |
-| **Me — Delete** | DELETE | `/api/me?confirm=1` | Cookie | `src/app/api/me/route.ts` |
-| **Email — Preferences** | GET/PATCH | `/api/email/preferences` | Cookie | `src/app/api/email/preferences/route.ts` |
-| **Email — Outbox (admin)** | GET | `/api/admin/emails` | Cookie admin | `src/app/api/admin/emails/route.ts` |
-| **Upload** | POST | `/api/upload` | Cookie | `src/app/api/upload/route.ts` |
-| **Cron — Expire** | POST/GET | `/api/cron/...` | `CRON_SECRET` | `src/app/api/cron/*` |
-| **Admin — Dashboard** | GET | `/api/admin` | Cookie admin | `src/app/api/admin/route.ts` |
-| **Admin — Users** | GET/POST/PATCH/DELETE | `/api/admin/users…` | admin | `src/app/api/admin/users/*` |
-| **Admin — Artists/Studios** | GET/POST/PATCH | `/api/admin/artists`, `/api/admin/studios` | admin | `src/app/api/admin/artists/*` |
-| **Admin — Bookings** | GET/PATCH | `/api/admin/bookings…` | admin | `src/app/api/admin/bookings/*` |
-| **Admin — Payments** | GET | `/api/admin/payments` | admin | `src/app/api/admin/payments/route.ts` |
-| **Admin — Payouts** | GET/PATCH | `/api/admin/payouts` | admin | `src/app/api/admin/payouts/route.ts` |
-| **Admin — Quotations**| GET | `/api/admin/quotations` | admin | `src/app/api/admin/quotations/route.ts` |
-| **Admin — Messages** | GET | `/api/admin/messages` | admin | `src/app/api/admin/messages/route.ts` |
-| **Admin — Audit** | GET | `/api/admin/audit` | admin | `src/app/api/admin/audit/route.ts` |
-| **Admin — Settings** | GET/PATCH | `/api/admin/settings` | admin | `src/app/api/admin/settings/route.ts` |
-| **Admin — Analytics**| GET | `/api/admin/analytics` | admin | `src/app/api/admin/analytics/route.ts` |
-| **Dev — Emails** | GET | `/dev/emails` (RSC page) | No (dev-only guard) | `src/app/dev/emails/page.tsx` |
-| **Errors ingestion** | POST | `/api/errors` | rate-limited | `src/app/api/errors/route.ts` |
+| Group                          | Method                | Path                                                    | Auth                         | Route handler                                                                         |
+| ------------------------------ | --------------------- | ------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------- |
+| **Health**                     | GET                   | `/api/health`                                           | No                           | `src/app/api/health/route.ts`                                                         |
+| **Auth — Register**            | POST                  | `/api/auth/register`                                    | No                           | `src/app/api/auth/register/route.ts`                                                  |
+| **Auth — Login**               | POST                  | `/api/auth/login`                                       | No                           | `src/app/api/auth/login/route.ts`                                                     |
+| **Auth — Logout**              | POST                  | `/api/auth/logout`                                      | Cookie                       | `src/app/api/auth/logout/route.ts`                                                    |
+| **Auth — Me**                  | GET                   | `/api/auth/me`                                          | Cookie (soft)                | `src/app/api/auth/me/route.ts` or `GET /api/me` variant                               |
+| **Auth — Verify Email**        | GET                   | `/api/auth/verify-email?token=`                         | No                           | `src/app/api/auth/verify-email/route.ts`                                              |
+| **Auth — Resend Verify**       | POST                  | `/api/auth/resend-verification`                         | Cookie                       | `src/app/api/auth/resend-verification/route.ts`                                       |
+| **Auth — Forgot**              | POST                  | `/api/auth/forgot-password`                             | No (rate-limited)            | `src/app/api/auth/forgot-password/route.ts`                                           |
+| **Auth — Reset**               | POST                  | `/api/auth/reset-password`                              | No                           | `src/app/api/auth/reset-password/route.ts`                                            |
+| **Auth — Errors**              | POST                  | `/api/errors`                                           | No (rate-limited)            | `src/app/api/errors/route.ts`                                                         |
+| **Catalog — Artists**          | GET                   | `/api/artists?query&state&area&bridal&nonBridal&budget` | No                           | `src/app/api/artists/route.ts`                                                        |
+| **Catalog — Artists (client)** | GET                   | `/api/catalog/artists`                                  | No                           | `src/app/api/catalog/artists/route.ts`                                                |
+| **Catalog — Studios**          | GET                   | `/api/catalog/studios` (or `/api/studios`)              | No                           | `src/app/api/catalog/studios/route.ts`                                                |
+| **Catalog — Artist by slug**   | GET                   | `/artists/[slug]` (RSC, not API)                        | No                           | `src/app/artists/[slug]/page.tsx` (`resolveArtist`)                                   |
+| **Bookings — List**            | GET                   | `/api/bookings?limit&offset`                            | Cookie                       | `src/app/api/bookings/route.ts:86`                                                    |
+| **Bookings — Create**          | POST                  | `/api/bookings`                                         | Cookie                       | `src/app/api/bookings/route.ts:151`                                                   |
+| **Bookings — Transition**      | PATCH                 | `/api/bookings/[id]`                                    | Cookie                       | `src/app/api/bookings/[id]/route.ts`                                                  |
+| **Bookings — Quotation**       | POST                  | `/api/bookings/[id]/quotation`                          | Cookie (claimed artist)      | `src/app/api/bookings/[id]/quotation/route.ts`                                        |
+| **Bookings — Pay Fee**         | POST                  | `/api/bookings/[id]/pay-fee`                            | Cookie (owner)               | `src/app/api/bookings/[id]/pay-fee/route.ts`                                          |
+| **Bookings — Pay Balance**     | POST                  | `/api/bookings/[id]/pay-balance`                        | Cookie (owner)               | `src/app/api/bookings/[id]/pay-balance/route.ts`                                      |
+| **Bookings — Remind**          | POST                  | `/api/bookings/[id]/remind`                             | Cookie (claimed artist)      | `src/app/api/bookings/[id]/remind/route.ts`                                           |
+| **Bookings — Refund**          | POST                  | `/api/bookings/[id]/refund`                             | Cookie (owner)               | `src/app/api/bookings/[id]/refund/route.ts`                                           |
+| **Bookings — Invoice HTML**    | GET                   | `/api/bookings/[id]/invoice`                            | Cookie (owner                | artist)                                                                               | `src/app/api/bookings/[id]/invoice/route.ts`     |
+| **Bookings — Invoice PDF**     | GET                   | `/api/bookings/[id]/invoice.pdf`                        | Cookie (owner                | artist)                                                                               | `src/app/api/bookings/[id]/invoice.pdf/route.ts` |
+| **Messages — List**            | GET                   | `/api/bookings/[id]/messages`                           | Cookie (participant)         | `src/app/api/bookings/[id]/messages/route.ts`                                         |
+| **Messages — Create**          | POST                  | `/api/bookings/[id]/messages`                           | Cookie (participant)         | `src/app/api/bookings/[id]/messages/route.ts`                                         |
+| **Messages — Stream**          | GET                   | `/api/bookings/[id]/messages/stream`                    | Cookie (participant)         | `src/app/api/bookings/[id]/messages/stream/route.ts` (SSE)                            |
+| **Payments — Webhook**         | POST                  | `/api/payments/webhook`                                 | HMAC (`X-Billplz-Signature`) | `src/app/api/payments/webhook/route.ts`                                               |
+| **Artists — Claimed**          | GET                   | `/api/artist-profiles`                                  | Cookie                       | `src/app/api/artist-profiles/route.ts`                                                |
+| **Artists — Claim**            | POST                  | `/api/artist-profiles`                                  | Cookie (artist/studio)       | `src/app/api/artist-profiles/route.ts`                                                |
+| **Artists — Edit Self**        | PATCH                 | `/api/artist-profiles`                                  | Cookie (claimed)             | `src/app/api/artist-profiles/route.ts`                                                |
+| **Studios — Claim**            | POST/GET/PATCH        | `/api/studio-profiles`                                  | Cookie                       | `src/app/api/studio-profiles/route.ts`                                                |
+| **Reviews — Add**              | POST                  | `/api/artists/[slug]/reviews`                           | Cookie                       | `src/app/api/artists/[slug]/reviews/route.ts` (or via `src/server/catalog.ts` helper) |
+| **Me — Export**                | GET                   | `/api/me/export`                                        | Cookie                       | `src/app/api/me/export/route.ts`                                                      |
+| **Me — Delete**                | DELETE                | `/api/me?confirm=1`                                     | Cookie                       | `src/app/api/me/route.ts`                                                             |
+| **Email — Preferences**        | GET/PATCH             | `/api/email/preferences`                                | Cookie                       | `src/app/api/email/preferences/route.ts`                                              |
+| **Email — Outbox (admin)**     | GET                   | `/api/admin/emails`                                     | Cookie admin                 | `src/app/api/admin/emails/route.ts`                                                   |
+| **Upload**                     | POST                  | `/api/upload`                                           | Cookie                       | `src/app/api/upload/route.ts`                                                         |
+| **Cron — Expire**              | POST/GET              | `/api/cron/...`                                         | `CRON_SECRET`                | `src/app/api/cron/*`                                                                  |
+| **Admin — Dashboard**          | GET                   | `/api/admin`                                            | Cookie admin                 | `src/app/api/admin/route.ts`                                                          |
+| **Admin — Users**              | GET/POST/PATCH/DELETE | `/api/admin/users…`                                     | admin                        | `src/app/api/admin/users/*`                                                           |
+| **Admin — Artists/Studios**    | GET/POST/PATCH        | `/api/admin/artists`, `/api/admin/studios`              | admin                        | `src/app/api/admin/artists/*`                                                         |
+| **Admin — Bookings**           | GET/PATCH             | `/api/admin/bookings…`                                  | admin                        | `src/app/api/admin/bookings/*`                                                        |
+| **Admin — Payments**           | GET                   | `/api/admin/payments`                                   | admin                        | `src/app/api/admin/payments/route.ts`                                                 |
+| **Admin — Payouts**            | GET/PATCH             | `/api/admin/payouts`                                    | admin                        | `src/app/api/admin/payouts/route.ts`                                                  |
+| **Admin — Quotations**         | GET                   | `/api/admin/quotations`                                 | admin                        | `src/app/api/admin/quotations/route.ts`                                               |
+| **Admin — Messages**           | GET                   | `/api/admin/messages`                                   | admin                        | `src/app/api/admin/messages/route.ts`                                                 |
+| **Admin — Audit**              | GET                   | `/api/admin/audit`                                      | admin                        | `src/app/api/admin/audit/route.ts`                                                    |
+| **Admin — Settings**           | GET/PATCH             | `/api/admin/settings`                                   | admin                        | `src/app/api/admin/settings/route.ts`                                                 |
+| **Admin — Analytics**          | GET                   | `/api/admin/analytics`                                  | admin                        | `src/app/api/admin/analytics/route.ts`                                                |
+| **Dev — Emails**               | GET                   | `/dev/emails` (RSC page)                                | No (dev-only guard)          | `src/app/dev/emails/page.tsx`                                                         |
+| **Errors ingestion**           | POST                  | `/api/errors`                                           | rate-limited                 | `src/app/api/errors/route.ts`                                                         |
 
 > Routes shown are exhaustive for v2 baseline; exact file layout under `src/app/api/` matches table. See `src/app/api/admin/list-routes.test.ts` for automated coverage of admin surface.
 
@@ -106,12 +106,12 @@ Content-Type: application/json
 }
 ```
 
-| Status | Body |
-|--------|------|
-| 201 | `{user:{id,email,name,role,emailVerified}, devVerifyUrl?: string}` + `Set-Cookie: leish_session=…; HttpOnly; Path=/; SameSite=Lax; Secure@prod` |
-| 400 | `{error:"Name must be at least 2 characters"}` (first zod issue) |
-| 409 | `{error:"An account with this email already exists"}` |
-| 429 | `{error:"Too many requests"}` + `Retry-After` |
+| Status | Body                                                                                                                                            |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 201    | `{user:{id,email,name,role,emailVerified}, devVerifyUrl?: string}` + `Set-Cookie: leish_session=…; HttpOnly; Path=/; SameSite=Lax; Secure@prod` |
+| 400    | `{error:"Name must be at least 2 characters"}` (first zod issue)                                                                                |
+| 409    | `{error:"An account with this email already exists"}`                                                                                           |
+| 429    | `{error:"Too many requests"}` + `Retry-After`                                                                                                   |
 
 Validation: `registerSchema` `src/server/validation.ts:5`.
 
@@ -121,6 +121,7 @@ Validation: `registerSchema` `src/server/validation.ts:5`.
 POST /api/auth/login
 { "email":"nurul@example.my", "password":"Str0ng!Pass99" }
 ```
+
 - 200 + cookie on success; 401 generic on failure; 429 when rate-limited. Agnost `login` tracked.
 
 #### `POST /api/auth/logout`
@@ -141,6 +142,7 @@ POST /api/auth/login
 POST /api/auth/forgot-password
 { "email":"nurul@example.my", "turnstileToken":"…" }
 ```
+
 - Always `200 {message:"If an account exists …"}` (no enumeration). Token `password_resets` hashed sha256; 1h expiry. Dev response may include `devResetUrl`.
 
 #### `POST /api/auth/reset-password`
@@ -149,6 +151,7 @@ POST /api/auth/forgot-password
 POST /api/auth/reset-password
 { "token":"raw-token-from-email", "newPassword":"NewStr0ng!Pass" }
 ```
+
 - 200 on success; 400 on invalid/expired/used/reused; single-use (`used_at` set).
 
 ---
@@ -253,14 +256,14 @@ Cookie: leish_session=…
 }
 ```
 
-| Status | Body |
-|--------|------|
-| 201 | `{booking:SerializedBooking, user: PublicUser}` |
-| 400 | `{error:"Service not available for this artist" | zod message}` |
-| 401 | `{error:"Not authenticated"}` |
-| 404 | `{error:"Artist not found"}` |
-| 409 | `{error:"Sorry, this time slot has just been taken…"}` |
-| 429 | Too many requests |
+| Status | Body                                                   |
+| ------ | ------------------------------------------------------ |
+| 201    | `{booking:SerializedBooking, user: PublicUser}`        |
+| 400    | `{error:"Service not available for this artist"        | zod message}` |
+| 401    | `{error:"Not authenticated"}`                          |
+| 404    | `{error:"Artist not found"}`                           |
+| 409    | `{error:"Sorry, this time slot has just been taken…"}` |
+| 429    | Too many requests                                      |
 
 See FRS FR-BOOK-01 for server-derived price, pre-check + unique index race guard.
 
@@ -292,6 +295,7 @@ Cookie: leish_session=… (claimed artist)
 }
 → 201 {quotation:SerializedQuotation}
 ```
+
 - 403 when not claimed artist; 400 when booking not `accepted` or validation fails; previous pending becomes `superseded`.
 
 #### `POST /api/bookings/[id]/pay-fee` & `POST /api/bookings/[id]/pay-balance`
@@ -319,6 +323,7 @@ POST /api/bookings/bk_123/refund
 → 400 {error:"Only balance payments are refundable" | "Only paid balances…"}
 → 401/403
 ```
+
 - Refund endpoints call `refundBalancePayment()`; `billplz` path `POST /bills/{id}/refund`.
 
 #### Invoice
@@ -327,6 +332,7 @@ POST /api/bookings/bk_123/refund
 GET /api/bookings/[id]/invoice       → 200 text/html   (printable)
 GET /api/bookings/[id]/invoice.pdf   → 200 application/pdf  + Content-Disposition: attachment; filename="leish-invoice-<id>.pdf"
 ```
+
 - Authz: owner or claimed artist only. Content built server-side from quotation+fees.
 
 ---
@@ -390,11 +396,11 @@ X-Billplz-Paid: true|false   (inside body alternative field depending on Billplz
 }
 ```
 
-| Status | Body | Effect |
-|--------|------|--------|
-| 200 | `{ok:true}` | Processed: `markBillPaid` + `handlePaymentPaid` routed by `type` |
-| 401 | `{error:"Invalid signature"}` | No DB write |
-| 404 | Bill id not found | No booking confirmed |
+| Status | Body                          | Effect                                                           |
+| ------ | ----------------------------- | ---------------------------------------------------------------- |
+| 200    | `{ok:true}`                   | Processed: `markBillPaid` + `handlePaymentPaid` routed by `type` |
+| 401    | `{error:"Invalid signature"}` | No DB write                                                      |
+| 404    | Bill id not found             | No booking confirmed                                             |
 
 **Verification** `verifyBillplzSignature(rawBody, header, apiKey)` `src/server/payments.ts:381`: hex64 regex, `createHmac("sha256",apiKey).update(rawBody).digest("hex")`, `timingSafeEqual`.
 
@@ -433,6 +439,7 @@ PATCH /api/artist-profiles
 → 400 validation on priceFrom range
 → 403 unclaimed cannot edit
 ```
+
 - Whitelisted fields only; `verified`/`referralEarnings` ignored for self-service.
 
 #### `GET/POST/PATCH /api/studio-profiles` — mirrors artist; scopes `studio_id`.
@@ -603,15 +610,15 @@ Docker `HEALTHCHECK` hits this.
 
 ### 15. Error Handling
 
-| Condition | Status | Body Example |
-|-----------|--------|--------------|
-| Zod validation | 400 | `{error:"Name must be at least 2 characters"}` |
-| Missing session | 401 | `{error:"Not authenticated"}` |
-| `requireAdmin` non-admin | 403 | `{error:"Forbidden"}` |
-| Unknown artist/booking | 404 | `{error:"Artist not found"}` |
-| Duplicate email / profile / slot / payment type | 409 | `{error:"An account with this email already exists"}` or slot message |
-| Rate limit | 429 | `{error:"Too many requests"}` + `Retry-After` |
-| Webhook bad sig | 401 | `{error:"Invalid signature"}` |
+| Condition                                       | Status | Body Example                                                          |
+| ----------------------------------------------- | ------ | --------------------------------------------------------------------- |
+| Zod validation                                  | 400    | `{error:"Name must be at least 2 characters"}`                        |
+| Missing session                                 | 401    | `{error:"Not authenticated"}`                                         |
+| `requireAdmin` non-admin                        | 403    | `{error:"Forbidden"}`                                                 |
+| Unknown artist/booking                          | 404    | `{error:"Artist not found"}`                                          |
+| Duplicate email / profile / slot / payment type | 409    | `{error:"An account with this email already exists"}` or slot message |
+| Rate limit                                      | 429    | `{error:"Too many requests"}` + `Retry-After`                         |
+| Webhook bad sig                                 | 401    | `{error:"Invalid signature"}`                                         |
 
 Client error ingestion: `POST /api/errors {message, stack?, context}` — rate-limited, `reportError()`.
 
@@ -665,4 +672,4 @@ curl -X POST http://localhost:3000/api/artists/aisha-azman/reviews --cookie "lei
 
 ---
 
-*Next: `docs/08-Traceability-Matrix.md` maps each BR → SRS → FRS → API → Table → Test.*
+_Next: `docs/08-Traceability-Matrix.md` maps each BR → SRS → FRS → API → Table → Test._

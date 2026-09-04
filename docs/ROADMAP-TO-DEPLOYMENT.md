@@ -35,13 +35,23 @@ dashboard URL is login-gated; verify its state from the Vercel console).
 
 5. Create the fresh **Supabase** project (do not reuse v1 Neon/old Supabase).
    Set `DATABASE_URL` (pooler, `sslmode=require`) in Vercel **Production**.
-6. `npm run db:migrate` against prod `DATABASE_URL`; `supabase link` + `supabase db push`
-   (`supabase/migrations/*`); verify RLS enabled on all tables.
+6. `pnpm run db:migrate` against prod `DATABASE_URL`, then `pnpm run db:seed-catalog`
+   and seed the first admin (`scripts/seed-admin.ts`).
+   **Revised 2026-09-04:** the `supabase link` + `supabase db push` step is dropped.
+   There is no `supabase/` directory and no migration files — the schema lives in
+   `PG_SCHEMA` in `src/server/db.ts` and `db:migrate` applies it idempotently.
+   "Verify RLS on all tables" is likewise dropped: RLS has no effect while all
+   access goes through a direct `DATABASE_URL` connection, and authorization is
+   enforced in the application. See `docs/ARCHITECTURE.md` and
+   `docs/PHASE-1-ENV-CHECKLIST.md` §2.
 7. Set every var from `.env.example` in Vercel Production — real values for
    `NEXT_PUBLIC_URL`/`NEXT_PUBLIC_SITE_URL` (`https://leish.my`, never localhost),
    `SESSION_SECRET` (`openssl rand -base64 32` — **required**, server won't boot without it),
    Supabase URL/anon key, Brevo, Billplz, Sentry. No `NEXT_PUBLIC_*` marked "sensitive".
-8. Supabase Storage bucket for portfolio images (public-read policy only if uploads ship).
+8. Storage for portfolio images, **only if uploads ship at launch**. Note the code
+   uses **Vercel Blob** (`src/lib/storage.ts`, needs `BLOB_READ_WRITE_TOKEN`), not
+   Supabase Storage — `next.config.ts` allows both hosts, but only the Blob path is
+   implemented.
 
 ## Phase 2 — Payments, email, observability
 

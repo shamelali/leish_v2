@@ -33,7 +33,9 @@ interface MigrationOptions {
  * Migrate messages from the old `messages` table to the new DO SQLite
  * This is a one-time operation that can be run via a script or admin endpoint
  */
-export async function migrateMessagesToDO(options: MigrationOptions = {}): Promise<MigrationResult> {
+export async function migrateMessagesToDO(
+  options: MigrationOptions = {},
+): Promise<MigrationResult> {
   const { bookingIds, batchSize = 100, dryRun = false } = options;
   const result: MigrationResult = { success: true, migrated: 0, failed: 0, errors: [] };
 
@@ -99,7 +101,10 @@ export async function migrateMessagesToDO(options: MigrationOptions = {}): Promi
  * Validate that the new chat system works for a booking
  * Can be called after deployment to verify before switching traffic
  */
-export async function validateChatSystem(bookingId: string, userToken: string): Promise<{
+export async function validateChatSystem(
+  bookingId: string,
+  userToken: string,
+): Promise<{
   websocketConnect: boolean;
   historyLoad: boolean;
   sendReceive: boolean;
@@ -181,13 +186,13 @@ export function shouldUseNewChat(bookingId: string, userId: string): boolean {
 
   // Consistent hashing for user+booking
   const hash = hashString(`${bookingId}:${userId}`);
-  return (hash % 100) < rolloutPercent;
+  return hash % 100 < rolloutPercent;
 }
 
 function hashString(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash = (hash << 5) - hash + str.charCodeAt(i);
     hash |= 0;
   }
   return Math.abs(hash);
@@ -200,14 +205,20 @@ function hashString(str: string): number {
 export async function handleMigrationRequest(request: Request): Promise<Response> {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   let body: { bookingIds?: string[]; dryRun?: boolean };
   try {
     body = await request.json();
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const result = await migrateMessagesToDO({ bookingIds: body.bookingIds, dryRun: body.dryRun });
@@ -225,7 +236,10 @@ export async function handleMigrationRequest(request: Request): Promise<Response
 export async function handleValidationRequest(request: Request): Promise<Response> {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const url = new URL(request.url);
@@ -233,7 +247,10 @@ export async function handleValidationRequest(request: Request): Promise<Respons
   const token = url.searchParams.get("token");
 
   if (!bookingId || !token) {
-    return new Response(JSON.stringify({ error: "bookingId and token required" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "bookingId and token required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const result = await validateChatSystem(bookingId, token);

@@ -41,7 +41,9 @@ const BUCKETS = [
 async function migrateBucket(bucketName: string, r2Prefix: string) {
   console.log(`\n--- Migrating ${bucketName} -> ${r2Prefix} ---`);
 
-  const { data: objects, error } = await supabase.storage.from(bucketName).list("", { limit: 1000 });
+  const { data: objects, error } = await supabase.storage
+    .from(bucketName)
+    .list("", { limit: 1000 });
   if (error) {
     console.error(`Failed to list ${bucketName}:`, error);
     return { success: 0, failed: 0, skipped: 0 };
@@ -79,7 +81,7 @@ async function migrateBucket(bucketName: string, r2Prefix: string) {
           Body: buffer,
           ContentType: contentType,
           CacheControl: "public, max-age=31536000, immutable",
-        })
+        }),
       );
 
       console.log(`    ✓ Uploaded (${buffer.length} bytes)`);
@@ -97,9 +99,7 @@ async function verifyMigration() {
   console.log("\n--- Verifying R2 objects ---");
   let total = 0;
   for (const { prefix } of BUCKETS) {
-    const response = await r2.send(
-      new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix })
-    );
+    const response = await r2.send(new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix }));
     const count = response.Contents?.length ?? 0;
     console.log(`${prefix}: ${count} objects`);
     total += count;

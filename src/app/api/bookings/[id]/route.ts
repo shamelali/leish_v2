@@ -81,7 +81,9 @@ export const PATCH = statefulRoute(
         return jsonError(result.error ?? "Invalid transition", 403);
       }
 
-      await db.prepare("UPDATE bookings SET status = ? WHERE id = ?").run(result.status, booking.id);
+      await db
+        .prepare("UPDATE bookings SET status = ? WHERE id = ?")
+        .run(result.status, booking.id);
 
       // Notify the client about the status change; email the invoice on completion.
       await notifyBookingStatusChanged({
@@ -124,7 +126,10 @@ export const PATCH = statefulRoute(
       const total = quotation?.status === "expired" ? null : (quotation?.total ?? null);
       const bookingFeeSen = await getBookingFeeSen();
 
-      interaction?.end(JSON.stringify({ bookingId: booking.id, action: parsed.data, newStatus: result.status }), true);
+      interaction?.end(
+        JSON.stringify({ bookingId: booking.id, action: parsed.data, newStatus: result.status }),
+        true,
+      );
       return NextResponse.json({
         booking: {
           id: booking.id,
@@ -144,7 +149,8 @@ export const PATCH = statefulRoute(
           totalPrice: total,
           balanceDueDate: booking.date
             ? new Date(
-                new Date(`${booking.date}T00:00:00`).getTime() - BALANCE_DUE_DAYS_BEFORE * 86_400_000,
+                new Date(`${booking.date}T00:00:00`).getTime() -
+                  BALANCE_DUE_DAYS_BEFORE * 86_400_000,
               )
                 .toISOString()
                 .slice(0, 10)

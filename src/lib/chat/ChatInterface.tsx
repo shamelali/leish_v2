@@ -41,7 +41,13 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#16213e",
   },
   title: { fontSize: "18px", fontWeight: 600, color: "#fff" },
-  presence: { display: "flex", alignItems: "center", gap: "8px", flex: 1, justifyContent: "flex-end" },
+  presence: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flex: 1,
+    justifyContent: "flex-end",
+  },
   typingIndicator: {
     padding: "8px 16px",
     fontSize: "13px",
@@ -150,8 +156,16 @@ function getInitials(name: string): string {
 
 function getColorForName(name: string): string {
   const colors = [
-    "#ef4444", "#f97316", "#f59e0b", "#22c55e", "#14b8a6",
-    "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7", "#ec4899",
+    "#ef4444",
+    "#f97316",
+    "#f59e0b",
+    "#22c55e",
+    "#14b8a6",
+    "#3b82f6",
+    "#6366f1",
+    "#8b5cf6",
+    "#a855f7",
+    "#ec4899",
   ];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -208,11 +222,21 @@ function Message({ message, currentUserId, users }: MessageProps) {
   const bubbleStyle: React.CSSProperties = {
     padding: "12px 16px",
     borderRadius: isOwn ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-    background: isOwn ? (message.pending ? "#374151" : message.failed ? "#7f1d1d" : "#2563eb") : "#2a2a4a",
+    background: isOwn
+      ? message.pending
+        ? "#374151"
+        : message.failed
+          ? "#7f1d1d"
+          : "#2563eb"
+      : "#2a2a4a",
     color: "#fff",
     position: "relative",
     opacity: message.pending ? 0.7 : 1,
-    boxShadow: message.pending ? "0 0 0 1px #6b7280" : message.failed ? "0 0 0 1px #ef4444" : "none",
+    boxShadow: message.pending
+      ? "0 0 0 1px #6b7280"
+      : message.failed
+        ? "0 0 0 1px #ef4444"
+        : "none",
     transition: "all 0.2s ease",
   };
 
@@ -230,8 +254,17 @@ function Message({ message, currentUserId, users }: MessageProps) {
           <div style={{ marginTop: "8px", display: "flex", gap: "8px" }}>
             <span style={{ color: "#ef4444", fontSize: "13px" }}>Failed to send</span>
             <button
-              onClick={() => window.dispatchEvent(new CustomEvent("chat-retry", { detail: message.id }))}
-              style={{ padding: "4px 8px", background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent("chat-retry", { detail: message.id }))
+              }
+              style={{
+                padding: "4px 8px",
+                background: "#ef4444",
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
             >
               Retry
             </button>
@@ -271,8 +304,16 @@ function TypingIndicator({ typingUsers, currentUserId }: TypingIndicatorProps) {
       </span>
       <style jsx>{`
         @keyframes typing {
-          0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
-          40% { transform: scale(1); opacity: 1; }
+          0%,
+          80%,
+          100% {
+            transform: scale(0.8);
+            opacity: 0.5;
+          }
+          40% {
+            transform: scale(1);
+            opacity: 1;
+          }
         }
       `}</style>
     </div>
@@ -352,7 +393,7 @@ export function ChatInterface({
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => sendTyping(false), 3000);
     },
-    [sendTyping]
+    [sendTyping],
   );
 
   const handleSubmit = useCallback(
@@ -373,18 +414,16 @@ export function ChatInterface({
         console.error("Failed to send message:", err);
       }
     },
-    [sendMessage, sendTyping]
+    [sendMessage, sendTyping],
   );
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        (e.currentTarget.form?.requestSubmit?.() ?? e.currentTarget.form?.dispatchEvent(new Event("submit")));
-      }
-    },
-    []
-  );
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit?.() ??
+        e.currentTarget.form?.dispatchEvent(new Event("submit"));
+    }
+  }, []);
 
   // Retry failed messages
   useEffect(() => {
@@ -444,7 +483,10 @@ export function ChatInterface({
               border: "2px solid #1a1a2e",
             };
             return (
-              <div key={user.userId} style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <div
+                key={user.userId}
+                style={{ position: "relative", display: "flex", alignItems: "center" }}
+              >
                 <div style={avatarStyle}>{getInitials(user.name)}</div>
                 <div style={statusDotStyle} />
               </div>
@@ -490,7 +532,12 @@ export function ChatInterface({
         )}
 
         {messages.map((message) => (
-          <Message key={message.id} message={message} currentUserId={currentUser?.userId ?? null} users={users} />
+          <Message
+            key={message.id}
+            message={message}
+            currentUserId={currentUser?.userId ?? null}
+            users={users}
+          />
         ))}
 
         <div ref={messagesEndRef} />
@@ -498,24 +545,43 @@ export function ChatInterface({
 
       {/* Status Bar */}
       <div style={styles.statusBar}>
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          color: status === "connected" ? "#22c55e" : status === "connecting" ? "#f59e0b" : "#ef4444",
-        }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            color:
+              status === "connected" ? "#22c55e" : status === "connecting" ? "#f59e0b" : "#ef4444",
+          }}
+        >
           <span
             style={{
               width: "8px",
               height: "8px",
               borderRadius: "50%",
-              background: status === "connected" ? "#22c55e" : status === "connecting" ? "#f59e0b" : "#ef4444",
+              background:
+                status === "connected"
+                  ? "#22c55e"
+                  : status === "connecting"
+                    ? "#f59e0b"
+                    : "#ef4444",
             }}
           />
           {statusText}
         </div>
         {status === "error" && (
-          <button onClick={reconnect} style={{ marginLeft: "auto", padding: "4px 12px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>
+          <button
+            onClick={reconnect}
+            style={{
+              marginLeft: "auto",
+              padding: "4px 12px",
+              background: "#2563eb",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
             Reconnect
           </button>
         )}
@@ -545,7 +611,14 @@ export function ChatInterface({
           disabled={status !== "connected"}
           aria-label="Send message"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <path d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z" />
           </svg>
         </button>

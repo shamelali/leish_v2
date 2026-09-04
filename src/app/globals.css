@@ -54,18 +54,32 @@ body {
 
 /* Hero animation enhancements - using original Leish color scheme */
 @keyframes blobFloat {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(30px, 30px) scale(1.05); }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(30px, 30px) scale(1.05);
+  }
 }
 
 @keyframes blobPulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 0.8; }
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 @keyframes scanLineShift {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(100%); }
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
 }
 
 .blob-1,
@@ -74,9 +88,15 @@ body {
   animation: blobFloat 20s ease-in-out infinite;
 }
 
-.blob-1 { animation-delay: 0s; }
-.blob-2 { animation-delay: 7s; }
-.blob-3 { animation-delay: 14s; }
+.blob-1 {
+  animation-delay: 0s;
+}
+.blob-2 {
+  animation-delay: 7s;
+}
+.blob-3 {
+  animation-delay: 14s;
+}
 
 /* Pulse effect on hover */
 .blob-1:hover,
@@ -92,17 +112,37 @@ body {
 
 /* Hero title fade-in */
 @keyframes titleFadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Stagger entrance for children */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.stagger-1 { animation: fadeInUp 0.5s ease-out forwards 0.1s; }
-.stagger-2 { animation: fadeInUp 0.5s ease-out forwards 0.2s; }
-.stagger-3 { animation: fadeInUp 0.5s ease-out forwards 0.3s; }
-.stagger-4 { animation: fadeInUp 0.5s ease-out forwards 0.4s; }
+.stagger-1 {
+  animation: fadeInUp 0.5s ease-out forwards 0.1s;
+}
+.stagger-2 {
+  animation: fadeInUp 0.5s ease-out forwards 0.2s;
+}
+.stagger-3 {
+  animation: fadeInUp 0.5s ease-out forwards 0.3s;
+}
+.stagger-4 {
+  animation: fadeInUp 0.5s ease-out forwards 0.4s;
+}

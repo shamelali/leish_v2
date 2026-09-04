@@ -31,8 +31,6 @@ export default function BookingChatPage({ params }: BookingChatProps) {
     }
   }, [session, loading, router, bookingId]);
 
-  
-
   const wsUrl = process.env.NEXT_PUBLIC_CHAT_WS_URL;
 
   if (loading) {
@@ -78,8 +76,9 @@ export default function BookingChatPage({ params }: BookingChatProps) {
             style={{ height: "calc(100vh - 140px)", minHeight: "500px" }}
             onMessage={(msg) => {
               // Optional: track analytics
-              if (typeof window !== "undefined" && (window as any).gtag) {
-                (window as any).gtag("event", "chat_message_sent", {
+              const gtag = typeof window !== "undefined" ? window.gtag : undefined;
+              if (gtag) {
+                gtag("event", "chat_message_sent", {
                   booking_id: bookingId,
                   message_length: msg.body.length,
                 });

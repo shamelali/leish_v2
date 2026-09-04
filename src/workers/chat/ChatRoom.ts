@@ -22,18 +22,8 @@ import type {
   BookingContext,
   ChatRoomState,
   ChatConfig,
-  DEFAULT_CHAT_CONFIG,
+  Env,
 } from "./types";
-
-// ── Environment & Bindings ────────────────────────────────────────────────────
-
-interface Env {
-  CHAT_ROOM: DurableObjectNamespace<ChatRoom>;
-  // For auth validation (can be a service binding or HTTP call to main app)
-  AUTH_SERVICE?: Fetcher;
-  // Optional: Analytics Engine for chat metrics
-  CHAT_ANALYTICS?: AnalyticsEngineDataset;
-}
 
 // ── Helper Functions ──────────────────────────────────────────────────────────
 
@@ -49,7 +39,11 @@ function sanitizeMessage(body: string, maxLength: number): string {
   return body.slice(0, maxLength).trim();
 }
 
-function createMessage(input: ChatMessageInput, sender: UserPresence, config: ChatConfig): ChatMessage {
+function createMessage(
+  input: ChatMessageInput,
+  sender: UserPresence,
+  config: ChatConfig,
+): ChatMessage {
   return {
     id: generateId(),
     bookingId: input.bookingId,
@@ -97,12 +91,38 @@ class ConnectionRateLimiter {
 
 // ── ChatRoom Durable Object ──────────────────────────────────────────────────
 
+/**
+ * A WebSocket that has completed the `join` handshake carries the identity of
+ * the session attached to it, so later frames (message/typing/read/history) and
+ * disconnect cleanup can resolve the sender without another lookup.
+ */
+type TaggedWebSocket = WebSocket & {
+  userId?: string;
+  bookingId?: string;
+};
+
+/** Read the identity attached to a socket at join time. */
+function socketIdentity(ws: WebSocket): { userId?: string; bookingId?: string } {
+  const tagged = ws as TaggedWebSocket;
+  return { userId: tagged.userId, bookingId: tagged.bookingId };
+}
+
+/** Attach identity to a socket once it has successfully joined a room. */
+function tagSocket(ws: WebSocket, userId: string, bookingId: string): void {
+  const tagged = ws as TaggedWebSocket;
+  tagged.userId = userId;
+  tagged.bookingId = bookingId;
+}
+
 export class ChatRoom extends DurableObject<Env> {
   private state: ChatRoomState;
   private config: ChatConfig;
   private rateLimiters = new Map<WebSocket, ConnectionRateLimiter>();
   private heartbeatIntervals = new Map<WebSocket, number>();
-  private authCache = new Map<string, { user: UserPresence; booking: BookingContext; expires: number }>();
+  private authCache = new Map<
+    string,
+    { user: UserPresence; booking: BookingContext; expires: number }
+  >();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -161,10 +181,10 @@ export class ChatRoom extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
 
     // Initialize rate limiter for this connection
-    this.rateLimiters.set(server, new ConnectionRateLimiter(
-      this.config.rateLimitPerMinute,
-      60_000,
-    ));
+    this.rateLimiters.set(
+      server,
+      new ConnectionRateLimiter(this.config.rateLimitPerMinute, 60_000),
+    );
 
     // Start heartbeat
     const heartbeatId = setInterval(() => {
@@ -229,10 +249,23 @@ export class ChatRoom extends DurableObject<Env> {
 
   private async handleBatchInsert(request: Request): Promise<Response> {
     try {
-      const body = await request.json<{ messages: Array<{ id: string; booking_id: string; sender_id: string; sender_name: string; sender_role: string; body: string; created_at: string }> }>();
+      const body = await request.json<{
+        messages: Array<{
+          id: string;
+          booking_id: string;
+          sender_id: string;
+          sender_name: string;
+          sender_role: string;
+          body: string;
+          created_at: string;
+        }>;
+      }>();
 
       if (!body.messages?.length) {
-        return new Response(JSON.stringify({ error: "messages required" }), { status: 400, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "messages required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       let inserted = 0;
@@ -269,7 +302,9 @@ export class ChatRoom extends DurableObject<Env> {
           }
         }
         // Keep sorted
-        this.state.messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        this.state.messages.sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
       }
 
       await this.persistState();
@@ -279,40 +314,64 @@ export class ChatRoom extends DurableObject<Env> {
       });
     } catch (e) {
       console.error("Batch insert error:", e);
-      return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Batch insert failed" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: e instanceof Error ? e.message : "Batch insert failed" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
   }
 
   private async handleValidate(request: Request): Promise<Response> {
     try {
-      const body = await request.json<{ bookingId: string; action?: string; before?: string; limit?: number }>();
+      const body = await request.json<{
+        bookingId: string;
+        action?: string;
+        before?: string;
+        limit?: number;
+      }>();
 
       if (!body.bookingId) {
-        return new Response(JSON.stringify({ error: "bookingId required" }), { status: 400, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "bookingId required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       // For migration, we skip auth and just return success
       // The worker index.ts already validated via Next.js API
-      return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
     } catch (e) {
-      return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Validation failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
+      return new Response(
+        JSON.stringify({ error: e instanceof Error ? e.message : "Validation failed" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
     }
   }
 
   private async handleGetPresence(): Promise<Response> {
-    return new Response(JSON.stringify({ users: Array.from(this.state.presence.values()) }), { headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ users: Array.from(this.state.presence.values()) }), {
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   private async handleInternalMessage(request: Request): Promise<Response> {
     try {
       const body = await request.json<{ bookingId: string; body: string; tempId: string }>();
       // This would need auth validation - for now return not implemented
-      return new Response(JSON.stringify({ error: "Not implemented" }), { status: 501, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Not implemented" }), {
+        status: 501,
+        headers: { "Content-Type": "application/json" },
+      });
     } catch (e) {
-      return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Failed" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   }
 
@@ -329,19 +388,35 @@ export class ChatRoom extends DurableObject<Env> {
       const limit = body.limit ?? this.config.maxHistoryMessages;
       const page = messages.slice(-limit);
 
-      return new Response(JSON.stringify({ messages: page, hasMore: messages.length > limit }), { headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ messages: page, hasMore: messages.length > limit }), {
+        headers: { "Content-Type": "application/json" },
+      });
     } catch (e) {
-      return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Failed" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   }
 
   private async handleModerate(request: Request): Promise<Response> {
     try {
-      const body = await request.json<{ bookingId: string; action: "delete" | "flag" | "ban"; messageId: string; reason?: string }>();
+      const body = await request.json<{
+        bookingId: string;
+        action: "delete" | "flag" | "ban";
+        messageId: string;
+        reason?: string;
+      }>();
       // TODO: Implement moderation
-      return new Response(JSON.stringify({ success: true, action: body.action, messageId: body.messageId }), { headers: { "Content-Type": "application/json" } });
+      return new Response(
+        JSON.stringify({ success: true, action: body.action, messageId: body.messageId }),
+        { headers: { "Content-Type": "application/json" } },
+      );
     } catch (e) {
-      return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Failed" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   }
 
@@ -353,11 +428,13 @@ export class ChatRoom extends DurableObject<Env> {
 
     const rateCheck = limiter.check();
     if (!rateCheck.allowed) {
-      ws.send(JSON.stringify({
-        type: "error",
-        code: "RATE_LIMITED",
-        message: `Too many messages. Retry after ${Math.ceil(rateCheck.retryAfterMs / 1000)}s`,
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          code: "RATE_LIMITED",
+          message: `Too many messages. Retry after ${Math.ceil(rateCheck.retryAfterMs / 1000)}s`,
+        }),
+      );
       return;
     }
 
@@ -365,7 +442,9 @@ export class ChatRoom extends DurableObject<Env> {
     try {
       parsed = JSON.parse(message.toString());
     } catch {
-      ws.send(JSON.stringify({ type: "error", code: "INVALID_JSON", message: "Invalid message format" }));
+      ws.send(
+        JSON.stringify({ type: "error", code: "INVALID_JSON", message: "Invalid message format" }),
+      );
       return;
     }
 
@@ -390,21 +469,34 @@ export class ChatRoom extends DurableObject<Env> {
           ws.send(JSON.stringify({ type: "pong" }));
           break;
         default:
-          ws.send(JSON.stringify({ type: "error", code: "UNKNOWN_TYPE", message: "Unknown message type" }));
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              code: "UNKNOWN_TYPE",
+              message: "Unknown message type",
+            }),
+          );
       }
     } catch (error) {
       console.error("ChatRoom error:", error);
-      ws.send(JSON.stringify({
-        type: "error",
-        code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Internal server error",
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          code: "INTERNAL_ERROR",
+          message: error instanceof Error ? error.message : "Internal server error",
+        }),
+      );
     }
   }
 
   // ── WebSocket Close Handler ────────────────────────────────────────────────
 
-  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
+  async webSocketClose(
+    ws: WebSocket,
+    code: number,
+    reason: string,
+    wasClean: boolean,
+  ): Promise<void> {
     // Cleanup rate limiter
     this.rateLimiters.delete(ws);
 
@@ -419,7 +511,7 @@ export class ChatRoom extends DurableObject<Env> {
     for (const [userId, presence] of this.state.presence) {
       // We need to track which ws belongs to which user
       // For simplicity, we'll use a custom property on the WebSocket
-      if ((ws as any).userId === userId) {
+      if (socketIdentity(ws).userId === userId) {
         this.state.presence.delete(userId);
         this.broadcast({
           type: "userLeft",
@@ -441,13 +533,22 @@ export class ChatRoom extends DurableObject<Env> {
 
   // ── Message Handlers ───────────────────────────────────────────────────────
 
-  private async handleJoin(ws: WebSocket, msg: Extract<ClientToServerMessage, { type: "join" }>): Promise<void> {
+  private async handleJoin(
+    ws: WebSocket,
+    msg: Extract<ClientToServerMessage, { type: "join" }>,
+  ): Promise<void> {
     const { bookingId, token } = msg;
 
     // Validate booking access
     const auth = await this.validateAccess(token, bookingId);
     if (!auth) {
-      ws.send(JSON.stringify({ type: "error", code: "UNAUTHORIZED", message: "Not authorized for this booking" }));
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          code: "UNAUTHORIZED",
+          message: "Not authorized for this booking",
+        }),
+      );
       ws.close(4001, "Unauthorized");
       return;
     }
@@ -458,14 +559,19 @@ export class ChatRoom extends DurableObject<Env> {
     if (!this.state.bookingId) {
       this.state.bookingId = bookingId;
     } else if (this.state.bookingId !== bookingId) {
-      ws.send(JSON.stringify({ type: "error", code: "WRONG_BOOKING", message: "This room is for a different booking" }));
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          code: "WRONG_BOOKING",
+          message: "This room is for a different booking",
+        }),
+      );
       ws.close(4002, "Wrong booking");
       return;
     }
 
     // Attach user info to WebSocket for cleanup
-    (ws as any).userId = user.userId;
-    (ws as any).bookingId = bookingId;
+    tagSocket(ws, user.userId, bookingId);
 
     // Add to presence
     const existingPresence = this.state.presence.get(user.userId);
@@ -479,26 +585,33 @@ export class ChatRoom extends DurableObject<Env> {
 
     // Send welcome with current state
     const users = Array.from(this.state.presence.values());
-    ws.send(JSON.stringify({
-      type: "welcome",
-      bookingId,
-      user: presence,
-      users,
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "welcome",
+        bookingId,
+        user: presence,
+        users,
+      }),
+    );
 
     // Notify others
-    this.broadcast({
-      type: "userJoined",
-      user: presence,
-    }, ws);
+    this.broadcast(
+      {
+        type: "userJoined",
+        user: presence,
+      },
+      ws,
+    );
 
     // Send recent history
     const recentMessages = this.state.messages.slice(-this.config.maxHistoryMessages);
-    ws.send(JSON.stringify({
-      type: "history",
-      messages: recentMessages,
-      hasMore: this.state.messages.length > this.config.maxHistoryMessages,
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "history",
+        messages: recentMessages,
+        hasMore: this.state.messages.length > this.config.maxHistoryMessages,
+      }),
+    );
 
     // Persist state
     await this.persistState();
@@ -507,9 +620,11 @@ export class ChatRoom extends DurableObject<Env> {
     this.trackEvent("user_joined", { bookingId, userId: user.userId, role: user.role });
   }
 
-  private async handleMessage(ws: WebSocket, msg: Extract<ClientToServerMessage, { type: "message" }>): Promise<void> {
-    const userId = (ws as any).userId;
-    const bookingId = (ws as any).bookingId;
+  private async handleMessage(
+    ws: WebSocket,
+    msg: Extract<ClientToServerMessage, { type: "message" }>,
+  ): Promise<void> {
+    const { userId, bookingId } = socketIdentity(ws);
 
     if (!userId || !bookingId) {
       ws.send(JSON.stringify({ type: "error", code: "NOT_JOINED", message: "Must join first" }));
@@ -517,7 +632,13 @@ export class ChatRoom extends DurableObject<Env> {
     }
 
     if (msg.bookingId !== bookingId) {
-      ws.send(JSON.stringify({ type: "error", code: "WRONG_BOOKING", message: "Message bookingId mismatch" }));
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          code: "WRONG_BOOKING",
+          message: "Message bookingId mismatch",
+        }),
+      );
       return;
     }
 
@@ -543,11 +664,13 @@ export class ChatRoom extends DurableObject<Env> {
     }
 
     // Acknowledge to sender (optimistic → confirmed)
-    ws.send(JSON.stringify({
-      type: "messageAck",
-      tempId: msg.tempId,
-      messageId: message.id,
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "messageAck",
+        tempId: msg.tempId,
+        messageId: message.id,
+      }),
+    );
 
     // Broadcast to all (including sender for confirmation)
     this.broadcast({
@@ -570,9 +693,11 @@ export class ChatRoom extends DurableObject<Env> {
     });
   }
 
-  private async handleTyping(ws: WebSocket, msg: Extract<ClientToServerMessage, { type: "typing" }>): Promise<void> {
-    const userId = (ws as any).userId;
-    const bookingId = (ws as any).bookingId;
+  private async handleTyping(
+    ws: WebSocket,
+    msg: Extract<ClientToServerMessage, { type: "typing" }>,
+  ): Promise<void> {
+    const { userId, bookingId } = socketIdentity(ws);
 
     if (!userId || !bookingId || msg.bookingId !== bookingId) return;
 
@@ -604,50 +729,63 @@ export class ChatRoom extends DurableObject<Env> {
       this.state.typingUsers.set(userId, timeoutId);
 
       // Broadcast typing start
-      this.broadcast({
-        type: "typing",
-        typing: {
+      this.broadcast(
+        {
           type: "typing",
-          bookingId,
-          userId,
-          userName: presence.name,
-          isTyping: true,
+          typing: {
+            type: "typing",
+            bookingId,
+            userId,
+            userName: presence.name,
+            isTyping: true,
+          },
         },
-      }, ws); // Don't send back to sender
+        ws,
+      ); // Don't send back to sender
     } else {
       presence.isTyping = false;
       presence.typingAt = undefined;
 
-      this.broadcast({
-        type: "typing",
-        typing: {
+      this.broadcast(
+        {
           type: "typing",
-          bookingId,
-          userId,
-          userName: presence.name,
-          isTyping: false,
+          typing: {
+            type: "typing",
+            bookingId,
+            userId,
+            userName: presence.name,
+            isTyping: false,
+          },
         },
-      }, ws);
+        ws,
+      );
     }
   }
 
-  private async handleRead(ws: WebSocket, msg: Extract<ClientToServerMessage, { type: "read" }>): Promise<void> {
-    const userId = (ws as any).userId;
-    const bookingId = (ws as any).bookingId;
+  private async handleRead(
+    ws: WebSocket,
+    msg: Extract<ClientToServerMessage, { type: "read" }>,
+  ): Promise<void> {
+    const { userId, bookingId } = socketIdentity(ws);
 
     if (!userId || !bookingId || msg.bookingId !== bookingId) return;
 
     // Broadcast read receipt
-    this.broadcast({
-      type: "read",
-      messageId: msg.messageId,
-      userId,
-    }, ws);
+    this.broadcast(
+      {
+        type: "read",
+        messageId: msg.messageId,
+        userId,
+      },
+      ws,
+    );
   }
 
-  private async handleHistory(ws: WebSocket, msg: Extract<ClientToServerMessage, { type: "history" }>): Promise<void> {
-    const userId = (ws as any).userId;
-    const bookingId = (ws as any).bookingId;
+  private async handleHistory(
+    ws: WebSocket,
+    msg: Extract<ClientToServerMessage, { type: "history" }>,
+  ): Promise<void> {
+    const { userId, bookingId } = socketIdentity(ws);
 
     if (!userId || !bookingId || msg.bookingId !== bookingId) return;
 
@@ -663,11 +801,13 @@ export class ChatRoom extends DurableObject<Env> {
     const limit = msg.limit ?? this.config.maxHistoryMessages;
     const page = messages.slice(-limit);
 
-    ws.send(JSON.stringify({
-      type: "history",
-      messages: page,
-      hasMore: messages.length > limit,
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "history",
+        messages: page,
+        hasMore: messages.length > limit,
+      }),
+    );
   }
 
   // ── Helper Methods ─────────────────────────────────────────────────────────
@@ -699,7 +839,10 @@ export class ChatRoom extends DurableObject<Env> {
     }
   }
 
-  private async validateAccess(token: string, bookingId: string): Promise<{ user: UserPresence; booking: BookingContext } | null> {
+  private async validateAccess(
+    token: string,
+    bookingId: string,
+  ): Promise<{ user: UserPresence; booking: BookingContext } | null> {
     // Check cache first
     const cached = this.authCache.get(token);
     if (cached && cached.expires > Date.now() && cached.booking.id === bookingId) {
@@ -777,7 +920,7 @@ export class ChatRoom extends DurableObject<Env> {
       this.env.CHAT_ANALYTICS.writeDataPoint({
         blobs: [event, this.state.bookingId],
         doubles: [Date.now()],
-        indexes: [data.userId as string ?? "unknown"],
+        indexes: [(data.userId as string) ?? "unknown"],
       });
     }
   }

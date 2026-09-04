@@ -70,7 +70,10 @@ const ADDITIVE_COLUMNS: Record<string, Array<[string, string]>> = {
       "status_changed",
       "ALTER TABLE email_preferences ADD COLUMN status_changed INTEGER NOT NULL DEFAULT 1",
     ],
-    ["review_request", "ALTER TABLE email_preferences ADD COLUMN review_request INTEGER NOT NULL DEFAULT 1"],
+    [
+      "review_request",
+      "ALTER TABLE email_preferences ADD COLUMN review_request INTEGER NOT NULL DEFAULT 1",
+    ],
   ],
   email_retries: [
     ["html", "ALTER TABLE email_retries ADD COLUMN html TEXT"],

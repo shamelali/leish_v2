@@ -67,8 +67,6 @@ export async function getClaimedProfile(userId: string): Promise<ArtistProfileRo
 }
 
 export async function unclaimArtistProfile(userId: string): Promise<boolean> {
-  const result = await getDb()
-    .prepare("DELETE FROM artist_profiles WHERE user_id = ?")
-    .run(userId);
+  const result = await getDb().prepare("DELETE FROM artist_profiles WHERE user_id = ?").run(userId);
   return result.changes > 0;
 }

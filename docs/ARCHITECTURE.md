@@ -37,14 +37,26 @@ Same async API either way. Schema migrations: `scripts/migrate.ts`
 
 ## Where Supabase still appears
 
-- `/admin/**` pages (provider approvals, overview metrics) use the Supabase
-  client (`src/lib/supabase`, typed by `src/lib/types/database.ts`, schema in
-  `supabase/migrations/*`). They require `NEXT_PUBLIC_SUPABASE_URL` /
-  `NEXT_PUBLIC_SUPABASE_ANON_KEY` and are the only pages that do.
-- `src/proxy.ts` refreshes Supabase auth sessions in middleware.
+**Supabase is used for OAuth sign-in only. It is not a data path.**
+
+- `src/lib/supabase/auth.ts` wraps `signInWithOAuth`, `exchangeCodeForSession`,
+  `getUser` and `signOut` for the Google / Facebook / Instagram buttons
+  (`/api/auth/oauth/*`, `/auth/callback`). `/admin/**` calls `getSupabaseUser()`
+  to recognise a user who signed in via OAuth.
+- These paths need `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+  Without them the OAuth buttons fail; email + password login is unaffected.
+- **No code issues a Supabase data query.** There is not one `.from()` call in
+  `src/`. Once OAuth resolves an identity, the user row is read from the
+  Postgres facade (`getDb()`), and every subsequent read and write goes through
+  that facade.
 - The legacy Supabase booking routes (`/api/payments/billplz/*`,
   `src/lib/actions/*`, `src/lib/payments/*`) were removed on 2026-08-17 —
   the public loop is single-path.
+
+_Corrected 2026-09-04: this section previously described `/admin/**` as reading
+its data through the Supabase client, and referenced `src/proxy.ts` and
+`src/lib/types/database.ts`. Neither file exists, and the admin pages read
+through `getDb()` like everything else._
 
 ## Why one Postgres provider (not Neon + Supabase, not Drizzle)
 
@@ -59,19 +71,46 @@ source of drift. One provider for Postgres + Auth + Storage removes:
   journal to drift out of sync with.
 - A second set of connection strings/pooling config to keep straight.
 
-## RLS instead of hand-rolled route/layout guards (admin surface)
+## Authorization is enforced in the application, not by RLS
 
-v1's admin access check was an `if` statement in `app/admin/layout.tsx`
-that had a role-check bug (see HANDOVER.md). The admin pages still have
-that layout guard for UX (redirect before rendering), and the Supabase-backed
-data they read is protected by Postgres RLS policies
-(`supabase/migrations/0002_rls_policies.sql`). That means even if the layout
-guard has a bug in the future, queries from a non-admin still return nothing —
-defense in depth instead of a single point of failure.
+**There are no RLS policies in this repo, and RLS would not currently do
+anything if there were.**
 
-The public booking loop is protected by the session checks inside the
-`/api/*` route handlers (`src/server/session.ts`, per-route role checks), not
-by RLS.
+RLS constrains requests that arrive through Supabase's Data API carrying a user
+JWT. This app never makes such a request: all data access goes through
+`getDb()` over a direct `DATABASE_URL` connection, which connects as the
+database owner and bypasses row-level policies by design. Supabase is an OAuth
+provider here, nothing more (see "Where Supabase still appears").
+
+So authorization is enforced in the application, at three layers:
+
+- **Admin surface** — `src/app/admin/layout.tsx` redirects unless
+  `user.role === "admin"`, and `src/server/admin-auth.ts` re-checks on every
+  admin API call. Destructive admin mutations go through `atomicAdminGuard()`,
+  which folds the check and the write into one conditional SQL statement so two
+  concurrent demotions cannot remove the last admin.
+- **Booking loop** — session checks inside each `/api/*` handler
+  (`src/server/session.ts`), plus per-route role and ownership checks. Prices
+  are always resolved server-side from DB records, never trusted from the
+  client.
+- **Payments** — the Billplz webhook verifies an HMAC signature before any
+  mutation, so a forged callback cannot confirm a booking.
+
+### Should RLS be added?
+
+Not now. It would add no meaningful protection while creating real risk: a
+policy on a table the app writes to via `DATABASE_URL` either does nothing
+(owner bypass) or silently breaks writes in a way that is painful to diagnose.
+
+Revisit this **only** if the browser is ever given direct Supabase Data API
+access — for example a client-side `.from()` query or Supabase Realtime. At
+that point RLS stops being defence-in-depth and becomes the only thing standing
+between an anon key and the table, and it must be added before that ships.
+
+_Corrected 2026-09-04: this section previously claimed admin data was protected
+by `supabase/migrations/0002_rls_policies.sql`. There is no `supabase/`
+directory, no such migration, and no RLS policy anywhere in the repo. See also
+`docs/PHASE-1-ENV-CHECKLIST.md` §2._
 
 ## Money logic lives in a few places
 

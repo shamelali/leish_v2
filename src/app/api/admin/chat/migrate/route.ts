@@ -33,7 +33,8 @@ export async function POST(request: Request) {
 
     // Verify admin
     const db = await getDb();
-    const user = await db.prepare("SELECT role FROM users WHERE id = ?").get(payload.sub) as { role: string } | undefined;
+    const user = (await db.prepare("SELECT role FROM users WHERE id = ?").get(payload.sub)) as
+      { role: string } | undefined;
     if (!user || user.role !== "admin") {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
 
       // For each booking, call the worker to insert messages
       const workerUrl = process.env.NEXT_PUBLIC_CHAT_WS_URL?.replace("/ws/", "/api/") ?? "";
-      
+
       for (const [bookingId, messages] of byBooking) {
         if (dryRun) {
           result.migrated += messages.length;

@@ -166,7 +166,14 @@ describe("logAdminAction", () => {
     getDb().exec("DROP TABLE admin_audit_log");
     try {
       await expect(
-        logAdminAction("audit-writer", "critical_action", "users", "id", {}, { requireAudit: true }),
+        logAdminAction(
+          "audit-writer",
+          "critical_action",
+          "users",
+          "id",
+          {},
+          { requireAudit: true },
+        ),
       ).rejects.toThrow(/critical: audit write failed/);
     } finally {
       getDb().exec(`CREATE TABLE IF NOT EXISTS admin_audit_log (
@@ -242,7 +249,9 @@ describe("requireAdmin rate limiting", () => {
 describe("atomicAdminGuard", () => {
   beforeEach(async () => {
     await getDb().prepare("DELETE FROM users WHERE email LIKE ?").run("%@atomic-test.local");
-    await getDb().prepare("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE email LIKE ?)").run("%@atomic-test.local");
+    await getDb()
+      .prepare("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE email LIKE ?)")
+      .run("%@atomic-test.local");
   });
 
   it("allows demoting non-admin user (no guard needed)", async () => {
@@ -251,7 +260,14 @@ describe("atomicAdminGuard", () => {
       .prepare(
         "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(targetId, `${targetId}@atomic-test.local`, "Target", "customer", "x:y", new Date().toISOString());
+      .run(
+        targetId,
+        `${targetId}@atomic-test.local`,
+        "Target",
+        "customer",
+        "x:y",
+        new Date().toISOString(),
+      );
 
     const result = await atomicAdminGuard(targetId, "demote", "customer");
     expect(result.ok).toBe(true);
@@ -263,7 +279,14 @@ describe("atomicAdminGuard", () => {
       .prepare(
         "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(adminId, `${adminId}@atomic-test.local`, "Only Admin", "admin", "x:y", new Date().toISOString());
+      .run(
+        adminId,
+        `${adminId}@atomic-test.local`,
+        "Only Admin",
+        "admin",
+        "x:y",
+        new Date().toISOString(),
+      );
 
     // Ensure this is the only admin
     const otherAdmins = (await getDb()
@@ -278,7 +301,9 @@ describe("atomicAdminGuard", () => {
     if (!result.ok) expect(result.reason).toBe("Cannot demote the last remaining admin");
 
     // Verify role unchanged
-    const user = await getDb().prepare("SELECT role FROM users WHERE id = ?").get<{ role: string }>(adminId);
+    const user = await getDb()
+      .prepare("SELECT role FROM users WHERE id = ?")
+      .get<{ role: string }>(adminId);
     expect(user?.role).toBe("admin");
   });
 
@@ -289,18 +314,34 @@ describe("atomicAdminGuard", () => {
       .prepare(
         "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(admin1, `${admin1}@atomic-test.local`, "Admin 1", "admin", "x:y", new Date().toISOString());
+      .run(
+        admin1,
+        `${admin1}@atomic-test.local`,
+        "Admin 1",
+        "admin",
+        "x:y",
+        new Date().toISOString(),
+      );
     await getDb()
       .prepare(
         "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(admin2, `${admin2}@atomic-test.local`, "Admin 2", "admin", "x:y", new Date().toISOString());
+      .run(
+        admin2,
+        `${admin2}@atomic-test.local`,
+        "Admin 2",
+        "admin",
+        "x:y",
+        new Date().toISOString(),
+      );
 
     const result = await atomicAdminGuard(admin1, "demote", "artist");
     expect(result.ok).toBe(true);
 
     // Verify role changed
-    const user = await getDb().prepare("SELECT role FROM users WHERE id = ?").get<{ role: string }>(admin1);
+    const user = await getDb()
+      .prepare("SELECT role FROM users WHERE id = ?")
+      .get<{ role: string }>(admin1);
     expect(user?.role).toBe("artist");
   });
 
@@ -310,7 +351,14 @@ describe("atomicAdminGuard", () => {
       .prepare(
         "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(adminId, `${adminId}@atomic-test.local`, "Only Admin", "admin", "x:y", new Date().toISOString());
+      .run(
+        adminId,
+        `${adminId}@atomic-test.local`,
+        "Only Admin",
+        "admin",
+        "x:y",
+        new Date().toISOString(),
+      );
 
     // Ensure this is the only admin
     const otherAdmins = (await getDb()
@@ -336,12 +384,26 @@ describe("atomicAdminGuard", () => {
       .prepare(
         "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(admin1, `${admin1}@atomic-test.local`, "Admin 1", "admin", "x:y", new Date().toISOString());
+      .run(
+        admin1,
+        `${admin1}@atomic-test.local`,
+        "Admin 1",
+        "admin",
+        "x:y",
+        new Date().toISOString(),
+      );
     await getDb()
       .prepare(
         "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(admin2, `${admin2}@atomic-test.local`, "Admin 2", "admin", "x:y", new Date().toISOString());
+      .run(
+        admin2,
+        `${admin2}@atomic-test.local`,
+        "Admin 2",
+        "admin",
+        "x:y",
+        new Date().toISOString(),
+      );
 
     const result = await atomicAdminGuard(admin1, "delete");
     expect(result.ok).toBe(true);
@@ -358,19 +420,38 @@ describe("atomicAdminGuard", () => {
       .prepare(
         "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(admin1, `${admin1}@atomic-test.local`, "Admin 1", "admin", "x:y", new Date().toISOString());
+      .run(
+        admin1,
+        `${admin1}@atomic-test.local`,
+        "Admin 1",
+        "admin",
+        "x:y",
+        new Date().toISOString(),
+      );
     await getDb()
       .prepare(
         "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(admin2, `${admin2}@atomic-test.local`, "Admin 2", "admin", "x:y", new Date().toISOString());
+      .run(
+        admin2,
+        `${admin2}@atomic-test.local`,
+        "Admin 2",
+        "admin",
+        "x:y",
+        new Date().toISOString(),
+      );
 
     // Create a session for admin1
     await getDb()
       .prepare(
         "INSERT INTO sessions (jti, user_id, revoked, expires_at, created_at) VALUES (?, ?, 0, ?, ?)",
       )
-      .run("test-jti", admin1, new Date(Date.now() + 86400000).toISOString(), new Date().toISOString());
+      .run(
+        "test-jti",
+        admin1,
+        new Date(Date.now() + 86400000).toISOString(),
+        new Date().toISOString(),
+      );
 
     const result = await atomicAdminGuard(admin1, "demote", "artist");
     expect(result.ok).toBe(true);

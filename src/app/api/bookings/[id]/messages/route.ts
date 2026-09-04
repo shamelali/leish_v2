@@ -44,13 +44,14 @@ async function authorizeBookingAccess(request: Request, bookingId: string) {
   const isOwner = booking.user_id === user.id;
   const [claimedArtists, claimedStudios] = isArtistRole
     ? await Promise.all([getClaimedArtistIds(user.id), getClaimedStudioIds(user.id)])
-    : [[], []] as unknown as [string[], string[]];
+    : ([[], []] as unknown as [string[], string[]]);
   const isStudio = user.role === "studio" && claimedStudios.length > 0;
   const isClaimed = isStudio
     ? claimedStudios.includes(booking.studio_id ?? "")
     : claimedArtists.includes(booking.artist_id);
   // Fallback: studio who legacy-claimed an artist can still access artist bookings
-  const isLegacyClaimed = !isStudio && user.role === "studio" && claimedArtists.includes(booking.artist_id);
+  const isLegacyClaimed =
+    !isStudio && user.role === "studio" && claimedArtists.includes(booking.artist_id);
   if (!isOwner && !isClaimed && !isLegacyClaimed) {
     return { error: jsonError("Not authorized", 403) };
   }

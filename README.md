@@ -109,15 +109,26 @@ Open http://localhost:3000.
 ## Quality gates
 
 ```bash
-npm run lint          # ESLint (0 warnings required)
-npm run typecheck     # tsc --noEmit
-npm test              # Vitest unit + component tests (48 tests)
-npm run build         # production build
-npx playwright test   # E2E (register → book → dashboard) — needs browsers
+./scripts/ci-local.sh   # all gates below, in CI's order (~80s)
+
+pnpm run format:check   # Prettier
+pnpm run lint           # ESLint
+pnpm run typecheck      # tsc --noEmit
+pnpm test               # Vitest unit + component tests (554 tests)
+pnpm run build          # production build
+pnpm run e2e            # Playwright — needs browsers installed
+pnpm run test:pg        # Postgres integration — needs DATABASE_URL
 ```
 
 CI (`.github/workflows/ci.yml`) runs format → lint → typecheck → test → build on
-every PR, plus a Playwright E2E job (browser install handled in CI).
+every PR, plus Playwright E2E and Postgres integration jobs.
+
+> **Actions is currently billing-locked**, so no CI run has executed. Use
+> `./scripts/ci-local.sh`, which mirrors the `verify` job exactly, and enable the
+> pre-push hook with `git config core.hooksPath .githooks`. See
+> [docs/CI-WITHOUT-ACTIONS.md](docs/CI-WITHOUT-ACTIONS.md) — the lock is an
+> account-level flag, not a quota, and this repo is public so Actions minutes
+> are free.
 
 ## Security features
 

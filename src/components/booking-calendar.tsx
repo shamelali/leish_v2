@@ -90,7 +90,11 @@ export default function BookingCalendar({
         }),
       });
 
-      const data = (await res.json()) as { error?: string; code?: string; booking?: { id: string } };
+      const data = (await res.json()) as {
+        error?: string;
+        code?: string;
+        booking?: { id: string };
+      };
       if (!res.ok) {
         const message: string = data.error ?? "Unable to send your booking request.";
         if (res.status === 401) {

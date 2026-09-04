@@ -15,9 +15,7 @@ function hashToken(token: string): string {
 }
 
 export async function storeVerificationToken(userId: string): Promise<string> {
-  await getDb()
-    .prepare("DELETE FROM email_verifications WHERE user_id = ?")
-    .run(userId);
+  await getDb().prepare("DELETE FROM email_verifications WHERE user_id = ?").run(userId);
   const token = randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
   await getDb()

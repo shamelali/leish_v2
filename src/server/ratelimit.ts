@@ -4,13 +4,28 @@
  * - `createMemoryStore()` — in-process sliding-window buckets. Fine for
  *   single-instance deploys and tests.
  * - `createUpstashStore()` — Redis-backed fixed-window counters via the
- *   Upstash REST API (no SDK needed). Used when UPSTASH_REST_URL and
- *   UPSTASH_REST_TOKEN are set; otherwise the default limiter falls back
- *   to memory so local runs never break.
+ *   Upstash REST API (no SDK needed). Implemented and tested, but NOT wired
+ *   into the default limiter: setting UPSTASH_REST_URL / UPSTASH_REST_TOKEN
+ *   has no effect. To use it you must construct it explicitly.
  * - `createRateLimiter(store)` — returns a `(key, limit, windowMs) => Promise<result>`
  *   function. `rateLimit` is the default instance used by API routes.
  *
  * Results include `retryAfterMs` so callers can emit a Retry-After header.
+ *
+ * ## Operational limitation: limits are PER INSTANCE, not global
+ *
+ * The default limiter keeps its buckets in the process heap. On a serverless
+ * host every concurrent instance gets its own empty Map, so with N warm
+ * instances the effective limit is up to N x the configured value, and a
+ * limit "resets" whenever an instance is recycled. An attacker who spreads
+ * requests across connections is therefore throttled far more loosely than
+ * the numbers in the route handlers suggest.
+ *
+ * This is accepted for launch: the limiter exists to blunt casual abuse and
+ * accidental retry storms, not to be a security control. Nothing enforcing
+ * authorization or money depends on it. If real abuse appears, swap the
+ * default to `createUpstashStore()` (or any shared store) — the interface is
+ * already the right shape and requires no changes at the call sites.
  */
 
 export interface RateLimitResult {

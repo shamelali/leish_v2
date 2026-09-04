@@ -78,12 +78,19 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - Cross-references `MALAYSIA_STATES`, `BRIDAL_EVENTS`, `NON_BRIDAL_EVENTS`
 - Types inferred via `z.infer`
 
-### 2. Payments (`src/lib/payments/billplz.ts` + `src/server/payments.ts`)
+### 2. Payments (`src/server/payments.ts`)
 
-- Billplz API: `createBill()`, `verifyWebhookSignature()` (HMAC-SHA256)
-- Signature fields (ordered): `amount|collection_id|id|paid|paid_amount|state`
-- `BILLPLZ_X_SIGNATURE_KEY` required for webhook verification
-- `BILLPLZ_API_KEY`, `BILLPLZ_COLLECTION_ID`, `BILLPLZ_BASE_URL`, `BILLPLZ_X_SIGNATURE_KEY`
+- Billplz API: `createBill()`, `verifyBillplzSignature()` (HMAC-SHA256)
+- The signature is computed over the **raw request body**, using
+  `BILLPLZ_API_KEY` as the HMAC secret, and compared timing-safely against the
+  hex digest in the `X-Billplz-Signature` header
+- **`BILLPLZ_X_SIGNATURE_KEY` is not used.** No code reads it — do not set it
+- `BILLPLZ_API_KEY`, `BILLPLZ_COLLECTION_ID`, `BILLPLZ_BASE_URL`
+
+> The old `src/lib/payments/billplz.ts`, which signed a concatenation of
+> `amount|collection_id|id|paid|paid_amount|state` with a separate signature
+> key, was removed when the booking loop was unified onto the db-facade
+> backend. `src/server/payments.ts` is the only payment implementation.
 
 ### 2b. Hybrid Payment Model (`src/server/payments.ts`)
 
@@ -183,8 +190,8 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - `SUPABASE_SERVICE_ROLE_KEY` — **never** expose to client
 - `SESSION_SECRET` — 32-byte base64 generated via `openssl rand -base64 32`
 - `DATABASE_URL` — PostgreSQL connection string (Neon/Supabase pooler)
-- `BILLPLZ_API_KEY`, `BILLPLZ_COLLECTION_ID`, `BILLPLZ_X_SIGNATURE_KEY`
-- `EMAIL_PROVIDER` — `dev` | `resend` | `postmark` (default: `dev`)
+- `BILLPLZ_API_KEY` (also the webhook HMAC secret), `BILLPLZ_COLLECTION_ID`
+- `EMAIL_PROVIDER` — `dev` | `resend` | `postmark` | `brevo` (default: `dev`)
 - `RESEND_API_KEY` — required when `EMAIL_PROVIDER=resend` (or use Vercel Connect API-key connector)
 - `POSTMARK_SERVER_TOKEN` — required when `EMAIL_PROVIDER=postmark` (or use Vercel Connect API-key connector)
 - `BREVO_API_KEY` — required when `EMAIL_PROVIDER=brevo` (or use Vercel Connect API-key connector)
@@ -194,8 +201,11 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 **Optional but recommended:**
 
-- `POSTGRES_URL` — validated by `checkPostgresUrl()` in `src/env.ts`
-- `UPSTASH_REST_URL` / `UPSTASH_REST_TOKEN` — distributed rate limiting
+- `POSTGRES_URL` — read only by `scripts/retain-purge.mjs`, which falls back
+  to `DATABASE_URL`. Not validated anywhere; not needed by the app
+- `UPSTASH_REST_URL` / `UPSTASH_REST_TOKEN` — **currently inert.**
+  `src/server/ratelimit.ts` hardcodes the in-memory store, so rate limits are
+  per-instance regardless of these values
 - `SENTRY_DSN` — error reporting
 - `ERROR_WEBHOOK_URL` — fallback error sink
 - `LOG_WEBHOOK_URL` — log forwarding
@@ -257,13 +267,16 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 - `SUPABASE_SERVICE_ROLE_KEY` has full admin access — use only server-side
 - Never expose to browser; all API routes use supabase server client
-- Row-level security (RLS) recommended on Supabase tables
+- Row-level security (RLS) is **not** in use and would have no effect today: all data access goes through `getDb()` on a direct `DATABASE_URL` connection, which bypasses row-level policies. Supabase is an OAuth provider only. Add RLS only if the browser is ever given direct Supabase Data API access — see `docs/ARCHITECTURE.md`
 
 ### 3. Payment Security
 
-- `BILLPLX_X_SIGNATURE_KEY` must be kept secret — verifies webhook integrity
-- Webhook signature: HMAC-SHA256 of `amount|collection_id|id|paid|paid_amount|state`
-- Verify signature **before** marking bookings as paid (already implemented in `billplz.ts`)
+- `BILLPLZ_API_KEY` must be kept secret — it is the webhook HMAC secret as well
+  as the API credential, so a leak allows forged "paid" callbacks
+- Webhook signature: HMAC-SHA256 over the **raw request body**, hex-encoded in
+  the `X-Billplz-Signature` header
+- Verify signature **before** marking bookings as paid (implemented in
+  `verifyBillplzSignature()`, `src/server/payments.ts`)
 
 ### 4. Rate Limiting
 
@@ -422,7 +435,9 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
 ### 1. `src/env.ts` Build Quirk
 
 - `validateEnv()` **only** checks `SESSION_SECRET` when `NODE_ENV === "production"` AND not a build phase
-- `checkPostgresUrl()` throws if `POSTGRES_URL` missing in production
+- There is no `checkPostgresUrl()`. `validateEnv()` only _warns_ when
+  `DATABASE_URL` or `NEXT_PUBLIC_SITE_URL` are unset — a missing
+  `DATABASE_URL` silently falls back to SQLite rather than failing
 - **Do not** set `SESSION_SECRET` during `next build` — it will fail
 - Set all vars in `.env.local` or Vercel dashboard
 
@@ -442,13 +457,17 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
 
 ### 4. Billplz Webhook
 
-- **Must** set `BILLPLZ_X_SIGNATURE_KEY` in production
-- Signature verification checks: `amount|collection_id|id|paid|paid_amount|state`
+- **Must** set `BILLPLZ_API_KEY` in production — it is both the API credential
+  and the secret used to verify webhook signatures
+- Signature verification: HMAC-SHA256 over the **raw request body**, compared
+  timing-safely against the hex digest in `X-Billplz-Signature`
 - Reject webhooks with mismatched signatures (prevents forged "paid" events)
+- Because the API key doubles as the signing secret, treat any leak of it as a
+  payment-integrity incident, not just a credential rotation
 
 ### 5. Email Delivery
 
-- Provider selected by `EMAIL_PROVIDER`: `dev` (default), `resend`, or `postmark`
+- Provider selected by `EMAIL_PROVIDER`: `dev` (default), `resend`, `postmark`, or `brevo`
 - `resend` needs `RESEND_API_KEY`; `postmark` needs `POSTMARK_SERVER_TOKEN`
 - **Vercel Connect**: If API-key connectors are configured, keys are resolved from
   Connect first, falling back to env vars. This lets you manage credentials centrally.
@@ -482,9 +501,9 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
 
 - **Forgot `SESSION_SECRET`** → app crashes on startup in production
 - **Forgot `DATABASE_URL`** → pg pool fails; falls through to sqlite (different data)
-- **Billplz webhook without `X_SIGNATURE_KEY`** → signature verification skipped, security risk
+- **Billplz webhook without `BILLPLZ_API_KEY`** → `verifyBillplzSignature()` returns false and every callback is rejected; bookings never confirm
 - **`NEXT_PUBLIC_` prefix** — only expose non-secret vars to browser
-- **Vercel `NODE_ENV=production`** — `env.ts` `checkPostgresUrl()` runs; ensure `POSTGRES_URL` set
+- **Vercel `NODE_ENV=production`** — `validateEnv()` runs and throws only on a missing `SESSION_SECRET`; a missing `DATABASE_URL` merely warns and silently falls back to SQLite on ephemeral disk
 
 ### 11. Catalog & 404 Gotchas
 
