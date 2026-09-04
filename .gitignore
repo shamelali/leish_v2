@@ -1,7 +1,10 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+# No leading slash: this must match nested node_modules too, not just the one
+# at the repo root. my-agent/node_modules (27,608 files) was committed because
+# the pattern used to be anchored to the root.
+node_modules
 /.pnp
 .pnp.*
 .yarn/*
