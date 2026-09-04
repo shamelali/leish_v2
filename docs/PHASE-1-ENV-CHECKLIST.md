@@ -51,23 +51,28 @@ DATABASE_URL="..." ADMIN_EMAIL="you@leish.my" ADMIN_PASSWORD="..." \
   node --experimental-strip-types scripts/seed-admin.ts
 ```
 
-> ### ⚠️ Open question: `supabase db push` has nothing to push
+> ### ✅ Resolved: skip `supabase db push`, and do not add RLS
 >
-> Roadmap step 6 says to run `supabase link` + `supabase db push` against
-> `supabase/migrations/*` and verify RLS. **There is no `supabase/` directory in
-> this repo** — no migration files exist.
+> Roadmap step 6 said to run `supabase link` + `supabase db push` against
+> `supabase/migrations/*` and verify RLS. **There is no `supabase/` directory
+> and no migration files.** The schema lives in `PG_SCHEMA` in
+> `src/server/db.ts`, applied idempotently by `pnpm run db:migrate`. That is the
+> whole migration story — nothing is missing.
 >
-> The schema lives solely in `PG_SCHEMA` inside `src/server/db.ts`, applied by
-> `pnpm run db:migrate` (idempotent, with additive column backfills).
+> On RLS: it would have **no effect** here. RLS constrains requests arriving
+> through Supabase's Data API with a user JWT, and this app never makes one.
+> Every query goes through `getDb()` on a direct `DATABASE_URL` connection,
+> which connects as the owner and bypasses row-level policies. Supabase is used
+> **only for OAuth sign-in** — there is not a single `.from()` data query in
+> `src/`.
 >
-> This has a real consequence: **`db:migrate` does not create RLS policies.**
-> The handover doc describes an `is_admin()` RLS function backing the admin
-> layout. If that protection is expected in production, RLS must be applied
-> separately — it is not in the migration path.
+> Adding RLS now would provide no protection while adding risk: a policy on a
+> table the app writes to either does nothing or silently breaks writes.
+> Authorization is enforced in the application — see `docs/ARCHITECTURE.md`.
 >
-> **Decide before launch:** either (a) accept app-level authorization only and
-> update the roadmap, or (b) author the RLS migrations. This is the one Phase 1
-> item that is not mechanical.
+> **Revisit only if** the browser is ever given direct Supabase Data API access
+> (a client-side `.from()` query, or Realtime). Then RLS becomes mandatory
+> before that ships.
 
 `ADMIN_EMAIL` / `ADMIN_PASSWORD` are read only by `scripts/seed-admin.ts`. Pass
 them inline for the one-off run; do **not** store them in Vercel.
@@ -144,11 +149,11 @@ serve images from Supabase Storage instead, that code path does not exist yet.
 
 ### Supabase client keys
 
-| Variable                        | Notes                                                                                        |
-| ------------------------------- | -------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`      | Required by `/admin/**` and `src/proxy.ts`, which are still Supabase-based per the handover. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same.                                                                                        |
-| `SUPABASE_SERVICE_ROLE_KEY`     | Server-only. **Never** mark as a `NEXT_PUBLIC_*` variable.                                   |
+| Variable                        | Notes                                                                                                                             |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Needed for OAuth sign-in (`/api/auth/oauth/*`, `/auth/callback`) and for `/admin/**` to recognise an OAuth user. Not a data path. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same.                                                                                                                             |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Server-only. **Never** mark as a `NEXT_PUBLIC_*` variable.                                                                        |
 
 These are separate from `DATABASE_URL`. The booking loop uses the db-facade
 (`DATABASE_URL`); the admin console uses the Supabase client.

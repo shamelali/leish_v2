@@ -267,7 +267,7 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 - `SUPABASE_SERVICE_ROLE_KEY` has full admin access — use only server-side
 - Never expose to browser; all API routes use supabase server client
-- Row-level security (RLS) recommended on Supabase tables
+- Row-level security (RLS) is **not** in use and would have no effect today: all data access goes through `getDb()` on a direct `DATABASE_URL` connection, which bypasses row-level policies. Supabase is an OAuth provider only. Add RLS only if the browser is ever given direct Supabase Data API access — see `docs/ARCHITECTURE.md`
 
 ### 3. Payment Security
 
