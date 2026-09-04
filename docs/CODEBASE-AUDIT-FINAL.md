@@ -64,7 +64,7 @@ Leish v2 is a Next.js 16 (app router) marketplace for beauty artists/studios in 
 
 ### 1.6 Additional Hardening (Already Present — Confirmed)
 
-- **Billplz webhooks** (`src/lib/payments/billplz.ts`): HMAC-SHA256 over `amount|collection_id|id|paid|paid_amount|state` with `BILLPLZ_X_SIGNATURE_KEY`; webhook verifies before mutating `payments`/`bookings`/`payouts`.
+- **Billplz webhooks** (`verifyBillplzSignature()`, `src/server/payments.ts`): HMAC-SHA256 over the **raw request body** with `BILLPLZ_API_KEY` as the secret, compared timing-safely against the hex digest in `X-Billplz-Signature`; webhook verifies before mutating `payments`/`bookings`/`payouts`. _(Corrected 2026-09-04: this report previously cited `src/lib/payments/billplz.ts` and `BILLPLZ_X_SIGNATURE_KEY`. That file was removed when the booking loop was unified, and no code reads that variable.)_
 - **SSE / `chat-bus.ts`:** In-memory pub/sub guarded for serverless — no long-lived process assumption; Vercel/Workers timeout noted (see §3.1).
 - **DB facade** (`src/server/db.ts`): Dual Pg/SQLite with placeholder translation (`@name`/`?` → `$n`), `PG_SCHEMA`/`SQLITE_SCHEMA` drift detection, lazy migration, `DATABASE_URL` guard in production.
 - **File uploads** (`src/server/upload.ts`): Validated via `@vercel/blob`/S3 presigner, size/type checks, remotePatterns locked to `*.supabase.co` + `*.public.blob.vercel-storage.com` (`next.config.ts:14-22`).
