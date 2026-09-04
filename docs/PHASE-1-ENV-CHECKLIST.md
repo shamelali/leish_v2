@@ -178,7 +178,16 @@ Setting these achieves nothing today and creates false confidence.
 
 > **Rate limiting is in-memory in production.** On multi-instance serverless each
 > instance keeps its own counters, so effective limits are multiplied by the
-> instance count. A known, accepted limitation — but know it before launch.
+> instance count, and counters reset whenever an instance is recycled. A known,
+> accepted limitation — but know it before launch.
+>
+> Accepted because the limiter blunts casual abuse and retry storms; it is not a
+> security control, and nothing enforcing authorization or money depends on it.
+> Setting `UPSTASH_REST_*` will **not** fix this — the default limiter ignores
+> those variables (see §5). The fix is a one-line change in
+> `src/server/ratelimit.ts` to use `createUpstashStore()`, which is already
+> implemented and tested. Escalate to that if you see credential-stuffing on
+> `/api/auth/login` or repeated bill creation on `/api/bookings/[id]/pay-fee`.
 
 ---
 
@@ -277,7 +286,38 @@ Then, on the deployed instance:
    (Roadmap step 9).
 
 Do not skip step 5. The webhook is the only path that confirms a booking, and a
-signature mismatch there fails closed and silently.
+signature mismatch there fails closed — the client is charged and the booking
+never confirms.
+
+### 8.1 Webhook alerting — set `SENTRY_DSN` before the first real payment
+
+`POST /api/payments/webhook` deliberately returns 200 on most failures so
+Billplz stops retrying. That means **the HTTP status tells you nothing**;
+alerting is the only way these surface. The route calls `reportError()` on
+every non-happy path:
+
+| Alert message                                 | Meaning                                                                                                                                         | Action                                                                                            |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Billplz webhook signature verification failed | `metadata.apiKeyConfigured: false` ⇒ `BILLPLZ_API_KEY` is unset and **no payment will ever confirm**. If true ⇒ wrong key, or forged callbacks. | Treat as SEV-1 during launch. Check the key matches the Billplz account that owns the collection. |
+| Paid Billplz bill has no payment row          | Money taken, nothing to settle against.                                                                                                         | Reconcile by hand from the Billplz dashboard.                                                     |
+| Paid Billplz callback for unknown bill        | Valid signature, unrecognised bill — usually a stale bill from another environment pointing at this callback URL.                               | Confirm `BILLPLZ_CALLBACK_URL` is not shared between sandbox and prod.                            |
+
+Without `SENTRY_DSN` (or `ERROR_WEBHOOK_URL`) these reports go only to the
+process log, where nobody is watching. `SENTRY_DSN` is listed as Tier 3
+"recommended" in §4 for the app generally — **for the webhook it is effectively
+required**, because a paid-but-unconfirmed booking is otherwise invisible until
+the customer complains.
+
+Verify it end to end before launch: send a deliberately mis-signed POST to the
+deployed webhook and confirm the alert arrives.
+
+```bash
+curl -X POST https://<prod-host>/api/payments/webhook \
+  -H 'content-type: application/json' \
+  -H 'x-billplz-signature: 0000000000000000000000000000000000000000000000000000000000000000' \
+  -d '{"id":"alerting_smoke_test","paid":true,"state":"paid"}'
+# Expect 401, and an "invalid_signature" alert in Sentry within ~1 min.
+```
 
 ---
 
