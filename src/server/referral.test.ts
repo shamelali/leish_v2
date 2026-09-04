@@ -134,14 +134,18 @@ describe("referral code assignment and lookup", () => {
     const code = await assignReferralCode("artist", "artist-1");
     expect(isValidReferralCode(code)).toBe(true);
 
-    const row = await getDb().prepare("SELECT referral_code FROM artists WHERE id = ?").get("artist-1") as ArtistRow | undefined;
+    const row = (await getDb()
+      .prepare("SELECT referral_code FROM artists WHERE id = ?")
+      .get("artist-1")) as ArtistRow | undefined;
     expect(row).toBeDefined();
     expect(row?.referral_code).toBe(code);
   });
 
   it("getOrCreateReferralCode returns existing code if present", async () => {
     await seedArtist("artist-2");
-    await getDb().prepare("UPDATE artists SET referral_code = ? WHERE id = ?").run("LEISH-EXISTING", "artist-2");
+    await getDb()
+      .prepare("UPDATE artists SET referral_code = ? WHERE id = ?")
+      .run("LEISH-EXISTING", "artist-2");
     const code = await getOrCreateReferralCode("artist", "artist-2");
     expect(code).toBe("LEISH-EXISTING");
   });
@@ -156,7 +160,9 @@ describe("referral code assignment and lookup", () => {
   it("findReferrerByCode finds artist by referral code", async () => {
     await seedArtist("artist-4");
     await assignReferralCode("artist", "artist-4");
-    const artist = await getDb().prepare("SELECT referral_code FROM artists WHERE id = ?").get("artist-4") as ArtistRow | undefined;
+    const artist = (await getDb()
+      .prepare("SELECT referral_code FROM artists WHERE id = ?")
+      .get("artist-4")) as ArtistRow | undefined;
     const found = await findReferrerByCode(artist?.referral_code ?? "");
     expect(found).not.toBeNull();
     expect(found?.type).toBe("artist");
@@ -166,7 +172,9 @@ describe("referral code assignment and lookup", () => {
   it("findReferrerByCode finds studio by referral code", async () => {
     await seedStudio("studio-1");
     await assignReferralCode("studio", "studio-1");
-    const studio = await getDb().prepare("SELECT referral_code FROM studios WHERE id = ?").get("studio-1") as StudioRow | undefined;
+    const studio = (await getDb()
+      .prepare("SELECT referral_code FROM studios WHERE id = ?")
+      .get("studio-1")) as StudioRow | undefined;
     const found = await findReferrerByCode(studio?.referral_code ?? "");
     expect(found).not.toBeNull();
     expect(found?.type).toBe("studio");
@@ -229,7 +237,10 @@ describe("referral creation and queries", () => {
     });
 
     // Qualify one
-    await getDb().prepare("UPDATE referrals SET status = 'qualified', reward_sen = 5000, qualified_at = ? WHERE id = ?")
+    await getDb()
+      .prepare(
+        "UPDATE referrals SET status = 'qualified', reward_sen = 5000, qualified_at = ? WHERE id = ?",
+      )
       .run(new Date().toISOString(), r1.id);
 
     const stats = await getReferralStats("artist", "referrer-1");
@@ -273,11 +284,15 @@ describe("referral qualification and payment", () => {
     const result = await qualifyReferral("artist", "referee-qual", 5000);
     expect(result).toBe(true);
 
-    const referral = await getDb().prepare("SELECT * FROM referrals WHERE referee_id = ?").get("referee-qual") as ReferralRow | undefined;
+    const referral = (await getDb()
+      .prepare("SELECT * FROM referrals WHERE referee_id = ?")
+      .get("referee-qual")) as ReferralRow | undefined;
     expect(referral?.status).toBe("qualified");
     expect(referral?.reward_sen).toBe(5000);
 
-    const artist = await getDb().prepare("SELECT referral_earnings FROM artists WHERE id = ?").get("referrer-qual") as { referral_earnings: number } | undefined;
+    const artist = (await getDb()
+      .prepare("SELECT referral_earnings FROM artists WHERE id = ?")
+      .get("referrer-qual")) as { referral_earnings: number } | undefined;
     expect(artist?.referral_earnings).toBe(5000);
   });
 
@@ -293,13 +308,17 @@ describe("referral qualification and payment", () => {
       refereeType: "artist",
       refereeId: "referee-qual",
     });
-    await getDb().prepare("UPDATE referrals SET status = 'qualified', reward_sen = 5000, qualified_at = ? WHERE id = ?")
+    await getDb()
+      .prepare(
+        "UPDATE referrals SET status = 'qualified', reward_sen = 5000, qualified_at = ? WHERE id = ?",
+      )
       .run(new Date().toISOString(), r.id);
 
     const result = await payReferral(r.id);
     expect(result).toBe(true);
 
-    const referral = await getDb().prepare("SELECT * FROM referrals WHERE id = ?").get(r.id) as ReferralRow | undefined;
+    const referral = (await getDb().prepare("SELECT * FROM referrals WHERE id = ?").get(r.id)) as
+      ReferralRow | undefined;
     expect(referral?.status).toBe("paid");
     expect(referral?.paid_at).not.toBeNull();
   });
@@ -328,10 +347,13 @@ describe("referral qualification and payment", () => {
     const result = await updateReferralReward(r.id, 10000);
     expect(result).toBe(true);
 
-    const referral = await getDb().prepare("SELECT * FROM referrals WHERE id = ?").get(r.id) as ReferralRow | undefined;
+    const referral = (await getDb().prepare("SELECT * FROM referrals WHERE id = ?").get(r.id)) as
+      ReferralRow | undefined;
     expect(referral?.reward_sen).toBe(10000);
 
-    const artist = await getDb().prepare("SELECT referral_earnings FROM artists WHERE id = ?").get("referrer-qual") as { referral_earnings: number } | undefined;
+    const artist = (await getDb()
+      .prepare("SELECT referral_earnings FROM artists WHERE id = ?")
+      .get("referrer-qual")) as { referral_earnings: number } | undefined;
     expect(artist?.referral_earnings).toBe(10000);
   });
 

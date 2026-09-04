@@ -16,7 +16,15 @@ vi.mock("@vercel/blob", () => ({
   head: mockHead,
 }));
 
-import { uploadObject, deleteObject, objectExists, listObjects, getBlobUrl, generateKey, STORAGE_PREFIXES } from "./storage";
+import {
+  uploadObject,
+  deleteObject,
+  objectExists,
+  listObjects,
+  getBlobUrl,
+  generateKey,
+  STORAGE_PREFIXES,
+} from "./storage";
 
 beforeEach(() => {
   process.env.BLOB_READ_WRITE_TOKEN = "test-token";
@@ -76,8 +84,7 @@ describe("uploadObject", () => {
     expect(Buffer.isBuffer(body)).toBe(true);
     expect(body.toString()).toBe("stream data");
   });
-
-  });
+});
 
 describe("deleteObject", () => {
   it("deletes object with token", async () => {
@@ -113,10 +120,7 @@ describe("objectExists", () => {
 describe("listObjects", () => {
   it("returns array of pathnames", async () => {
     mockList.mockResolvedValue({
-      blobs: [
-        { pathname: "prefix/file1.txt" },
-        { pathname: "prefix/file2.txt" },
-      ],
+      blobs: [{ pathname: "prefix/file1.txt" }, { pathname: "prefix/file2.txt" }],
     });
 
     const objects = await listObjects("prefix/");
@@ -135,7 +139,11 @@ describe("getBlobUrl", () => {
     const url = await getBlobUrl("test/key.txt");
 
     expect(url).toBe("https://blob.example.com/test/key.txt");
-    expect(mockList).toHaveBeenCalledWith({ prefix: "test/key.txt", limit: 1, token: "test-token" });
+    expect(mockList).toHaveBeenCalledWith({
+      prefix: "test/key.txt",
+      limit: 1,
+      token: "test-token",
+    });
   });
 
   it("throws when blob not found", async () => {

@@ -1,7 +1,16 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { compilePlaceholders, resolveParams, isPostgres, getDb, closeDb, extractSchemaTables, detectSchemaDrift, migrateSqlite } from "./db";
+import {
+  compilePlaceholders,
+  resolveParams,
+  isPostgres,
+  getDb,
+  closeDb,
+  extractSchemaTables,
+  detectSchemaDrift,
+  migrateSqlite,
+} from "./db";
 import { DatabaseSync } from "node:sqlite";
 
 describe("placeholder translation (sqlite -> pg)", () => {
@@ -98,10 +107,12 @@ describe("migrateSqlite", () => {
   it("applies schema and migrations to a fresh database", () => {
     const db = new DatabaseSync(":memory:");
     expect(() => migrateSqlite(db)).not.toThrow();
-    
+
     // Check tables exist
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
-    const tableNames = tables.map(t => t.name);
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
+      name: string;
+    }[];
+    const tableNames = tables.map((t) => t.name);
     expect(tableNames).toContain("users");
     expect(tableNames).toContain("bookings");
     expect(tableNames).toContain("artists");
@@ -137,21 +148,21 @@ describe("migrateSqlite", () => {
         created_at TEXT NOT NULL
       );
     `);
-    
+
     expect(() => migrateSqlite(db)).not.toThrow();
-    
+
     // Check new columns were added
     const userCols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
-    expect(userCols.some(c => c.name === "email_verified")).toBe(true);
-    expect(userCols.some(c => c.name === "consent")).toBe(true);
-    expect(userCols.some(c => c.name === "consent_timestamp")).toBe(true);
-    
+    expect(userCols.some((c) => c.name === "email_verified")).toBe(true);
+    expect(userCols.some((c) => c.name === "consent")).toBe(true);
+    expect(userCols.some((c) => c.name === "consent_timestamp")).toBe(true);
+
     const bookingCols = db.prepare("PRAGMA table_info(bookings)").all() as { name: string }[];
-    expect(bookingCols.some(c => c.name === "event_type")).toBe(true);
-    expect(bookingCols.some(c => c.name === "venue")).toBe(true);
-    expect(bookingCols.some(c => c.name === "guest_count")).toBe(true);
-    expect(bookingCols.some(c => c.name === "balance_reminder_at")).toBe(true);
-    expect(bookingCols.some(c => c.name === "studio_id")).toBe(true);
+    expect(bookingCols.some((c) => c.name === "event_type")).toBe(true);
+    expect(bookingCols.some((c) => c.name === "venue")).toBe(true);
+    expect(bookingCols.some((c) => c.name === "guest_count")).toBe(true);
+    expect(bookingCols.some((c) => c.name === "balance_reminder_at")).toBe(true);
+    expect(bookingCols.some((c) => c.name === "studio_id")).toBe(true);
   });
 
   it("rebuilds payments table when type column is missing", () => {
@@ -191,15 +202,17 @@ describe("migrateSqlite", () => {
         updated_at TEXT NOT NULL
       );
     `);
-    
+
     expect(() => migrateSqlite(db)).not.toThrow();
-    
+
     // Check payments table has type column and unique index
     const paymentCols = db.prepare("PRAGMA table_info(payments)").all() as { name: string }[];
-    expect(paymentCols.some(c => c.name === "type")).toBe(true);
-    
-    const indexes = db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as { name: string }[];
-    expect(indexes.some(i => i.name === "uq_payments_booking_type")).toBe(true);
+    expect(paymentCols.some((c) => c.name === "type")).toBe(true);
+
+    const indexes = db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as {
+      name: string;
+    }[];
+    expect(indexes.some((i) => i.name === "uq_payments_booking_type")).toBe(true);
   });
 
   it("adds referral columns to artists and studios", () => {
@@ -229,18 +242,18 @@ describe("migrateSqlite", () => {
         created_at TEXT NOT NULL
       );
     `);
-    
+
     expect(() => migrateSqlite(db)).not.toThrow();
-    
+
     const artistCols = db.prepare("PRAGMA table_info(artists)").all() as { name: string }[];
-    expect(artistCols.some(c => c.name === "referral_code")).toBe(true);
-    expect(artistCols.some(c => c.name === "referred_by")).toBe(true);
-    expect(artistCols.some(c => c.name === "referral_earnings")).toBe(true);
-    
+    expect(artistCols.some((c) => c.name === "referral_code")).toBe(true);
+    expect(artistCols.some((c) => c.name === "referred_by")).toBe(true);
+    expect(artistCols.some((c) => c.name === "referral_earnings")).toBe(true);
+
     const studioCols = db.prepare("PRAGMA table_info(studios)").all() as { name: string }[];
-    expect(studioCols.some(c => c.name === "referral_code")).toBe(true);
-    expect(studioCols.some(c => c.name === "referred_by")).toBe(true);
-    expect(studioCols.some(c => c.name === "referral_earnings")).toBe(true);
+    expect(studioCols.some((c) => c.name === "referral_code")).toBe(true);
+    expect(studioCols.some((c) => c.name === "referred_by")).toBe(true);
+    expect(studioCols.some((c) => c.name === "referral_earnings")).toBe(true);
   });
 });
 
@@ -315,7 +328,9 @@ describe("Sqlite facade operations", () => {
     await db.prepare("CREATE TABLE test_tbl (id TEXT PRIMARY KEY, val INTEGER)").run();
     await db.prepare("INSERT INTO test_tbl (id, val) VALUES (?, ?)").run("a", 1);
     await db.prepare("INSERT INTO test_tbl (id, val) VALUES (?, ?)").run("b", 2);
-    const rows = await db.prepare("SELECT * FROM test_tbl ORDER BY id").all<{ id: string; val: number }>();
+    const rows = await db
+      .prepare("SELECT * FROM test_tbl ORDER BY id")
+      .all<{ id: string; val: number }>();
     expect(rows.length).toBe(2);
     expect(rows[0].id).toBe("a");
     expect(rows[1].id).toBe("b");
@@ -331,7 +346,9 @@ describe("Sqlite facade operations", () => {
   it("executes prepare().run() with named params", async () => {
     const db = getDb();
     await db.prepare("CREATE TABLE test_tbl3 (id TEXT PRIMARY KEY, val INTEGER)").run();
-    const result = await db.prepare("INSERT INTO test_tbl3 (id, val) VALUES (@id, @val)").run({ id: "y", val: 99 });
+    const result = await db
+      .prepare("INSERT INTO test_tbl3 (id, val) VALUES (@id, @val)")
+      .run({ id: "y", val: 99 });
     expect(result.changes).toBe(1);
   });
 

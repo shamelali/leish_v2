@@ -60,9 +60,7 @@ export async function getClaimedStudioIds(userId: string): Promise<string[]> {
   return rows.map((r) => r.studio_id);
 }
 
-export async function getClaimedStudioProfile(
-  userId: string,
-): Promise<StudioProfileRow | null> {
+export async function getClaimedStudioProfile(userId: string): Promise<StudioProfileRow | null> {
   const row = (await getDb()
     .prepare("SELECT * FROM studio_profiles WHERE user_id = ?")
     .get(userId)) as StudioProfileRow | undefined;
@@ -70,8 +68,6 @@ export async function getClaimedStudioProfile(
 }
 
 export async function unclaimStudioProfile(userId: string): Promise<boolean> {
-  const result = await getDb()
-    .prepare("DELETE FROM studio_profiles WHERE user_id = ?")
-    .run(userId);
+  const result = await getDb().prepare("DELETE FROM studio_profiles WHERE user_id = ?").run(userId);
   return result.changes > 0;
 }

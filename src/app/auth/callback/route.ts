@@ -22,21 +22,15 @@ export async function GET(request: Request) {
   const next = searchParams.get("next") ?? "/dashboard";
 
   // Validate next param to prevent open redirects
-  const safeNext =
-    next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
 
   if (code) {
     const supabase = await createServerSupabase();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
-      logger.error(
-        { error: error.message },
-        "[auth/callback] code exchange failed",
-      );
-      return NextResponse.redirect(
-        `${origin}/login?error=oauth_exchange_failed`,
-      );
+      logger.error({ error: error.message }, "[auth/callback] code exchange failed");
+      return NextResponse.redirect(`${origin}/login?error=oauth_exchange_failed`);
     }
 
     if (data.user) {

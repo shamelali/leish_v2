@@ -74,23 +74,25 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 export function ThemeProvider({
   children,
   initialTheme = "dark",
-}: { children: ReactNode; initialTheme?: Theme }) {
-  const theme = useSyncExternalStore(
-    subscribe,
-    readThemeFromStorage,
-    () => getServerSnapshot(initialTheme)
+}: {
+  children: ReactNode;
+  initialTheme?: Theme;
+}) {
+  const theme = useSyncExternalStore(subscribe, readThemeFromStorage, () =>
+    getServerSnapshot(initialTheme),
   );
 
   const setTheme = useCallback((next: Theme) => {
     setThemeInStorage(next);
   }, []);
 
-  const toggle = useCallback(() => setTheme(theme === "dark" ? "light" : "dark"), [theme, setTheme]);
+  const toggle = useCallback(
+    () => setTheme(theme === "dark" ? "light" : "dark"),
+    [theme, setTheme],
+  );
 
   return (
-    <ThemeContext.Provider value={{ theme, toggle, setTheme }}>
-      {children}
-    </ThemeContext.Provider>
+    <ThemeContext.Provider value={{ theme, toggle, setTheme }}>{children}</ThemeContext.Provider>
   );
 }
 

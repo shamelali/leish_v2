@@ -24,19 +24,19 @@ Real-time chat system for Leish v2 bookings, built with **WebSocket Hibernation*
 
 ## ✨ Features
 
-| Feature | Implementation |
-|---------|----------------|
-| **Real-time messaging** | WebSocket Hibernation API (millions of connections) |
+| Feature                 | Implementation                                         |
+| ----------------------- | ------------------------------------------------------ |
+| **Real-time messaging** | WebSocket Hibernation API (millions of connections)    |
 | **Message persistence** | DO embedded SQLite (survives restarts, no external DB) |
-| **Presence** | Online/away/offline with automatic timeout |
-| **Typing indicators** | Broadcast with auto-clear timeout |
-| **Read receipts** | Per-message, per-user |
-| **Optimistic UI** | Instant send → server acknowledgment |
-| **History pagination** | Infinite scroll with `before` cursor |
-| **Auto-reconnect** | Exponential backoff (configurable) |
-| **Rate limiting** | Per-connection sliding window |
-| **Admin moderation** | Delete/flag/ban via REST API |
-| **Analytics** | Workers Analytics Engine integration |
+| **Presence**            | Online/away/offline with automatic timeout             |
+| **Typing indicators**   | Broadcast with auto-clear timeout                      |
+| **Read receipts**       | Per-message, per-user                                  |
+| **Optimistic UI**       | Instant send → server acknowledgment                   |
+| **History pagination**  | Infinite scroll with `before` cursor                   |
+| **Auto-reconnect**      | Exponential backoff (configurable)                     |
+| **Rate limiting**       | Per-connection sliding window                          |
+| **Admin moderation**    | Delete/flag/ban via REST API                           |
+| **Analytics**           | Workers Analytics Engine integration                   |
 
 ## 📦 Installation
 
@@ -57,15 +57,15 @@ cp -r src/workers/chat /your-project/src/workers/
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true, "head_sampling_rate": 1 },
   "durable_objects": {
-    "bindings": [{ "name": "CHAT_ROOM", "class_name": "ChatRoom" }]
+    "bindings": [{ "name": "CHAT_ROOM", "class_name": "ChatRoom" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChatRoom"] }],
   "vars": {
     "MAX_MESSAGE_LENGTH": "5000",
     "MAX_HISTORY_MESSAGES": "100",
     "PRESENCE_TIMEOUT_MS": "30000",
-    "TYPING_TIMEOUT_MS": "5000"
-  }
+    "TYPING_TIMEOUT_MS": "5000",
+  },
 }
 ```
 
@@ -128,11 +128,7 @@ function CustomChat({ bookingId, token }) {
     onMessage: (msg) => trackEvent("chat_message", msg),
   });
 
-  return (
-    <div>
-      {/* Your custom UI */}
-    </div>
-  );
+  return <div>{/* Your custom UI */}</div>;
 }
 ```
 
@@ -250,13 +246,13 @@ npx wrangler tail --search "booking-123"
 
 ## 🔧 Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MAX_MESSAGE_LENGTH` | 5000 | Max characters per message |
-| `MAX_HISTORY_MESSAGES` | 100 | Messages kept in memory (SQLite has all) |
-| `PRESENCE_TIMEOUT_MS` | 30000 | Time before user marked offline |
-| `TYPING_TIMEOUT_MS` | 5000 | Time before typing auto-clears |
-| `CHAT_ROLLOUT_PERCENT` | 0 | Feature flag percentage (0-100) |
+| Variable               | Default | Description                              |
+| ---------------------- | ------- | ---------------------------------------- |
+| `MAX_MESSAGE_LENGTH`   | 5000    | Max characters per message               |
+| `MAX_HISTORY_MESSAGES` | 100     | Messages kept in memory (SQLite has all) |
+| `PRESENCE_TIMEOUT_MS`  | 30000   | Time before user marked offline          |
+| `TYPING_TIMEOUT_MS`    | 5000    | Time before typing auto-clears           |
+| `CHAT_ROLLOUT_PERCENT` | 0       | Feature flag percentage (0-100)          |
 
 ## 🚀 Performance
 
@@ -279,6 +275,7 @@ npx wrangler tail --search "booking-123"
 ### WebSocket Messages
 
 **Client → Server**
+
 ```typescript
 // Join room
 { type: "join", bookingId: string, token: string }
@@ -300,6 +297,7 @@ npx wrangler tail --search "booking-123"
 ```
 
 **Server → Client**
+
 ```typescript
 // Welcome + initial state
 { type: "welcome", bookingId, user, users }
@@ -336,34 +334,38 @@ npx wrangler tail --search "booking-123"
 
 ### REST Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/ws/:bookingId` | WebSocket upgrade |
-| GET | `/api/chat/history/:bookingId` | Paginated history |
-| GET | `/api/chat/presence/:bookingId` | Current presence |
-| POST | `/api/chat/validate` | Validate booking access |
-| POST | `/api/chat/message` | Send message (fallback) |
-| GET | `/api/chat/booking/:bookingId` | Booking context |
-| GET | `/api/admin/chat/stats` | Global stats (admin) |
-| POST | `/api/admin/chat/moderate` | Moderation actions (admin) |
+| Method | Path                            | Description                |
+| ------ | ------------------------------- | -------------------------- |
+| GET    | `/ws/:bookingId`                | WebSocket upgrade          |
+| GET    | `/api/chat/history/:bookingId`  | Paginated history          |
+| GET    | `/api/chat/presence/:bookingId` | Current presence           |
+| POST   | `/api/chat/validate`            | Validate booking access    |
+| POST   | `/api/chat/message`             | Send message (fallback)    |
+| GET    | `/api/chat/booking/:bookingId`  | Booking context            |
+| GET    | `/api/admin/chat/stats`         | Global stats (admin)       |
+| POST   | `/api/admin/chat/moderate`      | Moderation actions (admin) |
 
 ## 🐛 Troubleshooting
 
 ### Connection fails
+
 - Check `NEXT_PUBLIC_CHAT_WS_URL` is correct
 - Verify token is valid and not expired
 - Ensure booking exists and user has access
 
 ### Messages not appearing
+
 - Check browser console for WebSocket errors
 - Verify DO is deployed: `npx wrangler tail`
 - Check rate limiting (30 msg/min)
 
 ### High latency
+
 - Deploy worker closer to users (Cloudflare auto-routes)
 - Check Analytics Engine for bottlenecks
 
 ### Presence not updating
+
 - Verify heartbeat interval (25s)
 - Check presence timeout (30s default)
 

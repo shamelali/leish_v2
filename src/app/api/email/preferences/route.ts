@@ -29,7 +29,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as { key?: string; enabled?: boolean } | null;
+  const body = (await request.json().catch(() => null)) as {
+    key?: string;
+    enabled?: boolean;
+  } | null;
   if (!body || typeof body.key !== "string" || typeof body.enabled !== "boolean") {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }

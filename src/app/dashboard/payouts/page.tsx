@@ -54,7 +54,9 @@ export default function ArtistPayoutsPage() {
     if (!user) return;
     let cancelled = false;
     fetch("/api/me/payouts")
-      .then((r) => (r.ok ? r.json() as Promise<PayoutsResponse> : Promise.reject(new Error("failed"))))
+      .then((r) =>
+        r.ok ? (r.json() as Promise<PayoutsResponse>) : Promise.reject(new Error("failed")),
+      )
       .then((d) => {
         if (!cancelled) setPayouts(d.payouts ?? []);
       })

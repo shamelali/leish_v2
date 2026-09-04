@@ -53,18 +53,26 @@ export async function POST(request: Request) {
     const db = await getDb();
 
     // Get user
-    const user = await db
+    const user = (await db
       .prepare("SELECT id, name, role FROM users WHERE id = ?")
-      .get(payload.sub) as { id: string; name: string; role: string } | undefined;
+      .get(payload.sub)) as { id: string; name: string; role: string } | undefined;
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Get booking
-    const booking = await db
+    const booking = (await db
       .prepare("SELECT id, user_id, artist_id, studio_id, status FROM bookings WHERE id = ?")
-      .get(body.bookingId) as { id: string; user_id: string; artist_id: string | null; studio_id: string | null; status: string } | undefined;
+      .get(body.bookingId)) as
+      | {
+          id: string;
+          user_id: string;
+          artist_id: string | null;
+          studio_id: string | null;
+          status: string;
+        }
+      | undefined;
 
     if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
@@ -89,7 +97,10 @@ export async function POST(request: Request) {
         : !!(booking.artist_id && claimedArtists.includes(booking.artist_id));
 
       // Fallback: studio who legacy-claimed an artist
-      isLegacyClaimed = !isStudio && user.role === "studio" && !!(booking.artist_id && claimedArtists.includes(booking.artist_id));
+      isLegacyClaimed =
+        !isStudio &&
+        user.role === "studio" &&
+        !!(booking.artist_id && claimedArtists.includes(booking.artist_id));
     }
 
     const authorized = isOwner || isClaimed || isLegacyClaimed || user.role === "admin";

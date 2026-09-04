@@ -5,34 +5,34 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "head_sampling_rate": 1,
   },
   "durable_objects": {
     "bindings": [
       {
         "name": "CHAT_ROOM",
-        "class_name": "ChatRoom"
-      }
-    ]
+        "class_name": "ChatRoom",
+      },
+    ],
   },
   "queues": {
     "producers": [
       {
         "queue": "leish-email-queue",
-        "binding": "leish_email_queue"
-      }
-    ]
+        "binding": "leish_email_queue",
+      },
+    ],
   },
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["ChatRoom"]
-    }
+      "new_sqlite_classes": ["ChatRoom"],
+    },
   ],
   "vars": {
     "MAX_MESSAGE_LENGTH": "5000",
     "MAX_HISTORY_MESSAGES": "100",
     "PRESENCE_TIMEOUT_MS": "30000",
-    "TYPING_TIMEOUT_MS": "5000"
-  }
+    "TYPING_TIMEOUT_MS": "5000",
+  },
 }

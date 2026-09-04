@@ -52,7 +52,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     ? claimedStudios.includes(booking.studio_id ?? "")
     : claimedArtists.includes(booking.artist_id);
   // Fallback: studio who legacy-claimed an artist can still access artist bookings
-  const isLegacyClaimed = !isStudio && user.role === "studio" && claimedArtists.includes(booking.artist_id);
+  const isLegacyClaimed =
+    !isStudio && user.role === "studio" && claimedArtists.includes(booking.artist_id);
   if (!isOwner && !isClaimed && !isLegacyClaimed) return jsonError("Not authorized", 403);
 
   // History first, oldest → newest.

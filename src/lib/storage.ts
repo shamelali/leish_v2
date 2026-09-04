@@ -8,7 +8,9 @@ export interface BlobConfig {
 function getBlobToken(): string {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) {
-    throw new Error("BLOB_READ_WRITE_TOKEN missing. Create a Blob store via Vercel dashboard or `vercel blob create-store`.");
+    throw new Error(
+      "BLOB_READ_WRITE_TOKEN missing. Create a Blob store via Vercel dashboard or `vercel blob create-store`.",
+    );
   }
   return token;
 }
@@ -17,10 +19,14 @@ export async function uploadObject(
   key: string,
   body: Buffer | Uint8Array | ReadableStream,
   contentType: string,
-  options?: { cacheControl?: string; metadata?: Record<string, string> }
+  options?: { cacheControl?: string; metadata?: Record<string, string> },
 ): Promise<void> {
   const token = getBlobToken();
-  const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body instanceof Uint8Array ? body : new Uint8Array(await new Response(body).arrayBuffer()));
+  const buffer = Buffer.isBuffer(body)
+    ? body
+    : Buffer.from(
+        body instanceof Uint8Array ? body : new Uint8Array(await new Response(body).arrayBuffer()),
+      );
   await put(key, buffer, {
     access: "public",
     contentType,

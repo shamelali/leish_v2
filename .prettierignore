@@ -17,3 +17,11 @@ pnpm-lock.yaml
 
 # Data
 data
+
+# Vendored third-party sources — kept verbatim so they stay diffable against
+# upstream. These carry their own formatting configs.
+redis-js-main
+my-agent
+
+# Agent skill packs (vendored docs, synced from upstream)
+.agents/skills

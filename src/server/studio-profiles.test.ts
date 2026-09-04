@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
 import { hashPassword } from "./password";
-import { claimStudioProfile, getClaimedStudioIds, getClaimedStudioProfile, unclaimStudioProfile } from "./studio-profiles";
+import {
+  claimStudioProfile,
+  getClaimedStudioIds,
+  getClaimedStudioProfile,
+  unclaimStudioProfile,
+} from "./studio-profiles";
 import { getStudioById } from "./catalog";
 
 async function createTestUser(role = "studio") {
@@ -13,7 +18,14 @@ async function createTestUser(role = "studio") {
     .prepare(
       "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
-    .run(userId, `${userId}@test.local}`, "Test User", role, hashPassword("password123"), new Date().toISOString());
+    .run(
+      userId,
+      `${userId}@test.local}`,
+      "Test User",
+      role,
+      hashPassword("password123"),
+      new Date().toISOString(),
+    );
   return userId;
 }
 

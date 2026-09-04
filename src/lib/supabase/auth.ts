@@ -48,9 +48,9 @@ export async function findUserBySupabaseId(supabaseUserId: string): Promise<User
  * Find a local user by email.
  */
 export async function findUserByEmail(email: string): Promise<UserRow | undefined> {
-  return getDb()
-    .prepare("SELECT * FROM users WHERE email = ?")
-    .get(email) as Promise<UserRow | undefined>;
+  return getDb().prepare("SELECT * FROM users WHERE email = ?").get(email) as Promise<
+    UserRow | undefined
+  >;
 }
 
 /**
@@ -70,9 +70,7 @@ export async function createOAuthUser(
     )
     .run(id, email, name, supabaseUserId, now);
 
-  return getDb()
-    .prepare("SELECT * FROM users WHERE id = ?")
-    .get(id) as Promise<UserRow>;
+  return getDb().prepare("SELECT * FROM users WHERE id = ?").get(id) as Promise<UserRow>;
 }
 
 /**

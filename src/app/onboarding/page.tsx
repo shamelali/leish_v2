@@ -118,7 +118,8 @@ function OnboardingContent() {
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
       {isNew && (
         <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-500/10 dark:text-emerald-400">
-          Account created — now complete your {isStudio ? "studio" : "artist"} application to get discovered. ✨
+          Account created — now complete your {isStudio ? "studio" : "artist"} application to get
+          discovered. ✨
         </div>
       )}
       <h1 className="font-display text-4xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">

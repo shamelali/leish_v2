@@ -31,8 +31,6 @@ export default function BookingChatPage({ params }: BookingChatProps) {
     }
   }, [session, loading, router, bookingId]);
 
-  
-
   const wsUrl = process.env.NEXT_PUBLIC_CHAT_WS_URL;
 
   if (loading) {

@@ -48,7 +48,10 @@ export const POST = tryRoute(
 
     // Billplz sends state: "paid" on success; only process paid confirmations.
     if (payload.paid !== true || payload.state !== "paid") {
-      logger.info({ billId: payload.id, paid: payload.paid, state: payload.state }, "webhook ignored (not paid)");
+      logger.info(
+        { billId: payload.id, paid: payload.paid, state: payload.state },
+        "webhook ignored (not paid)",
+      );
       return new NextResponse("OK", { status: 200 });
     }
 
@@ -85,7 +88,10 @@ export const POST = tryRoute(
           }).catch(() => {});
         }
 
-        interaction?.end(JSON.stringify({ billId: payload.id, bookingId: payment.booking_id, type: payment.type }), true);
+        interaction?.end(
+          JSON.stringify({ billId: payload.id, bookingId: payment.booking_id, type: payment.type }),
+          true,
+        );
       } else {
         logger.info({ billId: payload.id, changed }, "webhook for unknown bill (ignored)");
         interaction?.end("Unknown bill", false);

@@ -109,7 +109,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectCountRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const messageQueueRef = useRef<Array<{ msg: ClientToServerMessage; resolve: (v: ChatMessage) => void; reject: (e: Error) => void }>>([]);
+  const messageQueueRef = useRef<
+    Array<{
+      msg: ClientToServerMessage;
+      resolve: (v: ChatMessage) => void;
+      reject: (e: Error) => void;
+    }>
+  >([]);
   const pendingMessagesRef = useRef<Map<string, ChatMessage>>(new Map()); // tempId -> optimistic message
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
@@ -198,125 +204,154 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       setError(err);
       onError?.(err);
     };
-  }, [bookingId, token, wsUrl, reconnectAttempts, reconnectDelay, onConnect, onDisconnect, onError]);
+  }, [
+    bookingId,
+    token,
+    wsUrl,
+    reconnectAttempts,
+    reconnectDelay,
+    onConnect,
+    onDisconnect,
+    onError,
+  ]);
 
   // ── Message Handler ──────────────────────────────────────────────────────────
 
-  const handleMessage = useCallback((data: string) => {
-    try {
-      const msg: ServerToClientMessage = JSON.parse(data);
+  const handleMessage = useCallback(
+    (data: string) => {
+      try {
+        const msg: ServerToClientMessage = JSON.parse(data);
 
-      switch (msg.type) {
-        case "welcome": {
-          setCurrentUser(msg.user);
-          setUsers(msg.users);
-          onPresenceChange?.(msg.users);
-          break;
-        }
-
-        case "history": {
-          // Prepend older messages (history comes oldest→newest)
-          const newMessages = msg.messages.filter((m) => !messages.some((ex) => ex.id === m.id));
-          setMessages((prev) => [...newMessages, ...prev]);
-          setHasMoreHistory(msg.hasMore);
-          if (newMessages.length > 0) {
-            beforeMessageIdRef.current = newMessages[0].id;
+        switch (msg.type) {
+          case "welcome": {
+            setCurrentUser(msg.user);
+            setUsers(msg.users);
+            onPresenceChange?.(msg.users);
+            break;
           }
-          break;
-        }
 
-        case "message": {
-          // Check if this is our optimistic message being confirmed
-          const optimistic = pendingMessagesRef.current.get(msg.message.id);
-          if (optimistic) {
-            pendingMessagesRef.current.delete(msg.message.id);
-            setMessages((prev) =>
-              prev.map((m) => (m.id === optimistic.id ? { ...msg.message, optimistic: false } : m))
-            );
-          } else {
-            // New message from another user
-            setMessages((prev) => [...prev, msg.message]);
-          }
-          onMessage?.(msg.message);
-          break;
-        }
-
-        case "messageAck": {
-          // Optimistic message confirmed
-          const optimistic = pendingMessagesRef.current.get(msg.tempId);
-          if (optimistic) {
-            pendingMessagesRef.current.delete(msg.tempId);
-            setMessages((prev) =>
-              prev.map((m) => (m.id === optimistic.id ? { ...m, id: msg.messageId, pending: false } : m))
-            );
-          }
-          break;
-        }
-
-        case "messageFailed": {
-          const optimistic = pendingMessagesRef.current.get(msg.tempId);
-          if (optimistic) {
-            pendingMessagesRef.current.delete(msg.tempId);
-            setMessages((prev) =>
-              prev.map((m) => (m.id === optimistic.id ? { ...m, failed: true, pending: false } : m))
-            );
-          }
-          break;
-        }
-
-        case "presence": {
-          setUsers(msg.users);
-          onPresenceChange?.(msg.users);
-          break;
-        }
-
-        case "userJoined": {
-          setUsers((prev) => (prev.some((u) => u.userId === msg.user.userId) ? prev : [...prev, msg.user]));
-          break;
-        }
-
-        case "userLeft": {
-          setUsers((prev) => prev.filter((u) => u.userId !== msg.userId));
-          break;
-        }
-
-        case "typing": {
-          const { userId, userName, isTyping } = msg.typing;
-          setTypingUsers((prev) => {
-            const filtered = prev.filter((u) => u.userId !== userId);
-            if (isTyping) {
-              const user = users.find((u) => u.userId === userId) ?? { userId, name: userName, role: "client" as const, status: "online" as const, lastSeen: new Date().toISOString(), isTyping: true };
-              return [...filtered, user];
+          case "history": {
+            // Prepend older messages (history comes oldest→newest)
+            const newMessages = msg.messages.filter((m) => !messages.some((ex) => ex.id === m.id));
+            setMessages((prev) => [...newMessages, ...prev]);
+            setHasMoreHistory(msg.hasMore);
+            if (newMessages.length > 0) {
+              beforeMessageIdRef.current = newMessages[0].id;
             }
-            return filtered;
-          });
-          onTyping?.(msg.typing);
-          break;
-        }
+            break;
+          }
 
-        case "read": {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === msg.messageId ? { ...m, readBy: [...(m.readBy ?? []), msg.userId] } : m))
-          );
-          break;
-        }
+          case "message": {
+            // Check if this is our optimistic message being confirmed
+            const optimistic = pendingMessagesRef.current.get(msg.message.id);
+            if (optimistic) {
+              pendingMessagesRef.current.delete(msg.message.id);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === optimistic.id ? { ...msg.message, optimistic: false } : m,
+                ),
+              );
+            } else {
+              // New message from another user
+              setMessages((prev) => [...prev, msg.message]);
+            }
+            onMessage?.(msg.message);
+            break;
+          }
 
-        case "error": {
-          const err: ChatError = new Error(msg.message);
-          err.code = msg.code;
-          setError(err);
-          onError?.(err);
-          break;
-        }
+          case "messageAck": {
+            // Optimistic message confirmed
+            const optimistic = pendingMessagesRef.current.get(msg.tempId);
+            if (optimistic) {
+              pendingMessagesRef.current.delete(msg.tempId);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === optimistic.id ? { ...m, id: msg.messageId, pending: false } : m,
+                ),
+              );
+            }
+            break;
+          }
 
-        case "pong":
-          // Heartbeat response - connection alive
-          break;
+          case "messageFailed": {
+            const optimistic = pendingMessagesRef.current.get(msg.tempId);
+            if (optimistic) {
+              pendingMessagesRef.current.delete(msg.tempId);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === optimistic.id ? { ...m, failed: true, pending: false } : m,
+                ),
+              );
+            }
+            break;
+          }
+
+          case "presence": {
+            setUsers(msg.users);
+            onPresenceChange?.(msg.users);
+            break;
+          }
+
+          case "userJoined": {
+            setUsers((prev) =>
+              prev.some((u) => u.userId === msg.user.userId) ? prev : [...prev, msg.user],
+            );
+            break;
+          }
+
+          case "userLeft": {
+            setUsers((prev) => prev.filter((u) => u.userId !== msg.userId));
+            break;
+          }
+
+          case "typing": {
+            const { userId, userName, isTyping } = msg.typing;
+            setTypingUsers((prev) => {
+              const filtered = prev.filter((u) => u.userId !== userId);
+              if (isTyping) {
+                const user = users.find((u) => u.userId === userId) ?? {
+                  userId,
+                  name: userName,
+                  role: "client" as const,
+                  status: "online" as const,
+                  lastSeen: new Date().toISOString(),
+                  isTyping: true,
+                };
+                return [...filtered, user];
+              }
+              return filtered;
+            });
+            onTyping?.(msg.typing);
+            break;
+          }
+
+          case "read": {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === msg.messageId ? { ...m, readBy: [...(m.readBy ?? []), msg.userId] } : m,
+              ),
+            );
+            break;
+          }
+
+          case "error": {
+            const err: ChatError = new Error(msg.message);
+            err.code = msg.code;
+            setError(err);
+            onError?.(err);
+            break;
+          }
+
+          case "pong":
+            // Heartbeat response - connection alive
+            break;
+        }
+      } catch (e) {
+        console.error("Failed to parse chat message:", e);
       }
-    } catch (e) {
-      console.error("Failed to parse chat message:", e);
-    }
-  }, [messages, users, onMessage, onPresenceChange, onTyping, onError]);
+    },
+    [messages, users, onMessage, onPresenceChange, onTyping, onError],
+  );
 
   useEffect(() => {
     handleMessageRef.current = handleMessage;
@@ -361,7 +396,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             bookingId,
             body,
             tempId,
-          } as ClientToServerMessage)
+          } as ClientToServerMessage),
         );
 
         // Resolve when acknowledged (handled in messageAck)
@@ -379,29 +414,35 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             clearInterval(checkAck);
             pendingMessagesRef.current.delete(tempId);
             setMessages((prev) =>
-              prev.map((m) => (m.id === tempId ? { ...m, failed: true, pending: false } : m))
+              prev.map((m) => (m.id === tempId ? { ...m, failed: true, pending: false } : m)),
             );
             reject(new Error("Message send timeout"));
           }
         }, 10_000);
       });
     },
-    [bookingId, currentUser, messages]
+    [bookingId, currentUser, messages],
   );
 
-  const sendTyping = useCallback((isTyping: boolean) => {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "typing", bookingId, isTyping } as ClientToServerMessage));
-    }
-  }, [bookingId]);
+  const sendTyping = useCallback(
+    (isTyping: boolean) => {
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "typing", bookingId, isTyping } as ClientToServerMessage));
+      }
+    },
+    [bookingId],
+  );
 
-  const markRead = useCallback((messageId: string) => {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "read", bookingId, messageId } as ClientToServerMessage));
-    }
-  }, [bookingId]);
+  const markRead = useCallback(
+    (messageId: string) => {
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "read", bookingId, messageId } as ClientToServerMessage));
+      }
+    },
+    [bookingId],
+  );
 
   const loadMoreHistory = useCallback(async () => {
     if (isLoadingHistory || !hasMoreHistory || !beforeMessageIdRef.current) return;
@@ -416,7 +457,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         bookingId,
         before: beforeMessageIdRef.current,
         limit: maxHistoryMessages,
-      } as ClientToServerMessage)
+      } as ClientToServerMessage),
     );
 
     // Wait for history response (handled in handleMessage)
@@ -453,7 +494,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
   // ── Derived State ────────────────────────────────────────────────────────────
 
-  const sortedMessages = useMemo(() => messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()), [messages]);
+  const sortedMessages = useMemo(
+    () =>
+      messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    [messages],
+  );
 
   return {
     status,

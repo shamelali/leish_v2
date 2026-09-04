@@ -45,7 +45,10 @@ export default function AdminChatPage() {
   const apiBase = ""; // Use Next.js API routes
 
   const handleMigrate = async () => {
-    const ids = bookingIds.split(",").map((id) => id.trim()).filter(Boolean);
+    const ids = bookingIds
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
     if (ids.length === 0) {
       alert("Please enter at least one booking ID");
       return;
@@ -79,9 +82,12 @@ export default function AdminChatPage() {
 
     setValidating(true);
     try {
-      const res = await fetch(`/api/admin/chat/validate?bookingId=${validationBookingId}&token=${validationToken}`, {
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
+      const res = await fetch(
+        `/api/admin/chat/validate?bookingId=${validationBookingId}&token=${validationToken}`,
+        {
+          headers: { Authorization: `Bearer ${session.token}` },
+        },
+      );
       const data = await res.json();
       setValidationResult(data);
     } catch (err) {
@@ -102,7 +108,8 @@ export default function AdminChatPage() {
       <section style={styles.section}>
         <h2 style={styles.sectionTitle}>📦 Message Migration</h2>
         <p style={styles.description}>
-          Migrate historical messages from the old SSE system to the new Durable Object SQLite storage.
+          Migrate historical messages from the old SSE system to the new Durable Object SQLite
+          storage.
         </p>
 
         <div style={styles.formGroup}>
@@ -138,10 +145,12 @@ export default function AdminChatPage() {
         </button>
 
         {migrationResult && (
-          <div style={{
-            ...styles.result,
-            ...(migrationResult.success ? styles.resultSuccess : styles.resultError),
-          }}>
+          <div
+            style={{
+              ...styles.result,
+              ...(migrationResult.success ? styles.resultSuccess : styles.resultError),
+            }}
+          >
             <h3>{migrationResult.success ? "✅ Success" : "❌ Failed"}</h3>
             <p>Migrated: {migrationResult.migrated} messages</p>
             <p>Failed: {migrationResult.failed} messages</p>
@@ -150,7 +159,9 @@ export default function AdminChatPage() {
                 <summary>Errors</summary>
                 <ul style={styles.errorList}>
                   {migrationResult.errors.map((err, i) => (
-                    <li key={i} style={styles.errorItem}>{err}</li>
+                    <li key={i} style={styles.errorItem}>
+                      {err}
+                    </li>
                   ))}
                 </ul>
               </details>
@@ -161,9 +172,7 @@ export default function AdminChatPage() {
 
       <section style={styles.section}>
         <h2 style={styles.sectionTitle}>🔍 System Validation</h2>
-        <p style={styles.description}>
-          Test the chat system components for a specific booking.
-        </p>
+        <p style={styles.description}>Test the chat system components for a specific booking.</p>
 
         <div style={styles.formRow}>
           <div style={styles.formGroup}>
@@ -200,32 +209,56 @@ export default function AdminChatPage() {
         </button>
 
         {validationResult && (
-          <div style={{
-            ...styles.result,
-            ...(validationResult.errors.length === 0 ? styles.resultSuccess : styles.resultError),
-          }}>
-            <h3>{validationResult.errors.length === 0 ? "✅ All Checks Passed" : "❌ Issues Found"}</h3>
+          <div
+            style={{
+              ...styles.result,
+              ...(validationResult.errors.length === 0 ? styles.resultSuccess : styles.resultError),
+            }}
+          >
+            <h3>
+              {validationResult.errors.length === 0 ? "✅ All Checks Passed" : "❌ Issues Found"}
+            </h3>
             <div style={styles.checkGrid}>
               <div style={styles.checkItem}>
-                <span style={{ ...styles.checkIcon, color: validationResult.websocketConnect ? "#22c55e" : "#ef4444" }}>
+                <span
+                  style={{
+                    ...styles.checkIcon,
+                    color: validationResult.websocketConnect ? "#22c55e" : "#ef4444",
+                  }}
+                >
                   {validationResult.websocketConnect ? "✓" : "✗"}
                 </span>
                 <span>WebSocket Connection</span>
               </div>
               <div style={styles.checkItem}>
-                <span style={{ ...styles.checkIcon, color: validationResult.historyLoad ? "#22c55e" : "#ef4444" }}>
+                <span
+                  style={{
+                    ...styles.checkIcon,
+                    color: validationResult.historyLoad ? "#22c55e" : "#ef4444",
+                  }}
+                >
                   {validationResult.historyLoad ? "✓" : "✗"}
                 </span>
                 <span>History Load</span>
               </div>
               <div style={styles.checkItem}>
-                <span style={{ ...styles.checkIcon, color: validationResult.sendReceive ? "#22c55e" : "#ef4444" }}>
+                <span
+                  style={{
+                    ...styles.checkIcon,
+                    color: validationResult.sendReceive ? "#22c55e" : "#ef4444",
+                  }}
+                >
                   {validationResult.sendReceive ? "✓" : "✗"}
                 </span>
                 <span>Send/Receive</span>
               </div>
               <div style={styles.checkItem}>
-                <span style={{ ...styles.checkIcon, color: validationResult.presence ? "#22c55e" : "#ef4444" }}>
+                <span
+                  style={{
+                    ...styles.checkIcon,
+                    color: validationResult.presence ? "#22c55e" : "#ef4444",
+                  }}
+                >
                   {validationResult.presence ? "✓" : "✗"}
                 </span>
                 <span>Presence</span>
@@ -236,7 +269,9 @@ export default function AdminChatPage() {
                 <summary>Errors</summary>
                 <ul style={styles.errorList}>
                   {validationResult.errors.map((err, i) => (
-                    <li key={i} style={styles.errorItem}>{err}</li>
+                    <li key={i} style={styles.errorItem}>
+                      {err}
+                    </li>
                   ))}
                 </ul>
               </details>
@@ -251,7 +286,9 @@ export default function AdminChatPage() {
           Control the percentage of users who use the new chat system.
         </p>
         <div style={styles.rolloutInfo}>
-          <p>Current rollout: <code>CHAT_ROLLOUT_PERCENT</code> environment variable</p>
+          <p>
+            Current rollout: <code>CHAT_ROLLOUT_PERCENT</code> environment variable
+          </p>
           <p>Set in Cloudflare Workers dashboard → Variables</p>
           <ul style={styles.rolloutSteps}>
             <li>0% — All users on old SSE system</li>

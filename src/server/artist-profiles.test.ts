@@ -18,7 +18,14 @@ async function createTestUser(role = "artist") {
     .prepare(
       "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
-    .run(userId, `${userId}@test.local`, "Test User", role, hashPassword("password123"), new Date().toISOString());
+    .run(
+      userId,
+      `${userId}@test.local`,
+      "Test User",
+      role,
+      hashPassword("password123"),
+      new Date().toISOString(),
+    );
   return userId;
 }
 

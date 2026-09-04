@@ -16,9 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   try {
     const sbUser = await getSupabaseUser();
     if (sbUser) {
-      const row = await getDb()
-        .prepare("SELECT * FROM users WHERE id = ?")
-        .get<UserRow>(sbUser.id);
+      const row = await getDb().prepare("SELECT * FROM users WHERE id = ?").get<UserRow>(sbUser.id);
       if (row) user = row;
     }
   } catch {
@@ -32,9 +30,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     const payload = token ? await verifySessionToken(token) : null;
 
     if (payload) {
-      user = (await getDb()
-        .prepare("SELECT * FROM users WHERE id = ?")
-        .get<UserRow>(payload.sub)) ?? null;
+      user =
+        (await getDb().prepare("SELECT * FROM users WHERE id = ?").get<UserRow>(payload.sub)) ??
+        null;
     }
   }
 

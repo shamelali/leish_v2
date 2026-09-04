@@ -177,7 +177,10 @@ describe("reportError", () => {
       metadata: { action: "create" },
     });
 
-    const [, init] = fetchMock.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit | undefined];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [
+      RequestInfo | URL,
+      RequestInit | undefined,
+    ];
     const body = JSON.parse(String(init?.body).split("\n")[2]);
     expect(body.extra.userId).toBe("user-123");
     expect(body.extra.bookingId).toBe("booking-456");

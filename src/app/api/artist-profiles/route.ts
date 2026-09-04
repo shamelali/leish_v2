@@ -145,7 +145,10 @@ export async function PATCH(request: Request) {
       "artist self-update",
     );
 
-    interaction?.end(JSON.stringify({ artistId: profile.artist_id, fields: Object.keys(parsed.data) }), true);
+    interaction?.end(
+      JSON.stringify({ artistId: profile.artist_id, fields: Object.keys(parsed.data) }),
+      true,
+    );
     return NextResponse.json({ ok: true, artist: updated });
   } catch (err) {
     interaction?.end(err instanceof Error ? err.message : String(err), false);

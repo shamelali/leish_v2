@@ -355,7 +355,9 @@ describe("handlePaymentPaid", () => {
     const paidPayment = await getPaymentForBooking(bookingId, "deposit");
     await handlePaymentPaid(paidPayment!);
 
-    const booking = await getDb().prepare("SELECT status FROM bookings WHERE id = ?").get(bookingId);
+    const booking = await getDb()
+      .prepare("SELECT status FROM bookings WHERE id = ?")
+      .get(bookingId);
     expect(booking).toMatchObject({ status: "confirmed" });
   });
 
@@ -367,7 +369,9 @@ describe("handlePaymentPaid", () => {
     const paidPayment = await getPaymentForBooking(bookingId, "deposit");
     await handlePaymentPaid(paidPayment!);
 
-    const booking = await getDb().prepare("SELECT status FROM bookings WHERE id = ?").get(bookingId);
+    const booking = await getDb()
+      .prepare("SELECT status FROM bookings WHERE id = ?")
+      .get(bookingId);
     expect(booking).toMatchObject({ status: "requested" });
   });
 
@@ -379,7 +383,9 @@ describe("handlePaymentPaid", () => {
     const paidPayment = await getPaymentForBooking(bookingId, "deposit");
     await handlePaymentPaid(paidPayment!);
 
-    const booking = await getDb().prepare("SELECT status FROM bookings WHERE id = ?").get(bookingId);
+    const booking = await getDb()
+      .prepare("SELECT status FROM bookings WHERE id = ?")
+      .get(bookingId);
     expect(booking).toMatchObject({ status: "confirmed" });
   });
 
@@ -415,7 +421,12 @@ describe("handlePaymentPaid", () => {
         `INSERT INTO quotations (id, booking_id, base_fee, travel_fee, early_call_fee, accommodation_fee, extras, artist_note, total, status, created_at, expires_at)
          VALUES (?, ?, 0, 0, 0, 0, '[]', 'Note', 30000, 'paid', ?, ?)`,
       )
-      .run(quotationId, bookingId, new Date().toISOString(), new Date(Date.now() + 86400000).toISOString());
+      .run(
+        quotationId,
+        bookingId,
+        new Date().toISOString(),
+        new Date(Date.now() + 86400000).toISOString(),
+      );
 
     const balance = await createBookingPayment(bookingId, "balance", 30_000);
     await markBillPaid(balance.provider_ref!);
@@ -423,10 +434,14 @@ describe("handlePaymentPaid", () => {
     const paidBalance = await getPaymentForBooking(bookingId, "balance");
     await handlePaymentPaid(paidBalance!);
 
-    const quotation = await getDb().prepare("SELECT status FROM quotations WHERE id = ?").get(quotationId);
+    const quotation = await getDb()
+      .prepare("SELECT status FROM quotations WHERE id = ?")
+      .get(quotationId);
     expect(quotation).toMatchObject({ status: "paid" });
 
-    const payout = await getDb().prepare("SELECT * FROM payouts WHERE booking_id = ?").get(bookingId);
+    const payout = await getDb()
+      .prepare("SELECT * FROM payouts WHERE booking_id = ?")
+      .get(bookingId);
     expect(payout).toBeDefined();
     expect(payout).toMatchObject({ booking_id: bookingId, status: "pending" });
   });
@@ -445,7 +460,9 @@ describe("handlePaymentPaid", () => {
     const paidBalance = await getPaymentForBooking(bookingId, "balance");
     await handlePaymentPaid(paidBalance!);
 
-    const payout = await getDb().prepare("SELECT * FROM payouts WHERE booking_id = ?").get(bookingId);
+    const payout = await getDb()
+      .prepare("SELECT * FROM payouts WHERE booking_id = ?")
+      .get(bookingId);
     expect(payout).toBeDefined();
     expect(payout).toMatchObject({ booking_id: bookingId, gross_sen: 30000 });
   });
