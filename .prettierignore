@@ -25,3 +25,7 @@ my-agent
 
 # Agent skill packs (vendored docs, synced from upstream)
 .agents/skills
+
+# Workflow files cannot be rewritten by the CI token (a GitHub App push
+# without the `workflows` permission is rejected), so they are left as-is.
+.github/workflows
