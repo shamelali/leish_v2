@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+#
+# Pre-push gate. Stands in for GitHub Actions while it is billing-locked.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Runs the fast gates only (format, lint, typecheck, test) — roughly 60s.
+# The build is deliberately excluded: it is the slowest gate and rarely fails
+# alone once typecheck passes. Run the full set before opening a PR:
+#   ./scripts/ci-local.sh
+#
+# Bypass when you genuinely need to (WIP branch, docs typo):
+#   git push --no-verify
+
+set -uo pipefail
+
+# Never block a branch deletion.
+if [ -t 0 ]; then :; else
+  while read -r _local_ref local_sha _remote_ref _remote_sha; do
+    if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+      exit 0
+    fi
+  done
+fi
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  corepack enable >/dev/null 2>&1 || {
+    echo "pre-push: pnpm unavailable, skipping gates" >&2
+    exit 0
+  }
+fi
+
+export CI="true"
+export SKIP_ENV_VALIDATION="1"
+
+echo "pre-push: running gates (skip with --no-verify)"
+
+fail=0
+run() {
+  printf '  %-10s' "$1"
+  shift
+  if out=$("$@" 2>&1); then
+    echo "ok"
+  else
+    echo "FAILED"
+    echo "$out" | tail -n 25
+    fail=1
+  fi
+}
+
+run format    pnpm run format:check
+run lint      pnpm run lint
+run typecheck pnpm run typecheck
+run test      pnpm run test
+
+if [ "$fail" -ne 0 ]; then
+  echo
+  echo "pre-push: gates failed — push aborted." >&2
+  echo "Fix, or bypass with: git push --no-verify" >&2
+  exit 1
+fi
+
+echo "pre-push: all gates passed"
