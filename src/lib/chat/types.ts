@@ -16,6 +16,8 @@ export interface ChatMessage {
   optimistic?: boolean;
   pending?: boolean;
   failed?: boolean;
+  /** Client-assigned id for an optimistic message, echoed back on ack. */
+  tempId?: string;
   readBy?: string[];
 }
 
@@ -78,9 +80,9 @@ export type ServerToClientMessage =
 
 export interface BookingContext {
   id: string;
-  userId: string;           // Client who booked
-  artistId: string | null;  // Artist assigned
-  studioId: string | null;  // Studio assigned
+  userId: string; // Client who booked
+  artistId: string | null; // Artist assigned
+  studioId: string | null; // Studio assigned
   status: string;
 }
 

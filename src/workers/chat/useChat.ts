@@ -21,6 +21,11 @@ import type {
   TypingUpdate,
 } from "./types";
 
+/** An error surfaced by the chat server, carrying its machine-readable code. */
+export interface ChatError extends Error {
+  code?: string;
+}
+
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 interface UseChatOptions {
@@ -109,6 +114,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
   const beforeMessageIdRef = useRef<string | null>(null);
+  // `connect` and `handleMessage` are mutually recursive (a socket's onmessage
+  // dispatches to the handler; onclose re-enters connect to reconnect). Routing
+  // both through refs breaks the declaration cycle and, importantly, keeps
+  // `connect` from being re-created — and the socket torn down and rebuilt —
+  // every time `handleMessage` closes over new `messages`.
+  const handleMessageRef = useRef<(data: string) => void>(() => {});
+  const connectRef = useRef<() => void>(() => {});
 
   // ── Cleanup ─────────────────────────────────────────────────────────────────
 
@@ -156,7 +168,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     ws.onmessage = (event) => {
       if (!isMountedRef.current) return;
-      handleMessage(event.data);
+      handleMessageRef.current(event.data);
     };
 
     ws.onclose = (event) => {
@@ -172,7 +184,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         const delay = reconnectDelay * Math.pow(2, reconnectCountRef.current);
         reconnectCountRef.current++;
         reconnectTimeoutRef.current = setTimeout(() => {
-          if (isMountedRef.current) connect();
+          if (isMountedRef.current) connectRef.current();
         }, delay);
       } else {
         setError(new Error(`Max reconnection attempts reached: ${reason}`));
@@ -180,7 +192,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       }
     };
 
-    ws.onerror = (event) => {
+    ws.onerror = () => {
       if (!isMountedRef.current) return;
       const err = new Error("WebSocket error");
       setError(err);
@@ -290,8 +302,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
 
         case "error": {
-          const err = new Error(msg.message);
-          (err as any).code = msg.code;
+          const err: ChatError = new Error(msg.message);
+          err.code = msg.code;
           setError(err);
           onError?.(err);
           break;
@@ -305,6 +317,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       console.error("Failed to parse chat message:", e);
     }
   }, [messages, users, onMessage, onPresenceChange, onTyping, onError]);
+
+  useEffect(() => {
+    handleMessageRef.current = handleMessage;
+  }, [handleMessage]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -348,7 +368,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         const checkAck = setInterval(() => {
           if (!pendingMessagesRef.current.has(tempId)) {
             clearInterval(checkAck);
-            const confirmed = messages.find((m) => m.id === tempId || (m as any).tempId === tempId);
+            const confirmed = messages.find((m) => m.id === tempId || m.tempId === tempId);
             resolve(confirmed ?? null);
           }
         }, 100);

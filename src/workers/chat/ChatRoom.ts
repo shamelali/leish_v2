@@ -97,6 +97,29 @@ class ConnectionRateLimiter {
 
 // ── ChatRoom Durable Object ──────────────────────────────────────────────────
 
+/**
+ * A WebSocket that has completed the `join` handshake carries the identity of
+ * the session attached to it, so later frames (message/typing/read/history) and
+ * disconnect cleanup can resolve the sender without another lookup.
+ */
+type TaggedWebSocket = WebSocket & {
+  userId?: string;
+  bookingId?: string;
+};
+
+/** Read the identity attached to a socket at join time. */
+function socketIdentity(ws: WebSocket): { userId?: string; bookingId?: string } {
+  const tagged = ws as TaggedWebSocket;
+  return { userId: tagged.userId, bookingId: tagged.bookingId };
+}
+
+/** Attach identity to a socket once it has successfully joined a room. */
+function tagSocket(ws: WebSocket, userId: string, bookingId: string): void {
+  const tagged = ws as TaggedWebSocket;
+  tagged.userId = userId;
+  tagged.bookingId = bookingId;
+}
+
 export class ChatRoom extends DurableObject<Env> {
   private state: ChatRoomState;
   private config: ChatConfig;
@@ -419,7 +442,7 @@ export class ChatRoom extends DurableObject<Env> {
     for (const [userId, presence] of this.state.presence) {
       // We need to track which ws belongs to which user
       // For simplicity, we'll use a custom property on the WebSocket
-      if ((ws as any).userId === userId) {
+      if (socketIdentity(ws).userId === userId) {
         this.state.presence.delete(userId);
         this.broadcast({
           type: "userLeft",
@@ -464,8 +487,7 @@ export class ChatRoom extends DurableObject<Env> {
     }
 
     // Attach user info to WebSocket for cleanup
-    (ws as any).userId = user.userId;
-    (ws as any).bookingId = bookingId;
+    tagSocket(ws, user.userId, bookingId);
 
     // Add to presence
     const existingPresence = this.state.presence.get(user.userId);
@@ -508,8 +530,7 @@ export class ChatRoom extends DurableObject<Env> {
   }
 
   private async handleMessage(ws: WebSocket, msg: Extract<ClientToServerMessage, { type: "message" }>): Promise<void> {
-    const userId = (ws as any).userId;
-    const bookingId = (ws as any).bookingId;
+    const { userId, bookingId } = socketIdentity(ws);
 
     if (!userId || !bookingId) {
       ws.send(JSON.stringify({ type: "error", code: "NOT_JOINED", message: "Must join first" }));
@@ -571,8 +592,7 @@ export class ChatRoom extends DurableObject<Env> {
   }
 
   private async handleTyping(ws: WebSocket, msg: Extract<ClientToServerMessage, { type: "typing" }>): Promise<void> {
-    const userId = (ws as any).userId;
-    const bookingId = (ws as any).bookingId;
+    const { userId, bookingId } = socketIdentity(ws);
 
     if (!userId || !bookingId || msg.bookingId !== bookingId) return;
 
@@ -632,8 +652,7 @@ export class ChatRoom extends DurableObject<Env> {
   }
 
   private async handleRead(ws: WebSocket, msg: Extract<ClientToServerMessage, { type: "read" }>): Promise<void> {
-    const userId = (ws as any).userId;
-    const bookingId = (ws as any).bookingId;
+    const { userId, bookingId } = socketIdentity(ws);
 
     if (!userId || !bookingId || msg.bookingId !== bookingId) return;
 
@@ -646,8 +665,7 @@ export class ChatRoom extends DurableObject<Env> {
   }
 
   private async handleHistory(ws: WebSocket, msg: Extract<ClientToServerMessage, { type: "history" }>): Promise<void> {
-    const userId = (ws as any).userId;
-    const bookingId = (ws as any).bookingId;
+    const { userId, bookingId } = socketIdentity(ws);
 
     if (!userId || !bookingId || msg.bookingId !== bookingId) return;
 
