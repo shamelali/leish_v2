@@ -517,6 +517,8 @@ export async function createArtist(input: {
   priceFrom?: number;
   specialties?: string[];
   services?: Service[];
+  yearsExperience?: number;
+  portfolio?: string[];
   referralCode?: string;
 }): Promise<Artist | null> {
   await ensureCatalogSeeded();
@@ -558,8 +560,9 @@ export async function createArtist(input: {
   await db
     .prepare(
       `INSERT INTO artists (id, slug, name, tagline, bio, image, state, area, price_from,
-                            specialties, services, referral_code, referred_by, referral_earnings, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            years_experience, specialties, services, portfolio,
+                            referral_code, referred_by, referral_earnings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -573,8 +576,10 @@ export async function createArtist(input: {
       input.state ?? "",
       input.area ?? "",
       Math.max(0, Math.round(input.priceFrom ?? 0)),
+      Math.max(0, Math.round(input.yearsExperience ?? 0)),
       JSON.stringify(input.specialties ?? []),
       JSON.stringify(input.services ?? []),
+      JSON.stringify(input.portfolio ?? []),
       referralCode,
       referredBy,
       0,
@@ -626,6 +631,35 @@ export async function updateStudio(
   }
   const ok = await applyUpdate("studios", STUDIO_UPDATE_FIELDS, id, updates);
   return ok ? getStudioById(id) : null;
+}
+
+// ── Deletes (rollback of a just-created row) ─────────────────────────────────
+//
+// These are hard deletes with no cascade into bookings/reviews (those tables
+// reference artists by id *without* a foreign key, so rows would be left
+// dangling). They exist so a caller that has just created a profile and then
+// failed a later step (e.g. the claim in onboarding) can undo the insert
+// instead of leaving an orphaned public listing. Do not use them to remove a
+// profile that may already have bookings.
+
+export async function deleteArtist(id: string): Promise<boolean> {
+  const existing = (await getDb().prepare("SELECT slug FROM artists WHERE id = ?").get(id)) as
+    { slug: string } | undefined;
+  if (!existing) return false;
+  const result = await getDb().prepare("DELETE FROM artists WHERE id = ?").run(id);
+  await cacheDel(`${CACHE_PREFIX_ARTIST}id:${id}`, `${CACHE_PREFIX_ARTIST}slug:${existing.slug}`);
+  await cacheDelPrefix(CACHE_PREFIX_LIST);
+  return result.changes > 0;
+}
+
+export async function deleteStudio(id: string): Promise<boolean> {
+  const existing = (await getDb().prepare("SELECT slug FROM studios WHERE id = ?").get(id)) as
+    { slug: string } | undefined;
+  if (!existing) return false;
+  const result = await getDb().prepare("DELETE FROM studios WHERE id = ?").run(id);
+  await cacheDel(`${CACHE_PREFIX_STUDIO}id:${id}`, `${CACHE_PREFIX_STUDIO}slug:${existing.slug}`);
+  await cacheDelPrefix(CACHE_PREFIX_LIST);
+  return result.changes > 0;
 }
 
 /**

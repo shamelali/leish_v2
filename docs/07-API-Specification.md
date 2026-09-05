@@ -63,6 +63,7 @@
 | **Artists — Claim**            | POST                  | `/api/artist-profiles`                                  | Cookie (artist/studio)       | `src/app/api/artist-profiles/route.ts`                                                |
 | **Artists — Edit Self**        | PATCH                 | `/api/artist-profiles`                                  | Cookie (claimed)             | `src/app/api/artist-profiles/route.ts`                                                |
 | **Studios — Claim**            | POST/GET/PATCH        | `/api/studio-profiles`                                  | Cookie                       | `src/app/api/studio-profiles/route.ts`                                                |
+| **Onboarding — Publish**       | POST                  | `/api/onboarding`                                       | Cookie (verified pro)        | `src/app/api/onboarding/route.ts`                                                     |
 | **Reviews — Add**              | POST                  | `/api/artists/[slug]/reviews`                           | Cookie                       | `src/app/api/artists/[slug]/reviews/route.ts` (or via `src/server/catalog.ts` helper) |
 | **Me — Export**                | GET                   | `/api/me/export`                                        | Cookie                       | `src/app/api/me/export/route.ts`                                                      |
 | **Me — Delete**                | DELETE                | `/api/me?confirm=1`                                     | Cookie                       | `src/app/api/me/route.ts`                                                             |
@@ -443,6 +444,51 @@ PATCH /api/artist-profiles
 - Whitelisted fields only; `verified`/`referralEarnings` ignored for self-service.
 
 #### `GET/POST/PATCH /api/studio-profiles` — mirrors artist; scopes `studio_id`.
+
+#### `POST /api/onboarding`
+
+Self-service "set up my profile" (the `/onboarding` page). Creates a **new**
+catalog artist or studio and claims it for the caller in one request. Unlike
+`POST /api/artist-profiles`, which claims an existing seeded profile, this is the
+path a brand-new MUA/studio takes after registering. Auth: cookie session with
+role `artist` or `studio` **and** a verified email.
+
+```http
+POST /api/onboarding
+Origin: <app origin>          # CSRF-checked (statefulRoute)
+Cookie: leish_session=…
+{
+  "type": "artist" | "studio",          # must equal the account role
+  "name": "Nadia Rahman",               # 2–80 chars
+  "phone": "+60…",                      # optional
+  "state": "Selangor", "area": "Petaling Jaya",
+  "priceFrom": 350,                     # RM, optional at API level; form requires it
+  "about": "…",                         # → artists.bio / studios.description
+  // artist only
+  "specialties": ["Bridal"], "yearsExperience": 6, "portfolioUrl": "https://…",
+  // studio only
+  "address": "…", "hours": "…", "description": "…"
+}
+→ 201 {ok:true, type, id, slug}          # profile is live + claimed; verified = 0
+→ 400 validation / type ≠ role
+→ 401 no session
+→ 403 customer/admin role · unverified email · bad Origin
+→ 409 {error, id}  account already holds a profile (id = the existing one)
+→ 429 Retry-After  5 requests / minute / IP
+```
+
+Guarantees:
+
+- **Never leaves an orphan.** If the account already has a claim the route
+  answers 409 _before_ inserting anything. If the claim still collides after the
+  insert (two concurrent submissions), the just-created row is deleted and the
+  route answers 409 with the winner's id. A failed rollback is escalated via
+  `reportError` (`metadata.reason = orphaned_*_profile`) rather than logged and
+  forgotten. Prior to this contract a second submission returned **201** and
+  left an unclaimed public listing.
+- Profiles are published immediately with `verified = 0`; there is no hidden
+  "pending review" state. Admins grant the Verified badge later.
+- Email verification is required — the same trust gate as the claim routes.
 
 ---
 

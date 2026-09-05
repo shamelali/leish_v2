@@ -2,6 +2,23 @@
 import { describe, expect, it } from "vitest";
 import { getDb, toPublicUser, asRows, bind, isPostgres, type UserRow } from "./db";
 
+describe("sqlite facade named run", () => {
+  it("ignores object keys that are not named in the SQL (matches pg facade)", async () => {
+    // /api/auth/register does `run(bind(user))` where UserRow carries
+    // supabase_id but the INSERT doesn't list it. pg ignores the extra key;
+    // node:sqlite is strict by default and throws ERR_INVALID_STATE.
+    const db = getDb();
+    await db.exec("CREATE TABLE IF NOT EXISTS _named (a TEXT, b TEXT)");
+    await db.prepare("DELETE FROM _named").run();
+    const r = await db
+      .prepare("INSERT INTO _named (a, b) VALUES (@a, @b)")
+      .run(bind({ a: "1", b: "2", extra_key_not_in_sql: null }));
+    expect(r.changes).toBe(1);
+    const row = await db.prepare("SELECT * FROM _named").get<{ a: string; b: string }>();
+    expect(row).toEqual({ a: "1", b: "2" });
+  });
+});
+
 describe("sqlite facade positional run", () => {
   it("binds 5 positional string args (devSend pattern)", async () => {
     const db = getDb();
