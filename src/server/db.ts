@@ -116,6 +116,15 @@ function createSqliteFacade(db: DatabaseSync): DbFacade {
   return {
     prepare(sql: string): Statement {
       const stmt = db.prepare(sql);
+      // Match the pg facade, which binds only the @names present in the SQL
+      // and ignores extra keys on the object. node:sqlite is strict by default
+      // and throws ERR_INVALID_STATE for an unknown named parameter — which
+      // broke every `run(bind(row))` whose row type has more columns than the
+      // INSERT lists (e.g. UserRow.supabase_id in /api/auth/register).
+      // The setter exists from Node 22.13 / 23.4; older 22.x keep strict mode.
+      if (typeof stmt.setAllowUnknownNamedParameters === "function") {
+        stmt.setAllowUnknownNamedParameters(true);
+      }
       return {
         async get<T>(...params: BindParam[]): Promise<T | undefined> {
           return stmt.get(...(params as unknown as never[])) as T | undefined;
