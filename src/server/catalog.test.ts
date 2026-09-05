@@ -8,6 +8,8 @@ import {
   addEntityReview,
   createArtist,
   createStudio,
+  deleteArtist,
+  deleteStudio,
   findReviewableBooking,
   getArtistById,
   getArtistBySlug,
@@ -147,6 +149,44 @@ describe("catalog repository", () => {
     expect((await getStudioBySlug(created!.slug!))?.id).toBe(created!.id);
     expect((await resolveStudio(created!.slug!))?.id).toBe(created!.id);
     expect((await resolveStudio(created!.id))?.slug).toBe(created!.slug);
+  });
+
+  it("createArtist persists yearsExperience and portfolio at insert time", async () => {
+    await listAllArtists();
+    const created = await createArtist({
+      name: `Portfolio Artist ${randomUUID().slice(0, 8)}`,
+      state: "Selangor",
+      area: "Shah Alam",
+      yearsExperience: 7,
+      portfolio: ["https://instagram.com/portfolio.artist"],
+    });
+    expect(created!.yearsExperience).toBe(7);
+    expect(created!.portfolio).toEqual(["https://instagram.com/portfolio.artist"]);
+
+    // Defaults when omitted.
+    const bare = await createArtist({ name: `Bare Artist ${randomUUID().slice(0, 8)}` });
+    expect(bare!.yearsExperience).toBe(0);
+    expect(bare!.portfolio).toEqual([]);
+  });
+
+  it("deleteArtist removes the row by id and by slug lookups", async () => {
+    await listAllArtists();
+    const created = await createArtist({ name: `Doomed Artist ${randomUUID().slice(0, 8)}` });
+    expect(await deleteArtist(created!.id)).toBe(true);
+    expect(await getArtistById(created!.id)).toBeNull();
+    expect(await getArtistBySlug(created!.slug!)).toBeNull();
+    // Second delete is a no-op.
+    expect(await deleteArtist(created!.id)).toBe(false);
+    expect(await deleteArtist("does-not-exist")).toBe(false);
+  });
+
+  it("deleteStudio removes the row by id and by slug lookups", async () => {
+    await listAllStudios();
+    const created = await createStudio({ name: `Doomed Studio ${randomUUID().slice(0, 8)}` });
+    expect(await deleteStudio(created!.id)).toBe(true);
+    expect(await getStudioById(created!.id)).toBeNull();
+    expect(await getStudioBySlug(created!.slug!)).toBeNull();
+    expect(await deleteStudio(created!.id)).toBe(false);
   });
 
   it("filters artists by state, budget and query", async () => {

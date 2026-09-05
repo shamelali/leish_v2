@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { AREAS_BY_STATE, MALAYSIA_STATES } from "@/lib/data";
 import { Button } from "@/components/Button";
@@ -13,14 +13,58 @@ function OnboardingContent() {
   const searchParams = useSearchParams();
   const isNew = searchParams.get("new") === "1";
 
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState<{ id: string; slug: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+
+  // An account can hold exactly one profile. Look it up before showing the
+  // form so a returning applicant sees "manage your profile", not a form that
+  // will 409 on submit. `checked` starts false only for roles that can
+  // actually hold a profile, so the effect never needs a synchronous setState.
+  const canOnboard = user?.role === "artist" || user?.role === "studio";
+  const [existing, setExisting] = useState<{
+    checked: boolean;
+    name: string | null;
+    slug: string | null;
+  }>({ checked: false, name: null, slug: null });
 
   const isStudio = user?.role === "studio";
   const isArtist = user?.role === "artist";
 
-  if (loading) {
+  useEffect(() => {
+    if (!canOnboard) return;
+    let cancelled = false;
+    const endpoint = isStudio ? "/api/studio-profiles" : "/api/artist-profiles";
+    fetch(endpoint)
+      .then((r) => (r.ok ? r.json() : { profile: null }))
+      .then(
+        (body: {
+          profile: {
+            artistName?: string;
+            studioName?: string;
+            artistId?: string;
+            studioId?: string;
+          } | null;
+        }) => {
+          if (cancelled) return;
+          const p = body.profile;
+          setExisting({
+            checked: true,
+            name: p?.artistName ?? p?.studioName ?? null,
+            slug: p?.artistId ?? p?.studioId ?? null,
+          });
+        },
+      )
+      .catch(() => {
+        if (!cancelled) setExisting({ checked: true, name: null, slug: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canOnboard, isStudio]);
+
+  if (loading || (canOnboard && !existing.checked)) {
     return (
       <div className="mx-auto max-w-lg px-4 py-24 text-center text-stone-500 dark:text-stone-400">
         Loading…
@@ -79,20 +123,67 @@ function OnboardingContent() {
           </svg>
         </div>
         <h1 className="mt-6 font-display text-3xl font-semibold text-stone-900 dark:text-stone-100">
-          Application received!
+          Your profile is live
         </h1>
         <p className="mt-3 text-stone-600 dark:text-stone-400">
-          Thanks, {user.name}! Our team reviews every application — you&apos;ll hear from us within
-          2 working days once your profile is live.
+          Thanks, {user.name}! Your {isStudio ? "studio" : "artist"} profile is published and linked
+          to this account. Clients can find it in the {isStudio ? "studios" : "artists"} directory
+          right away.
         </p>
         <p className="mt-4 text-sm text-stone-400 dark:text-stone-500">
-          Your {isStudio ? "studio" : "artist"} profile is now live and claimed to your account.
+          Our team reviews new profiles and awards the Verified badge once we&apos;ve confirmed your
+          details — that usually takes a few working days and doesn&apos;t affect your listing.
         </p>
         <div className="mt-8 flex justify-center gap-3">
           <Button href="/dashboard" variant="outline">
             Go to Dashboard
           </Button>
-          <Button href="/artists">Browse Artists</Button>
+          <Button href={isStudio ? `/studios/${submitted.slug}` : `/artists/${submitted.slug}`}>
+            View my profile
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Already onboarded (or claimed a catalog profile from the dashboard).
+  if (existing.name) {
+    const href = isStudio ? `/studios/${existing.slug}` : `/artists/${existing.slug}`;
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 text-center">
+        <span className="text-5xl">✅</span>
+        <h1 className="mt-6 font-display text-3xl font-semibold text-stone-900 dark:text-stone-100">
+          You&apos;re already set up
+        </h1>
+        <p className="mt-3 text-stone-600 dark:text-stone-400">
+          This account manages <strong>{existing.name}</strong>. Each account can hold one{" "}
+          {isStudio ? "studio" : "artist"} profile, so there&apos;s nothing more to apply for.
+        </p>
+        <div className="mt-8 flex justify-center gap-3">
+          <Button href="/dashboard" variant="outline">
+            Go to Dashboard
+          </Button>
+          <Button href={href}>View my profile</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // The API requires a verified mailbox behind every public listing.
+  if (!user.emailVerified || needsVerification) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 text-center">
+        <span className="text-5xl">📬</span>
+        <h1 className="mt-6 font-display text-3xl font-semibold text-stone-900 dark:text-stone-100">
+          Verify your email first
+        </h1>
+        <p className="mt-3 text-stone-600 dark:text-stone-400">
+          Your {isStudio ? "studio" : "artist"} profile will be public under your name, so we ask
+          for a confirmed email address before publishing it. Check your inbox for the link we sent
+          to <strong>{user.email}</strong>, then come back here.
+        </p>
+        <div className="mt-8 flex justify-center gap-3">
+          <Button href="/dashboard">Resend from Dashboard</Button>
         </div>
       </div>
     );
@@ -118,12 +209,12 @@ function OnboardingContent() {
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
       {isNew && (
         <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-500/10 dark:text-emerald-400">
-          Account created — now complete your {isStudio ? "studio" : "artist"} application to get
+          Account created — now set up your {isStudio ? "studio" : "artist"} profile to get
           discovered. ✨
         </div>
       )}
       <h1 className="font-display text-4xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
-        {isStudio ? "Apply as a Studio" : "Apply as an Artist"}
+        {isStudio ? "Set up your studio profile" : "Set up your artist profile"}
       </h1>
       <p className="mt-2 text-stone-500 dark:text-stone-400">
         {isStudio
@@ -152,6 +243,7 @@ function OnboardingContent() {
             phone: String(fd.get("phone") || ""),
             state: String(fd.get("state") || ""),
             area: String(fd.get("area") || ""),
+            priceFrom: Number(fd.get("priceFrom") || 0),
             about: String(fd.get("about") || ""),
           };
           if (isArtist) {
@@ -169,9 +261,26 @@ function OnboardingContent() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || "Failed to submit");
-            setSubmitted(true);
+            const data = (await res.json().catch(() => ({}))) as {
+              error?: string;
+              id?: string;
+              slug?: string;
+            };
+            if (res.status === 403 && /verify your email/i.test(data.error ?? "")) {
+              setNeedsVerification(true);
+              return;
+            }
+            if (res.status === 409 && data.id) {
+              // Someone (probably this tab, twice) already claimed a profile.
+              setExisting({
+                checked: true,
+                name: String(fd.get("name") || user.name),
+                slug: data.id,
+              });
+              return;
+            }
+            if (!res.ok || !data.id) throw new Error(data.error || "Failed to submit");
+            setSubmitted({ id: data.id, slug: data.slug ?? data.id });
           } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
           } finally {
@@ -345,6 +454,28 @@ function OnboardingContent() {
         )}
 
         <div>
+          <label htmlFor="onb-price" className={labelCls}>
+            Starting price (RM)
+          </label>
+          <input
+            id="onb-price"
+            name="priceFrom"
+            type="number"
+            min={1}
+            max={100000}
+            step={1}
+            inputMode="numeric"
+            required
+            placeholder="e.g. 350"
+            className={inputCls}
+          />
+          <p className="mt-1.5 text-xs text-stone-400 dark:text-stone-500">
+            Shown as &ldquo;From RM…&rdquo; on your card and used for budget filters. You can change
+            it later.
+          </p>
+        </div>
+
+        <div>
           <label htmlFor="onb-about" className={labelCls}>
             {isStudio ? "About your studio" : "About you"}
           </label>
@@ -363,7 +494,7 @@ function OnboardingContent() {
         </div>
 
         <Button type="submit" className="w-full" disabled={submitting}>
-          {submitting ? "Submitting…" : "Submit Application"}
+          {submitting ? "Publishing…" : "Publish my profile"}
         </Button>
       </form>
     </div>
