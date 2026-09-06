@@ -19,7 +19,6 @@ export async function uploadObject(
   key: string,
   body: Buffer | Uint8Array | ReadableStream,
   contentType: string,
-  options?: { cacheControl?: string; metadata?: Record<string, string> },
 ): Promise<void> {
   const token = getBlobToken();
   const buffer = Buffer.isBuffer(body)

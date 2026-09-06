@@ -10,8 +10,6 @@
  * 3. Switch traffic gradually
  */
 
-import type { ChatMessage } from "./types";
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface MigrationResult {
@@ -36,7 +34,7 @@ interface MigrationOptions {
 export async function migrateMessagesToDO(
   options: MigrationOptions = {},
 ): Promise<MigrationResult> {
-  const { bookingIds, batchSize = 100, dryRun = false } = options;
+  const { bookingIds, dryRun = false } = options;
   const result: MigrationResult = { success: true, migrated: 0, failed: 0, errors: [] };
 
   const db = await getDb();

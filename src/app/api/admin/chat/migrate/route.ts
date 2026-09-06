@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/server/db";
-import { getClaimedArtistIds } from "@/server/artist-profiles";
-import { getClaimedStudioIds } from "@/server/studio-profiles";
 import { verifySessionToken } from "@/server/session";
 
 interface MigrationResult {
@@ -46,7 +44,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    const { bookingIds, batchSize = 100, dryRun = false } = body;
+    const { bookingIds, dryRun = false } = body;
     const result: MigrationResult = { success: true, migrated: 0, failed: 0, errors: [] };
 
     // Build query

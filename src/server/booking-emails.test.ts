@@ -67,8 +67,6 @@ const baseParams = {
 };
 
 describe("booking-emails", () => {
-  const origBrevoKey = process.env.BREVO_API_KEY;
-
   beforeEach(async () => {
     delete process.env.BREVO_API_KEY;
     delete process.env.EMAIL_PROVIDER;
@@ -100,7 +98,7 @@ describe("booking-emails", () => {
     });
 
     it("respects email preference booking_created", async () => {
-      const { userId, email } = await createTestUser({ booking_created: 0 });
+      const { userId } = await createTestUser({ booking_created: 0 });
       await notifyBookingCreated({ ...baseParams, ownerUserId: userId });
       const outbox = await getLastOutboxEmail();
       expect(outbox).toBeUndefined();

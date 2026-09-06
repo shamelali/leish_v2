@@ -47,11 +47,6 @@ function redactPii(value: unknown): unknown {
   return value;
 }
 
-/** PII-safe serialize hook for pino. */
-function piiRedactionHook(bindings: Record<string, unknown>) {
-  return redactPii(bindings) as Record<string, unknown>;
-}
-
 export function createForwardingSink(webhookUrl: string, fetchImpl: FetchLike): Writable {
   const buffer: string[] = [];
   let flushing = false;

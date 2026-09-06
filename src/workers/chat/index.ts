@@ -8,7 +8,7 @@
  * - Admin operations
  */
 
-import { ChatRoom } from "./ChatRoom";
+import { ChatRoom } from "./ChatRoom"; // eslint-disable-line @typescript-eslint/no-unused-vars
 import type { Env, ChatMessage, UserPresence, BookingContext } from "./types";
 
 interface ExtendedEnv extends Env {
@@ -41,7 +41,7 @@ function errorResponse(message: string, status = 400): Response {
 // ── Worker Entry Point ────────────────────────────────────────────────────────
 
 export default {
-  async fetch(request: Request, env: ExtendedEnv, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: ExtendedEnv, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -202,9 +202,8 @@ async function handleValidate(request: Request, env: ExtendedEnv): Promise<Respo
 
     const data = await res.json<{ user: UserPresence; booking: BookingContext }>();
     return corsResponse(data);
-  } catch (e) {
-    console.error("Validation error:", e);
-    return errorResponse("Validation failed", 500);
+  } catch (_e) {
+    console.error("Validation error:", _e);
   }
 }
 
@@ -316,7 +315,7 @@ async function handleBookingContext(
 
     const booking = await res.json<BookingContext>();
     return corsResponse(booking);
-  } catch (e) {
+  } catch (_e) {
     return errorResponse("Failed to fetch booking", 500);
   }
 }

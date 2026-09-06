@@ -42,8 +42,6 @@ export default function AdminChatPage() {
     return <div style={styles.loading}>Loading...</div>;
   }
 
-  const apiBase = ""; // Use Next.js API routes
-
   const handleMigrate = async () => {
     const ids = bookingIds
       .split(",")

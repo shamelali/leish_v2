@@ -83,19 +83,6 @@ describe("extractSchemaTables", () => {
 describe("detectSchemaDrift", () => {
   it("detects missing columns in SQLite schema", () => {
     const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const pgSchema = `
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        email TEXT NOT NULL,
-        new_col TEXT
-      );
-    `;
-    const sqliteSchema = `
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        email TEXT NOT NULL
-      );
-    `;
     // We can't easily test the internal function without exporting it
     // but we can test the logic indirectly
     expect(() => detectSchemaDrift()).not.toThrow();
@@ -276,7 +263,7 @@ describe("getDb and closeDb", () => {
   });
 
   it("closeDb resets the facade", async () => {
-    const db1 = getDb();
+    getDb();
     await closeDb();
     const db2 = getDb();
     // After closeDb, a new facade should be created

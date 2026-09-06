@@ -361,7 +361,7 @@ export class ChatRoom extends DurableObject<Env> {
 
   private async handleInternalMessage(request: Request): Promise<Response> {
     try {
-      const body = await request.json<{ bookingId: string; body: string; tempId: string }>();
+      const _body = await request.json<{ bookingId: string; body: string; tempId: string }>();
       // This would need auth validation - for now return not implemented
       return new Response(JSON.stringify({ error: "Not implemented" }), {
         status: 501,
@@ -493,9 +493,9 @@ export class ChatRoom extends DurableObject<Env> {
 
   async webSocketClose(
     ws: WebSocket,
-    code: number,
-    reason: string,
-    wasClean: boolean,
+    _code: number,
+    _reason: string,
+    _wasClean: boolean,
   ): Promise<void> {
     // Cleanup rate limiter
     this.rateLimiters.delete(ws);
@@ -508,7 +508,7 @@ export class ChatRoom extends DurableObject<Env> {
     }
 
     // Find and remove user from presence
-    for (const [userId, presence] of this.state.presence) {
+    for (const [userId, _presence] of this.state.presence) {
       // We need to track which ws belongs to which user
       // For simplicity, we'll use a custom property on the WebSocket
       if (socketIdentity(ws).userId === userId) {
@@ -553,7 +553,7 @@ export class ChatRoom extends DurableObject<Env> {
       return;
     }
 
-    const { user, booking } = auth;
+    const { user, _booking } = auth;
 
     // Store bookingId in DO state (first join sets it)
     if (!this.state.bookingId) {
@@ -574,7 +574,7 @@ export class ChatRoom extends DurableObject<Env> {
     tagSocket(ws, user.userId, bookingId);
 
     // Add to presence
-    const existingPresence = this.state.presence.get(user.userId);
+    const _existingPresence = this.state.presence.get(user.userId);
     const presence: UserPresence = {
       ...user,
       status: "online",
@@ -931,7 +931,7 @@ export class ChatRoom extends DurableObject<Env> {
     const now = Date.now();
     let changed = false;
 
-    for (const [userId, presence] of this.state.presence) {
+    for (const [_userId, presence] of this.state.presence) {
       const lastSeen = new Date(presence.lastSeen).getTime();
       if (now - lastSeen > this.config.presenceTimeoutMs) {
         if (presence.status !== "offline") {

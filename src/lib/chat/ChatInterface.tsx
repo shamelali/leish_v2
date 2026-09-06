@@ -177,16 +177,6 @@ function formatTime(dateString: string): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  const today = new Date();
-  if (date.toDateString() === today.toDateString()) return "Today";
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return date.toLocaleDateString([], { month: "short", day: "numeric" });
-}
-
 // ── Components ────────────────────────────────────────────────────────────────
 
 interface MessageProps {
@@ -354,10 +344,8 @@ export function ChatInterface({
     typingUsers,
     sendMessage,
     sendTyping,
-    markRead,
     loadMoreHistory,
     reconnect,
-    disconnect,
   } = useChat({
     bookingId,
     token,
@@ -420,8 +408,12 @@ export function ChatInterface({
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      e.currentTarget.form?.requestSubmit?.() ??
+      const form = e.currentTarget.form;
+      if (form?.requestSubmit) {
+        form.requestSubmit();
+      } else {
         e.currentTarget.form?.dispatchEvent(new Event("submit"));
+      }
     }
   }, []);
 

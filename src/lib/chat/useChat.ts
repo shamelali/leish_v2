@@ -14,7 +14,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type {
   ChatMessage,
-  ChatMessageInput,
   UserPresence,
   ClientToServerMessage,
   ServerToClientMessage,
@@ -109,13 +108,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectCountRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const messageQueueRef = useRef<
-    Array<{
-      msg: ClientToServerMessage;
-      resolve: (v: ChatMessage) => void;
-      reject: (e: Error) => void;
-    }>
-  >([]);
   const pendingMessagesRef = useRef<Map<string, ChatMessage>>(new Map()); // tempId -> optimistic message
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
