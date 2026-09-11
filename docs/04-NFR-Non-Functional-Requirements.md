@@ -127,14 +127,14 @@ _Measurement_: from Cloudflare/Vercel edge timing (`x-vercel-cache`, server-timi
 
 #### NFR-S-04 — Security Headers & Transport
 
-| Header                      | Value                                                                                    | Source                          |
-| --------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------- |
-| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` (prod)                                    | `next.config.ts`                |
-| `X-Frame-Options`           | `DENY`                                                                                   | `next.config.ts`                |
-| `X-Content-Type-Options`    | `nosniff`                                                                                | `next.config.ts`                |
-| `Referrer-Policy`           | `strict-origin-when-cross-origin`                                                        | `next.config.ts`                |
-| `Content-Security-Policy`   | Per-request nonce, no `unsafe-inline` for scripts; inline theme script uses nonce/hashed | `next.config.ts` + `layout.tsx` |
-| `Content-Type` charset      | `utf-8` always                                                                           | Next default                    |
+| Header                      | Value                                                                                 | Source                            |
+| --------------------------- | ------------------------------------------------------------------------------------- | --------------------------------- |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` (prod)                                 | `next.config.ts`                  |
+| `X-Frame-Options`           | `DENY`                                                                                | `next.config.ts`                  |
+| `X-Content-Type-Options`    | `nosniff`                                                                             | `next.config.ts`                  |
+| `Referrer-Policy`           | `strict-origin-when-cross-origin`                                                     | `next.config.ts`                  |
+| `Content-Security-Policy`   | Per-request nonce, no `unsafe-inline` for scripts; inline theme script uses the nonce | `src/proxy.ts` + `src/lib/csp.ts` |
+| `Content-Type` charset      | `utf-8` always                                                                        | Next default                      |
 
 #### NFR-S-05 — Rate Limiting & Bot Protection
 

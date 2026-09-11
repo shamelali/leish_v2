@@ -5,12 +5,16 @@ import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+import { CSP_NONCE_HEADER } from "@/lib/csp";
 
-/** CSP nonce set by middleware per-request; applied to script tags so script-src
- * can omit 'unsafe-inline'. Falls back to undefined in SSR edge cases. */
+/**
+ * CSP nonce minted per-request by `src/proxy.ts`; applied to script tags so
+ * script-src can omit 'unsafe-inline'. Falls back to undefined for routes the
+ * proxy matcher excludes and in SSR edge cases where `headers()` is unavailable.
+ */
 async function getCspNonce(): Promise<string | undefined> {
   try {
-    return (await headers()).get("x-nonce") ?? undefined;
+    return (await headers()).get(CSP_NONCE_HEADER) ?? undefined;
   } catch {
     return undefined;
   }

@@ -9,12 +9,11 @@ const securityHeaders = [
     value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
   },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
-  // Cloudflare Turnstile CSP — must allow challenges.cloudflare.com
-  {
-    key: "Content-Security-Policy",
-    value:
-      "default-src 'self'; script-src 'self' 'sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=' 'sha256-35cLDmLFwhkossgndXMP8iTa3kLiLccFvfwRJe6XWuM=' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src https://challenges.cloudflare.com; img-src data: https:; style-src 'self' 'unsafe-inline';",
-  },
+  // No Content-Security-Policy here on purpose. A static CSP cannot carry a
+  // per-request nonce, and shipping one alongside the nonce policy from
+  // `src/proxy.ts` emits two CSP headers — the browser enforces *both*, so the
+  // stricter nonce-less one wins and every script is blocked. The proxy is the
+  // single source of truth; see `src/lib/csp.ts`.
 ];
 
 const supabasePattern = {
