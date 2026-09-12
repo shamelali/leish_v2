@@ -165,6 +165,54 @@ have it — and keep the disclaimer, because it is the honest part.
    not built by Next), but it must be moved to the DI repo to reach
    dutaintegra.my.
 
+## Verified in this build
+
+- `python3 tools/check-pages.py` — tag balance, 565 EN/BM pairs with no
+  mismatches, every CSS class defined, every anchor and asset path resolving.
+- Interaction tests in jsdom (21 assertions, all passing): language toggle incl.
+  `<html lang>` and placeholders, pipeline tabs, BM/EN sample-email swap,
+  calculator maths, required-field blocking, the PDPA consent gate on the audit
+  form, and the mobile nav.
+- Not verified visually: headless Chromium cannot be downloaded in this sandbox,
+  so the layout has not been screenshot in a real browser.
+
+## Porting into `dutaintegraweb-main`
+
+The merged build is deliberately shaped to drop into the live site's conventions.
+When that repo is accessible, this is the work:
+
+1. **Assets — keep their real photography, drop my placeholders where a real
+   equivalent already exists in their repo:**
+
+   | This bundle                      | Their repo                          |
+   | -------------------------------- | ----------------------------------- |
+   | `assets/img/case-agmx.jpg`       | `assets/img/work-agmx.jpg`          |
+   | `assets/img/case-eastelpro.jpg`  | `assets/img/work-eastelpro.jpg`     |
+   | `assets/img/case-dutaconnect.jpg`| `assets/img/work-dutaconnect.jpg`   |
+   | `assets/img/case-leish.jpg`      | `assets/img/work-leish.jpg`         |
+   | *(service cards use inline SVG)* | `assets/img/svc-ai/it/cloud/security.jpg` |
+   | `assets/img/hero-signal.jpg`     | new file — no equivalent, add it    |
+
+2. **Pages.** This bundle is two files (`index.html`, `ai-outbound.html`); the live
+   site is `services.html`, `pricing.html`, `about.html`, `contact.html`,
+   `cases/*.html`, `free-audit`. Either adopt the bundle wholesale and redirect the
+   old URLs, or graft its sections into the existing pages. Do not silently replace
+   `cases/*.html` — those deep pages are better than anything in this bundle.
+
+3. **CSS.** `assets/css/site.css` is self-contained. If their stylesheet is global,
+   scope this one under a wrapper class, or merge only the `:root` tokens — that
+   block is the sole collision risk.
+
+4. **Keep their plumbing.** The WhatsApp deep links
+   (`wa.me/601154034051?text=…`), the `hello@dutaintegra.my` mailto, the `/ms/`
+   URL structure and the Cloudflare Turnstile widget on the forms. The forms here
+   have no captcha — reuse theirs.
+
+5. **`/ms/` mirrors.** Both pages already carry `hreflang` alternates pointing at
+   `/ms/`; the live site has real BM URLs for `/ms/`, `/ms/audit`, `/ms/free-audit`,
+   `/ms/pricing`, `/ms/contact`, `/ms/blog`. Port the BM strings into those rather
+   than relying on the client-side toggle.
+
 ## Next.js port (if you'd rather not keep it static)
 
 The live DI site is plain `.html`, so this build matches that. If you later move
