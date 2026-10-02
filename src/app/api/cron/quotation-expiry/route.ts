@@ -7,6 +7,7 @@ import { authorizeCron } from "@/server/cron-auth";
 import { logger } from "@/server/logger";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * GET/POST /api/cron/quotation-expiry
