@@ -292,7 +292,7 @@ function TypingIndicator({ typingUsers, currentUserId }: TypingIndicatorProps) {
           <span style={{ animation: "typing 1.4s infinite ease-in-out 0.4s" }}>●</span>
         </span>
       </span>
-      <style jsx>{`
+      <style>{`
         @keyframes typing {
           0%,
           80%,

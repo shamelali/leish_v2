@@ -30,6 +30,8 @@ const eslintConfig = defineConfig([
     ".claude/**",
     // Vendored third-party repository (Upstash redis-js reference copy):
     "redis-js-main/**",
+    // Stray legacy monorepo snapshot — not part of the app build:
+    "leish-monorepo/**",
   ]),
 ]);
 

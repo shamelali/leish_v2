@@ -22,6 +22,9 @@ data
 # upstream. These carry their own formatting configs.
 redis-js-main
 
+# Legacy monorepo snapshot — not part of the app build
+leish-monorepo
+
 # Agent skill packs (vendored docs, synced from upstream)
 .agents/skills
 
