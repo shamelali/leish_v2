@@ -102,7 +102,7 @@ moves execution to a different _billing account_ does not.
 | ------------------------------------------------------------------------------------ | ---------- | ------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **A. Move the repo to the `Duta-Integra` org**                                       | Low–medium | ✅                       | ✅                            | Org billing is separate from the personal account                                                                   |
 | **B. Fork the repo into the org / a second account**                                 | Low        | ✅ (in the fork)         | ❌ upstream PRs still blocked | Evidence lives in the fork's Actions tab                                                                            |
-| **C. Azure Pipelines**                                                               | Medium     | ❌ (new YAML)            | ✅                            | Free for public projects; first-class GitHub checks                                                                 |
+| **C. Azure Pipelines** — _config is committed_                                       | **Low**    | ❌ (new YAML)            | ✅                            | **Unlimited minutes + 10 parallel jobs free for public projects**; first-class GitHub checks; no card               |
 | **D. CircleCI**                                                                      | Medium     | ❌ (new YAML)            | ✅                            | 30k credits/mo (~3k–6k Linux min); GitHub app posts checks                                                          |
 | **E. Cirrus CI**                                                                     | Medium     | ❌ (`.cirrus.yml`)       | ✅                            | Closest Linux-container drop-in; Postgres service container                                                         |
 | **F. Local CI + `ci-report.sh`**                                                     | **None**   | ✅ (mirrored)            | ❌                            | Already wired; machine-generated evidence comment                                                                   |
@@ -148,33 +148,49 @@ repo's PRs. It appears in the fork's Actions tab; paste the run link on the
 upstream PR (or have the fork's workflow comment it back). Use this when you
 need a real runner now and cannot move the repo.
 
-### C–E. External hosted CI
+### C. Azure Pipelines — recommended when the repo stays where it is
 
-Any of these runs on a public repo without touching GitHub's billing, and all
-three post commit statuses back to GitHub PRs, which is the property local CI
-lacks. The gate list is identical — install, format, lint, typecheck, test,
-build — so a port is ~20 lines of YAML:
+`azure-pipelines.yml` is committed at the repo root and mirrors `ci.yml`
+gate-for-gate (verified: all nine commands match). It runs three stages —
+`verify`, `integration_pg`, `e2e` — on the same Node 22 / Ubuntu stack.
 
-```yaml
-# azure-pipelines.yml (Azure Pipelines — free for public projects)
-trigger: [main]
-pr: [main]
-pool: { vmImage: ubuntu-latest }
-steps:
-  - task: NodeTool@0
-    inputs: { versionSpec: "22.x" }
-  - script: corepack enable && pnpm install --frozen-lockfile
-  - script: pnpm run format:check
-  - script: pnpm run lint
-  - script: pnpm run typecheck
-  - script: pnpm run test:coverage
-  - script: pnpm run build
-    env: { SKIP_ENV_VALIDATION: "1" }
-```
+Why this one over Cirrus/CircleCI for this repo:
 
-Add a Postgres service container if you want `test:pg` covered too. Keep
-`scripts/ci-local.sh` and `ci.yml` in sync with whatever you port — three
-copies of the gate list drift fastest.
+- **Unlimited minutes and 10 parallel jobs for public repositories**, free, with
+  no payment method on file. The other hosted options cap you (CircleCI ~6,000
+  min/month, GitLab 400, Cirrus depends on your signed-up plan).
+- **Real pull-request checks** via the Azure Pipelines GitHub app — statuses
+  appear on the PR and can be made required in branch protection, restoring the
+  property that local CI cannot provide.
+- **Postgres and Playwright are covered**, so there is no "integration tests
+  only run locally" gap: the `integration_pg` stage starts `postgres:16-alpine`
+  and waits for `pg_isready`; the `e2e` stage installs Chromium with
+  `--with-deps`.
+
+Enable it (one-time, ~5 minutes, no credit card):
+
+1. Sign in at <https://dev.azure.com> with the GitHub account that owns the repo.
+2. Create an organisation and a project. The DevOps project may be private —
+   what matters for the free tier is that the **GitHub repository is public**.
+3. Pipelines → Create Pipeline → GitHub → `shamelali/leish_v2` →
+   "Existing Azure Pipelines YAML file" → branch `main`, path `/azure-pipelines.yml`
+   → Save. It runs on the next push/PR.
+4. Install the **Azure Pipelines** GitHub app for the repo (GitHub Marketplace →
+   Azure Pipelines → Free plan). Without this step no statuses appear on PRs.
+5. Once a run is green: repo → Settings → Branches → require the Azure check on
+   `main` in place of the `verify`/`integration-pg` entries that cannot pass
+   while Actions is locked.
+
+Honest caveats: it is a **third** copy of the gate list (`ci.yml`,
+`scripts/ci-local.sh`, `azure-pipelines.yml`) and they will drift if edited
+carelessly; and the free tier's Terms apply to public repos only — if the repo is
+ever made private, the 1,800 minutes/month private allowance kicks in.
+
+### D–E. Other hosted CI (Cirrus, CircleCI, GitLab mirror)
+
+All viable, all more work than C for this repo. GitLab can mirror a GitHub repo
+and post statuses back, but mirroring splits history and status across two hosts.
+Use these only if you already run one of them.
 
 ### F. Local CI, now with reviewable evidence
 
@@ -193,13 +209,21 @@ the author still controls the machine. Treat it as a smoke test with a receipt.
 
 ## Recommendation
 
-1. **Move to the `Duta-Integra` org (A)** if you want the problem gone properly.
-   It is the only option here that restores `ci.yml`, branch-protection checks
-   and the deploy workflow without maintaining a second CI system, and it is a
-   one-time cost rather than a permanent one.
-2. **Local CI + `ci-report.sh` (F) meanwhile** — already wired, no new accounts,
-   and it gives reviewers a receipt per commit.
-3. **Azure Pipelines or CircleCI (C/D)** only if moving the repo is not
-   acceptable and you need independent PR checks on _this_ repository.
-4. Do not spend time on faster-runner services (H) — they cannot start a job
-   while the account is locked.
+The decision reduces to one question: **is moving the repository acceptable?**
+
+**If yes → move it to the `Duta-Integra` organisation (A).** It is the only
+option that restores `ci.yml`, branch protection and `deploy.yml` exactly as
+written, with no second CI system to maintain. Billing follows the repository
+owner, and `Duta-Integra` is a separate GitHub organisation from the locked
+personal account.
+
+**If no → Azure Pipelines (C), using the committed `azure-pipelines.yml`.** Free
+and unlimited for public repos, real PR checks, Postgres and Playwright
+included. Roughly five minutes of clicking, then a branch-protection change.
+
+**Either way, keep F running now.** `scripts/ci-report.sh` costs nothing, needs
+no accounts, and gives reviewers a machine-generated receipt per commit while
+the decision is pending.
+
+Do not spend time on faster-runner services (H) — they cannot start a job while
+the account is locked because they replace the runner, not the scheduler.
