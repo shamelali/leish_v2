@@ -220,6 +220,24 @@ export async function listAllArtists(opts?: {
 }
 
 /**
+ * Total artist count, used for `X-Total-Count` / pagination metadata on list
+ * endpoints. Cheap (`COUNT(*)`, well under the 500-row listing cap) and never
+ * throws — returns 0 when the catalog is unavailable so callers can still
+ * answer with an empty page.
+ */
+export async function countArtists(): Promise<number> {
+  try {
+    await ensureCatalogSeeded();
+    const row = (await getDb().prepare("SELECT COUNT(*) AS c FROM artists").get()) as
+      { c: number } | undefined;
+    return Number(row?.c ?? 0);
+  } catch (err) {
+    console.error("[catalog] failed to count artists:", err instanceof Error ? err.message : err);
+    return 0;
+  }
+}
+
+/**
  * Filtered artist listing. SQL pre-filters the cheap indexed predicates
  * (state / area / budget); the pure `filterArtists` helper handles free-text
  * query and event-tag matching over the reduced set.

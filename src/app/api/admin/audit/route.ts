@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/server/db";
 import { requireAdmin } from "@/server/admin-auth";
 import { tryRoute } from "@/server/http";
+import { parsePagination } from "@/lib/pagination";
 
 export const GET = tryRoute(
   async function GET(request: Request) {
@@ -11,8 +12,10 @@ export const GET = tryRoute(
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action")?.trim() ?? "";
     const targetTable = searchParams.get("targetTable")?.trim() ?? "";
-    const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 50), 1), 200);
-    const offset = Math.max(Number(searchParams.get("offset") ?? 0), 0);
+    const { limit, offset } = parsePagination(searchParams, {
+      defaultLimit: 50,
+      maxLimit: 200,
+    });
 
     const db = getDb();
     const conditions: string[] = [];

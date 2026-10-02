@@ -21,8 +21,16 @@ const handler = tryRoute(
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const result = await runPayoutAutomation();
-    logger.info(result, "payout automation cron complete");
+    logger.info(
+      {
+        ...result,
+        durationMs: Date.now() - startedAt,
+        processedCount: result.settled + result.failed,
+      },
+      "payout automation cron complete",
+    );
     return NextResponse.json({ ok: true, ...result });
   },
   { route: "/api/cron/payout-automation" },

@@ -197,6 +197,51 @@ export async function notifySlackOverdueBalance(params: {
   });
 }
 
+/** Failed-email backlog above which the ops channel is warned (cron). */
+export const EMAIL_RETRY_BACKLOG_THRESHOLD = 100;
+
+/**
+ * Warn the ops channel that the failed-email retry backlog is growing.
+ * Returns `true` when a warning was posted (i.e. the threshold was exceeded),
+ * `false` when the backlog is healthy or Slack is unconfigured.
+ */
+export async function notifySlackEmailRetryBacklog(params: {
+  pending: number;
+  threshold?: number;
+}): Promise<boolean> {
+  const threshold = params.threshold ?? EMAIL_RETRY_BACKLOG_THRESHOLD;
+  if (params.pending <= threshold) return false;
+
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://leish.my"}/admin`;
+
+  return postToSlack({
+    blocks: [
+      {
+        type: "header",
+        text: { type: "plain_text", text: "⚠️ Email retry backlog", emoji: true },
+      },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Pending retries:*\n${params.pending}` },
+          { type: "mrkdwn", text: `*Alert threshold:*\n${threshold}` },
+        ],
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "View Admin", emoji: true },
+            url: dashboardUrl,
+          },
+        ],
+      },
+    ],
+    text: `⚠️ Email retry backlog: ${params.pending} pending (threshold ${threshold})`,
+  });
+}
+
 export async function notifySlackPayoutSummary(params: {
   settled: number;
   failed: number;

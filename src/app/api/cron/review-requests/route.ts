@@ -18,6 +18,7 @@ const handler = tryRoute(
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const result = await runReviewRequestSweep();
 
     logger.info(
@@ -25,6 +26,8 @@ const handler = tryRoute(
         requested: result.requested,
         skipped: result.skipped,
         errors: result.errors,
+        durationMs: Date.now() - startedAt,
+        processedCount: result.requested,
       },
       "review request sweep complete",
     );

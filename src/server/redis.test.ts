@@ -34,6 +34,8 @@ describe("server/redis cache helpers", () => {
   it("no-ops when Upstash env vars are not configured", async () => {
     vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
     vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REST_URL", "");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "");
     const { cacheGet, cacheSet, cacheDel, cacheDelPrefix, isRedisConfigured } =
       await import("./redis");
 
@@ -43,6 +45,18 @@ describe("server/redis cache helpers", () => {
     await cacheDel("k");
     await cacheDelPrefix("cat:");
     expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it("accepts the short UPSTASH_REST_* names as a fallback", async () => {
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REST_URL", "https://short.upstash.io");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "short-token");
+    const { isRedisConfigured, cacheGet } = await import("./redis");
+
+    expect(isRedisConfigured()).toBe(true);
+    mockGet.mockResolvedValueOnce(JSON.stringify({ ok: true }));
+    expect(await cacheGet<{ ok: boolean }>("k-short")).toEqual({ ok: true });
   });
 
   it("reads, writes, and deletes keys when configured", async () => {

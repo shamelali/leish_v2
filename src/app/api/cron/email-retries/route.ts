@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { authorizeCron } from "@/server/cron-auth";
-import { retryFailedEmails } from "@/server/email";
+import { countPendingEmailRetries, retryFailedEmails } from "@/server/email";
 import { tryRoute } from "@/server/http";
 import { logger } from "@/server/logger";
+import {
+  EMAIL_RETRY_BACKLOG_THRESHOLD,
+  notifySlackEmailRetryBacklog,
+} from "@/server/notifications";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -17,9 +21,31 @@ const handler = tryRoute(
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const result = await retryFailedEmails();
-    logger.info(result, "email retry cron completed");
-    return NextResponse.json(result);
+    const pending = await countPendingEmailRetries();
+    const backlog = pending > EMAIL_RETRY_BACKLOG_THRESHOLD;
+
+    logger.info(
+      {
+        ...result,
+        pending,
+        backlog,
+        durationMs: Date.now() - startedAt,
+        processedCount: result.retried,
+      },
+      "email retry cron completed",
+    );
+
+    if (backlog) {
+      logger.warn(
+        { pending, threshold: EMAIL_RETRY_BACKLOG_THRESHOLD },
+        "email retry backlog exceeds threshold — alerting Slack",
+      );
+      await notifySlackEmailRetryBacklog({ pending });
+    }
+
+    return NextResponse.json({ ...result, pending, backlog });
   },
   { route: "/api/cron/email-retries" },
 );

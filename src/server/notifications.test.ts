@@ -167,6 +167,37 @@ describe("server/notifications — notifySlackBookingStatus", () => {
   });
 });
 
+describe("server/notifications — notifySlackEmailRetryBacklog", () => {
+  it("does not post at or below the threshold", async () => {
+    const n = await loadWithChannel("C01ABC123");
+    await expect(n.notifySlackEmailRetryBacklog({ pending: 100 })).resolves.toBe(false);
+    await expect(n.notifySlackEmailRetryBacklog({ pending: 3 })).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("posts a warning above the threshold", async () => {
+    const n = await loadWithChannel("C01ABC123");
+    await expect(n.notifySlackEmailRetryBacklog({ pending: 150 })).resolves.toBe(true);
+
+    const body = lastPostBody();
+    expect(body.text).toContain("150");
+    expect(JSON.stringify(body)).toContain("Email retry backlog");
+    expect(JSON.stringify(body)).toContain("*Alert threshold:*");
+  });
+
+  it("honours a custom threshold", async () => {
+    const n = await loadWithChannel("C01ABC123");
+    await expect(n.notifySlackEmailRetryBacklog({ pending: 5, threshold: 3 })).resolves.toBe(true);
+    expect(lastPostBody().text).toContain("threshold 3");
+  });
+
+  it("returns false when Slack is unconfigured", async () => {
+    const n = await loadWithChannel(undefined);
+    await expect(n.notifySlackEmailRetryBacklog({ pending: 500 })).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("server/notifications — notifySlackPayment", () => {
   it("labels a deposit and converts the amount", async () => {
     const n = await loadWithChannel("C01ABC123");

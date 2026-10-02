@@ -3,10 +3,11 @@
  *
  * - `createMemoryStore()` — in-process sliding-window buckets. Fine for
  *   single-instance deploys and tests.
- * - `createUpstashStore()` — Redis-backed fixed-window counters via the
+ * - `createUpstashStore()` — Redis-backed sliding-window counters via the
  *   Upstash REST API (no SDK needed). Implemented and tested, but NOT wired
  *   into the default limiter: setting UPSTASH_REST_URL / UPSTASH_REST_TOKEN
- *   has no effect. To use it you must construct it explicitly.
+ *   (or UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN) has no effect.
+ *   To use it you must construct it explicitly.
  * - `createRateLimiter(store)` — returns a `(key, limit, windowMs) => Promise<result>`
  *   function. `rateLimit` is the default instance used by API routes.
  *
@@ -27,6 +28,8 @@
  * default to `createUpstashStore()` (or any shared store) — the interface is
  * already the right shape and requires no changes at the call sites.
  */
+
+import { resolveUpstashCredentials } from "./upstash";
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -83,8 +86,9 @@ export function createUpstashStore(opts?: {
   token?: string;
   fetchImpl?: typeof fetch;
 }): RateLimitStore | null {
-  const url = opts?.url ?? process.env.UPSTASH_REST_URL;
-  const token = opts?.token ?? process.env.UPSTASH_REST_TOKEN;
+  const credentials = resolveUpstashCredentials();
+  const url = opts?.url ?? credentials?.url;
+  const token = opts?.token ?? credentials?.token;
   if (!url || !token) return null;
   const doFetch = opts?.fetchImpl ?? fetch;
   const baseUrl = url.replace(/\/$/, "");

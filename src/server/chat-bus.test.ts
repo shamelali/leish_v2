@@ -67,7 +67,28 @@ describe("chat bus (in-memory fallback)", () => {
 
 describe("chat bus (upstash backend)", () => {
   it("returns null without configuration", () => {
-    expect(createUpstashBus({ url: undefined, token: undefined })).toBeNull();
+    vi.stubEnv("UPSTASH_REST_URL", "");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    expect(createUpstashBus()).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts either Upstash env-var naming", () => {
+    vi.stubEnv("UPSTASH_REST_URL", "");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://native.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "native-token");
+    expect(createUpstashBus()).not.toBeNull();
+    vi.unstubAllEnvs();
+
+    vi.stubEnv("UPSTASH_REST_URL", "https://short.upstash.io");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "short-token");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    expect(createUpstashBus()).not.toBeNull();
+    vi.unstubAllEnvs();
   });
 
   it("publishes to the upstash publish endpoint", () => {

@@ -262,6 +262,25 @@ async function main(): Promise<void> {
       );
       process.exitCode = 1;
     }
+
+    // Verify the performance indexes added to PG_SCHEMA are live (the schema
+    // statement above creates them idempotently — this is the post-check).
+    const EXPECTED_INDEXES = ["idx_artists_price", "idx_reviews_booking_id"];
+    const { rows: indexRows } = await pool.query(
+      `SELECT indexname FROM pg_indexes
+       WHERE schemaname = current_schema() AND indexname = ANY($1::text[])`,
+      [EXPECTED_INDEXES],
+    );
+    const indexes = indexRows.map((r: { indexname: string }) => r.indexname);
+    console.log(`[migrate] indexes present: ${indexes.join(", ") || "(none)"}`);
+    for (const expected of EXPECTED_INDEXES) {
+      if (!indexes.includes(expected)) {
+        console.error(
+          `[migrate] WARNING: expected index ${expected} missing — investigate before deploying.`,
+        );
+        process.exitCode = 1;
+      }
+    }
   } finally {
     await pool.end();
   }

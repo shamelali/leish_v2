@@ -50,15 +50,28 @@ describe("upstash rate limit store", () => {
   }
 
   it("returns null without configuration", () => {
-    const prevUrl = process.env.UPSTASH_REST_URL;
-    const prevToken = process.env.UPSTASH_REST_TOKEN;
-    process.env.UPSTASH_REST_URL = "";
-    process.env.UPSTASH_REST_TOKEN = "";
+    vi.stubEnv("UPSTASH_REST_URL", "");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
     expect(createUpstashStore()).toBeNull();
-    if (prevUrl !== undefined) process.env.UPSTASH_REST_URL = prevUrl;
-    else delete process.env.UPSTASH_REST_URL;
-    if (prevToken !== undefined) process.env.UPSTASH_REST_TOKEN = prevToken;
-    else delete process.env.UPSTASH_REST_TOKEN;
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts either Upstash env-var naming", () => {
+    vi.stubEnv("UPSTASH_REST_URL", "");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://native.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "native-token");
+    expect(createUpstashStore()).not.toBeNull();
+    vi.unstubAllEnvs();
+
+    vi.stubEnv("UPSTASH_REST_URL", "https://short.upstash.io");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "short-token");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    expect(createUpstashStore()).not.toBeNull();
+    vi.unstubAllEnvs();
   });
 
   it("allows within the limit and counts entries", async () => {
