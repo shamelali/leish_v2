@@ -3,6 +3,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { requireAdmin, logAdminAction, isLastAdmin, atomicAdminGuard } from "./admin-auth";
+import { logger } from "./logger";
+
+vi.mock("./notifications", () => ({
+  notifySlackAuditFailure: vi.fn().mockResolvedValue(false),
+}));
+import { notifySlackAuditFailure } from "./notifications";
 import { createSessionToken } from "./session";
 import { getDb } from "./db";
 
@@ -162,6 +168,40 @@ describe("logAdminAction", () => {
     }
   });
 
+  it("emits a dead-letter record when the audit write fails (fail-open path)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const logError = vi.spyOn(logger, "error").mockImplementation(() => logger);
+
+    getDb().exec("DROP TABLE admin_audit_log");
+    try {
+      await expect(
+        logAdminAction("audit-writer", "dead_letter_action", "users", "u-1", { reason: "test" }),
+      ).resolves.toBeUndefined();
+
+      const deadLetter = logError.mock.calls
+        .map(([fields]) => fields as Record<string, unknown>)
+        .find((fields) => fields?.auditDeadLetter === true);
+      expect(deadLetter).toBeDefined();
+      expect(deadLetter).toMatchObject({
+        action: "dead_letter_action",
+        targetTable: "users",
+        targetId: "u-1",
+        adminUserId: "audit-writer",
+      });
+    } finally {
+      // Recreate the table so later tests/files are unaffected.
+      getDb().exec(`CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id TEXT PRIMARY KEY,
+        admin_user_id TEXT NOT NULL REFERENCES users(id),
+        action TEXT NOT NULL,
+        target_table TEXT NOT NULL,
+        target_id TEXT,
+        details TEXT,
+        created_at TEXT NOT NULL
+      )`);
+    }
+  });
+
   it("throws when requireAudit is true and audit write fails", async () => {
     getDb().exec("DROP TABLE admin_audit_log");
     try {
@@ -175,6 +215,16 @@ describe("logAdminAction", () => {
           { requireAudit: true },
         ),
       ).rejects.toThrow(/critical: audit write failed/);
+
+      // The blocked mutation is still surfaced to the ops channel.
+      expect(notifySlackAuditFailure).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adminUserId: "audit-writer",
+          action: "critical_action",
+          targetTable: "users",
+          targetId: "id",
+        }),
+      );
     } finally {
       getDb().exec(`CREATE TABLE IF NOT EXISTS admin_audit_log (
         id TEXT PRIMARY KEY,

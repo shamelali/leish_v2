@@ -22,9 +22,15 @@ const handler = tryRoute(
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const result = await runQuotationRecoverySweep();
     logger.info(
-      { route: "/api/cron/quotation-recovery", ...result },
+      {
+        route: "/api/cron/quotation-recovery",
+        ...result,
+        durationMs: Date.now() - startedAt,
+        processedCount: result.recovered + result.released,
+      },
       "quotation recovery sweep complete",
     );
     return NextResponse.json(result);

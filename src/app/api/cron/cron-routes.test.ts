@@ -19,12 +19,15 @@ vi.mock("@/server/booking-transitions", () => ({
   }),
 }));
 
+const countPendingEmailRetries = vi.fn().mockResolvedValue(0);
+
 vi.mock("@/server/email", () => ({
   retryFailedEmails: vi.fn().mockResolvedValue({
     retried: 1,
     succeeded: 1,
     failed: 0,
   }),
+  countPendingEmailRetries: () => countPendingEmailRetries(),
 }));
 
 vi.mock("@/server/payout-automation", () => ({
@@ -83,6 +86,15 @@ vi.mock("@/server/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+const notifySlackEmailRetryBacklog = vi.fn().mockResolvedValue(true);
+
+vi.mock("@/server/notifications", () => ({
+  EMAIL_RETRY_BACKLOG_THRESHOLD: 100,
+  notifySlackEmailRetryBacklog: (params: { pending: number }) =>
+    notifySlackEmailRetryBacklog(params),
+}));
+
+import { logger } from "@/server/logger";
 import * as balanceReminders from "./balance-reminders/route";
 import * as bookingTransitions from "./booking-transitions/route";
 import * as emailRetries from "./email-retries/route";
@@ -106,6 +118,10 @@ const CRON_ROUTES = [
 describe("all cron routes enforce fail-closed CRON_SECRET and maxDuration=60", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    countPendingEmailRetries.mockResolvedValue(0);
+    notifySlackEmailRetryBacklog.mockClear();
+    vi.mocked(logger.info).mockClear();
+    vi.mocked(logger.warn).mockClear();
   });
 
   it.each(CRON_ROUTES)("$name exports maxDuration=60 and dynamic=force-dynamic", ({ mod }) => {
@@ -159,4 +175,68 @@ describe("all cron routes enforce fail-closed CRON_SECRET and maxDuration=60", (
       expect(res.status).toBe(200);
     },
   );
+
+  it.each(CRON_ROUTES)(
+    "$name completion log carries durationMs and processedCount",
+    async ({ name, mod }) => {
+      vi.stubEnv("CRON_SECRET", "top-secret");
+
+      await mod.GET(
+        new Request(`https://leish.my/api/cron/${name}`, {
+          headers: { authorization: "Bearer top-secret" },
+        }),
+      );
+
+      const completion = vi
+        .mocked(logger.info)
+        .mock.calls.map(([fields]) => fields as Record<string, unknown>)
+        .find(
+          (fields) =>
+            typeof fields?.durationMs === "number" && typeof fields?.processedCount === "number",
+        );
+
+      expect(completion).toBeDefined();
+      expect(completion!.durationMs as number).toBeGreaterThanOrEqual(0);
+      expect(completion!.processedCount as number).toBeGreaterThanOrEqual(0);
+    },
+  );
+
+  it("email-retries warns Slack when the backlog exceeds 100", async () => {
+    vi.stubEnv("CRON_SECRET", "top-secret");
+    countPendingEmailRetries.mockResolvedValue(150);
+
+    const res = await emailRetries.GET(
+      new Request("https://leish.my/api/cron/email-retries", {
+        headers: { authorization: "Bearer top-secret" },
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { pending: number; backlog: boolean };
+    expect(body.pending).toBe(150);
+    expect(body.backlog).toBe(true);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ pending: 150, threshold: 100 }),
+      expect.stringContaining("backlog"),
+    );
+    expect(notifySlackEmailRetryBacklog).toHaveBeenCalledWith({ pending: 150 });
+  });
+
+  it("email-retries stays quiet at or below the backlog threshold", async () => {
+    vi.stubEnv("CRON_SECRET", "top-secret");
+    countPendingEmailRetries.mockResolvedValue(100);
+
+    const res = await emailRetries.GET(
+      new Request("https://leish.my/api/cron/email-retries", {
+        headers: { authorization: "Bearer top-secret" },
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { pending: number; backlog: boolean };
+    expect(body.pending).toBe(100);
+    expect(body.backlog).toBe(false);
+    expect(notifySlackEmailRetryBacklog).not.toHaveBeenCalled();
+  });
 });

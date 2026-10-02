@@ -23,6 +23,7 @@ const handler = tryRoute(
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const expired = await findExpiredQuotations();
     let marked = 0;
 
@@ -43,7 +44,15 @@ const handler = tryRoute(
       }
     }
 
-    logger.info({ found: expired.length, marked }, "quotation expiry sweep complete");
+    logger.info(
+      {
+        found: expired.length,
+        marked,
+        durationMs: Date.now() - startedAt,
+        processedCount: marked,
+      },
+      "quotation expiry sweep complete",
+    );
     return NextResponse.json({ found: expired.length, expired: marked });
   },
   { route: "/api/cron/quotation-expiry" },

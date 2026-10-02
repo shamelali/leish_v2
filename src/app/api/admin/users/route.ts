@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { getDb, bind, toPublicUser, type UserRow } from "@/server/db";
 import { requireAdmin, logAdminAction } from "@/server/admin-auth";
 import { statefulRoute, tryRoute, readJson, jsonError } from "@/server/http";
+import { parsePagination } from "@/lib/pagination";
 import { hashPassword } from "@/server/password";
 
 export const GET = tryRoute(
@@ -13,8 +14,10 @@ export const GET = tryRoute(
     const url = new URL(request.url);
     const search = url.searchParams.get("search")?.trim() ?? "";
     const role = url.searchParams.get("role")?.trim() ?? "";
-    const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? "50"), 1), 200);
-    const offset = Math.max(Number(url.searchParams.get("offset") ?? "0"), 0);
+    const { limit, offset } = parsePagination(url.searchParams, {
+      defaultLimit: 50,
+      maxLimit: 200,
+    });
 
     const db = getDb();
     const conditions: string[] = [];

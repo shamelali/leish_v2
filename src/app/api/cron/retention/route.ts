@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authorizeCron } from "@/server/cron-auth";
+import { logger } from "@/server/logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -9,10 +10,24 @@ export const maxDuration = 60;
  * Placeholder retention sweep. Vercel Cron (see vercel.json) invokes this
  * daily with `Authorization: Bearer <CRON_SECRET>`. Heavy PII purging is
  * performed out-of-band by scripts/retain-purge.mjs against PostgreSQL.
+ *
+ * Logs the same `durationMs`/`processedCount` shape as the other cron routes
+ * so a single dashboard/alerts rule covers every sweep.
  */
-export async function GET(req: Request) {
-  const unauthorized = authorizeCron(req);
+async function run(request: Request) {
+  const unauthorized = authorizeCron(request);
   if (unauthorized) return unauthorized;
+
+  const startedAt = Date.now();
+
+  logger.info(
+    {
+      status: "ok",
+      durationMs: Date.now() - startedAt,
+      processedCount: 0,
+    },
+    "retention sweep complete",
+  );
 
   return NextResponse.json({
     status: "ok",
@@ -22,4 +37,5 @@ export async function GET(req: Request) {
   });
 }
 
-export const POST = GET;
+export const GET = run;
+export const POST = run;

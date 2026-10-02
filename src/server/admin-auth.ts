@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getDb, type UserRow } from "@/server/db";
 import { verifySessionToken } from "@/server/session";
 import { getClientIp, rateLimit } from "@/server/ratelimit";
+import { logger } from "./logger";
+import { reportError } from "./errors";
+import { notifySlackAuditFailure } from "./notifications";
 
 /**
  * Require a valid admin session. Returns the admin user or a JSON error response.
@@ -138,9 +141,66 @@ export async function atomicAdminGuard(
 }
 
 /**
+ * Emit an audit dead-letter record when the `admin_audit_log` write fails.
+ *
+ * A dead-letter *table* would live in the same database that just failed, so
+ * the record goes to the out-of-band sinks instead: the structured log stream
+ * (pino → `LOG_WEBHOOK_URL`), the error sink (`SENTRY_DSN` /
+ * `ERROR_WEBHOOK_URL`), and the Slack ops channel. Each sink is best-effort —
+ * a sink failure must never replace the original audit error.
+ */
+async function emitAuditDeadLetter(params: {
+  adminUserId: string;
+  action: string;
+  targetTable: string;
+  targetId: string | null;
+  details: Record<string, unknown>;
+  error: unknown;
+}): Promise<void> {
+  const errorMessage = params.error instanceof Error ? params.error.message : String(params.error);
+
+  logger.error(
+    {
+      auditDeadLetter: true,
+      adminUserId: params.adminUserId,
+      action: params.action,
+      targetTable: params.targetTable,
+      targetId: params.targetId,
+      details: params.details,
+      err: errorMessage,
+    },
+    "admin audit write failed — dead-letter emitted for reconciliation",
+  );
+
+  await Promise.allSettled([
+    reportError(params.error, {
+      route: "admin-audit",
+      userId: params.adminUserId,
+      metadata: {
+        auditDeadLetter: true,
+        action: params.action,
+        targetTable: params.targetTable,
+        targetId: params.targetId,
+        details: params.details,
+      },
+    }),
+    notifySlackAuditFailure({
+      adminUserId: params.adminUserId,
+      action: params.action,
+      targetTable: params.targetTable,
+      targetId: params.targetId,
+      error: errorMessage,
+    }),
+  ]);
+}
+
+/**
  * Log an admin action to the audit trail.
  * When `requireAudit` is true (for sensitive actions like demotions/deletions),
  * the function throws on failure to prevent unrecorded mutations.
+ *
+ * On failure the entry is emitted as a dead-letter record (log + error sink +
+ * Slack) so operators can reconcile even though the row was never written.
  */
 export async function logAdminAction(
   adminUserId: string,
@@ -169,6 +229,15 @@ export async function logAdminAction(
       });
   } catch (err) {
     console.error("[admin-audit] failed to write audit log:", err);
+    await emitAuditDeadLetter({
+      adminUserId,
+      action,
+      targetTable,
+      targetId,
+      details,
+      error: err,
+    });
+
     // For sensitive actions, block the request if audit write fails.
     if (options?.requireAudit) {
       throw new Error(

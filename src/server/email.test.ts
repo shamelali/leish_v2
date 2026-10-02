@@ -3,7 +3,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
-import { activeEmailProvider, isEmailEnabled, retryFailedEmails, sendEmail } from "./email";
+import {
+  activeEmailProvider,
+  countPendingEmailRetries,
+  isEmailEnabled,
+  retryFailedEmails,
+  sendEmail,
+} from "./email";
 
 const OUTBOX =
   "INSERT INTO email_outbox (id, to_email, subject, text, html, created_at) VALUES (?, ?, ?, ?, ?, ?)";
@@ -312,6 +318,25 @@ describe("email service", () => {
       } finally {
         globalThis.fetch = originalFetch;
       }
+    });
+
+    it("counts only retryable rows in the backlog gauge", async () => {
+      const past = new Date(Date.now() - 60_000).toISOString();
+      const now = new Date().toISOString();
+      await getDb()
+        .prepare(
+          `INSERT INTO email_retries (id, to_email, subject, text, html, attempts, max_attempts, next_retry, last_error, created_at)
+           VALUES (?, 'a@x.y', 'Retryable A', 't', NULL, 0, 3, ?, '', ?),
+                  (?, 'b@x.y', 'Retryable B', 't', NULL, 2, 3, ?, '', ?),
+                  (?, 'c@x.y', 'Exhausted', 't', NULL, 3, 3, ?, '', ?)`,
+        )
+        .run(randomUUID(), past, now, randomUUID(), past, now, randomUUID(), past, now);
+
+      expect(await countPendingEmailRetries()).toBe(2);
+    });
+
+    it("returns zero for an empty backlog", async () => {
+      expect(await countPendingEmailRetries()).toBe(0);
     });
 
     it("ignores rows not yet due or already exhausted", async () => {

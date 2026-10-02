@@ -180,31 +180,33 @@ These are separate from `DATABASE_URL`. The booking loop uses the db-facade
 
 ## 5. Tier 4 — Do not set (inactive or unused)
 
+> **Correction (2026-10-02):** the Upstash rows below are obsolete. Since PR #23
+> the default limiter wires `createUpstashStore()` automatically whenever either
+> env pair is set (see `src/server/ratelimit.ts`, `src/server/upstash.ts`), and
+> `redis.ts` / `chat-bus.ts` accept both pairs too. Set **one** pair in Vercel —
+> recommended in production so rate limits are global across serverless
+> instances rather than per-instance.
+
 Setting these achieves nothing today and creates false confidence.
 
-| Variable                                                                     | Status                                                                                                                                                                                                     |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `UPSTASH_REST_URL` / `_TOKEN`                                                | **Inactive.** `ratelimit.ts` hardcodes the in-memory store: _"Default limiter: ALWAYS memory (Upstash disabled for this deployment)."_ The Upstash store exists but is never wired to the default limiter. |
-| `UPSTASH_REDIS_REST_URL` / `_TOKEN`                                          | A **second, different** name pair read by `redis.ts`. Two schemes coexist; neither is on the live rate-limit path.                                                                                         |
-| `WEBHOOK_SECRET`, `STRIPE_WEBHOOK_SECRET`                                    | Only feed `areWebhooksConfigured()`, which nothing calls. Stripe is not a payment path here. Candidates for deletion.                                                                                      |
-| `R2_*` (5 vars)                                                              | Only `scripts/migrate-to-r2.ts`, a one-off. Not used at runtime.                                                                                                                                           |
-| `SLACK_CHANNEL_ID`, `CONNECT_SLACK_CONNECTOR`                                | Slack notifications require a Vercel Connect connector. No-op without one.                                                                                                                                 |
-| `NEXT_PUBLIC_CHAT_WS_URL`, `CHAT_NEW_SYSTEM_ENABLED`, `CHAT_ROLLOUT_PERCENT` | Cloudflare Worker chat. Only if the Worker is deployed — separate from the Vercel app.                                                                                                                     |
-| `POSTGRES_URL`                                                               | Alias read only by `scripts/retain-purge.mjs`; falls back to `DATABASE_URL`.                                                                                                                               |
-| `NEON_AUTH_*`                                                                | Placeholders in `deploy-env.md`. Neon Auth is **gone** per the handover. Do not carry them over.                                                                                                           |
-| `BILLPLZ_X_SIGNATURE_KEY`                                                    | **Not read by any code.** See §6.1.                                                                                                                                                                        |
+| Variable                                                                     | Status                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UPSTASH_REST_URL` / `_TOKEN`                                                | **Active (since PR #23).** Short-name pair; accepted by `ratelimit.ts`, `redis.ts`, and `chat-bus.ts` via `resolveUpstashCredentials()`. Set either this pair or the native one below — not both. |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN`                                          | **Active (since PR #23).** Native Upstash pair; takes precedence when both are present. Powers catalog caching, distributed rate limits, and chat pub/sub.                                        |
+| `WEBHOOK_SECRET`, `STRIPE_WEBHOOK_SECRET`                                    | Only feed `areWebhooksConfigured()`, which nothing calls. Stripe is not a payment path here. Candidates for deletion.                                                                             |
+| `R2_*` (5 vars)                                                              | Only `scripts/migrate-to-r2.ts`, a one-off. Not used at runtime.                                                                                                                                  |
+| `SLACK_CHANNEL_ID`, `CONNECT_SLACK_CONNECTOR`                                | Slack notifications require a Vercel Connect connector. No-op without one.                                                                                                                        |
+| `NEXT_PUBLIC_CHAT_WS_URL`, `CHAT_NEW_SYSTEM_ENABLED`, `CHAT_ROLLOUT_PERCENT` | Cloudflare Worker chat. Only if the Worker is deployed — separate from the Vercel app.                                                                                                            |
+| `POSTGRES_URL`                                                               | Alias read only by `scripts/retain-purge.mjs`; falls back to `DATABASE_URL`.                                                                                                                      |
+| `NEON_AUTH_*`                                                                | Placeholders in `deploy-env.md`. Neon Auth is **gone** per the handover. Do not carry them over.                                                                                                  |
+| `BILLPLZ_X_SIGNATURE_KEY`                                                    | **Not read by any code.** See §6.1.                                                                                                                                                               |
 
-> **Rate limiting is in-memory in production.** On multi-instance serverless each
-> instance keeps its own counters, so effective limits are multiplied by the
-> instance count, and counters reset whenever an instance is recycled. A known,
-> accepted limitation — but know it before launch.
->
-> Accepted because the limiter blunts casual abuse and retry storms; it is not a
-> security control, and nothing enforcing authorization or money depends on it.
-> Setting `UPSTASH_REST_*` will **not** fix this — the default limiter ignores
-> those variables (see §5). The fix is a one-line change in
-> `src/server/ratelimit.ts` to use `createUpstashStore()`, which is already
-> implemented and tested. Escalate to that if you see credential-stuffing on
+> **Rate limiting is distributed when Upstash is configured.** The default
+> limiter uses the Upstash store whenever either env pair is set (PR #23), so
+> counters are shared across serverless instances. Without Upstash it degrades
+> to per-instance in-memory counters (multiplied limits, reset on recycle).
+> Upstash errors fall back to memory for a 30s cooldown instead of failing
+> requests. Configure Upstash before launch and watch for credential-stuffing on
 > `/api/auth/login` or repeated bill creation on `/api/bookings/[id]/pay-fee`.
 
 ---

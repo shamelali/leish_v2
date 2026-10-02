@@ -93,25 +93,175 @@ smoke test, not a merge gate, and re-run CI once the lock clears.
 
 ## If the lock cannot be cleared
 
-Free options that work on public repos, in order of how well they fit here:
+The lock is **account-level**, so it follows `shamelali` (the user account) rather
+than this repository. That single fact drives every option below: anything that
+keeps the repo under the locked account inherits the lock, and anything that
+moves execution to a different _billing account_ does not.
 
-**Cirrus CI** — free for public repos, runs Linux containers, config is a
-single `.cirrus.yml`. The closest drop-in: it can run the same pnpm commands
-and provides real PR status checks, including a Postgres service container for
-`test:pg`.
+| Option                                                                               | Effort     | Restores `ci.yml` as-is? | Posts PR checks on this repo? | Notes                                                                                                               |
+| ------------------------------------------------------------------------------------ | ---------- | ------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **A. Move the repo to the `Duta-Integra` org**                                       | Low–medium | ✅                       | ✅                            | Org billing is separate from the personal account                                                                   |
+| **B. Fork the repo into the org / a second account**                                 | Low        | ✅ (in the fork)         | ❌ upstream PRs still blocked | Evidence lives in the fork's Actions tab                                                                            |
+| **C. Azure Pipelines** — _config is committed_                                       | **Low**    | ❌ (new YAML)            | ✅                            | **Unlimited minutes + 10 parallel jobs free for public projects**; first-class GitHub checks; no card               |
+| **D. CircleCI**                                                                      | Medium     | ❌ (new YAML)            | ✅                            | 30k credits/mo (~3k–6k Linux min); GitHub app posts checks                                                          |
+| **E. Cirrus CI**                                                                     | Medium     | ❌ (`.cirrus.yml`)       | ✅                            | Closest Linux-container drop-in; Postgres service container                                                         |
+| **F. Local CI + `ci-report.sh`**                                                     | **None**   | ✅ (mirrored)            | ❌                            | Already wired; machine-generated evidence comment                                                                   |
+| **G. Vercel build**                                                                  | None       | —                        | ❌                            | Build coverage only; not lint/typecheck/test                                                                        |
+| **H. Self-hosted or "faster" runners** (Blacksmith, Depot, RunsOn, Tenki, Namespace) | —          | —                        | —                             | ❌ **Does not work** — they replace the runner, not the scheduler; the job never starts while the account is locked |
+| **I. Jenkins / Drone / Woodpecker on a VPS**                                         | High       | ❌                       | ✅ (with webhooks)            | You now operate a CI server                                                                                         |
 
-**Woodpecker or Drone on a small VPS** — full control, no vendor quota, but you
-are now operating a CI server. Only sensible if you already have a box.
+### A. Move the repository to the `Duta-Integra` organization
 
-**Vercel's own build** — you are already deploying there, and a failed build
-blocks the deploy. This gives you `build` coverage for free but **not** lint,
-typecheck, tests or e2e, so it is a backstop rather than CI. Worth knowing it
-exists; not worth calling it a solution.
+The cleanest real fix that keeps GitHub Actions. Billing is attached to the
+**account that owns the repository**, and `Duta-Integra` is a separate GitHub
+organisation with its own billing settings — the personal lock should not follow
+the repo. Public repositories get unlimited Actions minutes, so the org needs no
+payment method.
 
-**GitLab CI via a mirror** — 400 free minutes/month, genuinely capable, but
-mirroring a GitHub repo to run CI elsewhere splits your history and status
-checks across two hosts. High friction for a temporary problem.
+**A user account performs the transfer; CI and automation cannot.** The endpoint
+requires `Administration: write` on the repository. A GitHub App installation
+token (what this workspace uses) reports `admin=true` on the repo and still
+gets:
 
-I would not migrate for this. The lock is very likely a five-minute billing
-fix, and every option above costs more than that to set up and keeps costing
-attention afterwards.
+```
+HTTP 403  X-Accepted-Github-Permissions: administration=write
+{"message":"Resource not accessible by integration"}
+```
+
+So run it from a session logged in as `shamelali` — the browser is the
+reliable route (**Settings → General → Danger Zone → Transfer ownership**),
+or the CLI:
+
+```bash
+gh api -X POST repos/shamelali/leish_v2/transfer -f new_owner=Duta-Integra
+```
+
+The move is immediate: a transfer to an organisation you own needs no
+acceptance step, so a wrong target is not caught by a prompt.
+
+Prepare and verify with the checked-in script — it records the commit
+beforehand and tests the consequences afterwards:
+
+```bash
+./scripts/post-transfer-check.sh --preflight          # rights, org, name, SHA recorded
+./scripts/post-transfer-check.sh --expect-sha <sha>   # post-transfer verification
+```
+
+What it checks afterwards:
+
+- the old URL 301s to the new path and `git ls-remote` returns the same SHA
+  from both;
+- PR #23 and its numbering survived;
+- workflows are present and Actions is enabled;
+- **the decisive test** — every recent run's jobs report a non-zero step count.
+  Zero steps is the fingerprint of the billing lock, so a transfer that failed
+  to clear billing is caught here rather than assumed fixed;
+- branch protection exists and still requires `verify`, `integration-pg`,
+  `e2e` (GitHub can drop rules the new owner cannot support).
+
+Expect to redo by hand: re-point the Vercel Git connection (Vercel matches on
+`owner/repo`), re-install the GitHub Apps (CodeRabbit, Arena), re-check secrets
+(values are never readable), confirm the org allows members to create
+repositories, and update local remotes
+(`git remote set-url origin https://github.com/Duta-Integra/leish_v2.git`).
+
+Two gotchas worth knowing:
+
+- GitHub redirects the old path for web and git traffic — **until a new
+  repository takes that name**, which permanently deletes the redirect. Do not
+  re-create `shamelali/leish_v2`.
+- If the org is later locked, the same logic moves the repo again; this is a
+  property of account boundaries, not of the organisation.
+
+### B. Fork into another (unlocked) account
+
+Lowest disruption to the canonical repo: keep `shamelali/leish_v2` as-is, fork
+it into `Duta-Integra` (or a second personal account), and push feature branches
+there to get real Actions runs. Actions in a fork are billed to the fork's
+owner, so they run regardless of the upstream lock.
+
+The catch: a PR opened _upstream_ is evaluated in the upstream repository's
+Actions, which is still locked — so fork CI evidence does not appear on this
+repo's PRs. It appears in the fork's Actions tab; paste the run link on the
+upstream PR (or have the fork's workflow comment it back). Use this when you
+need a real runner now and cannot move the repo.
+
+### C. Azure Pipelines — recommended when the repo stays where it is
+
+`azure-pipelines.yml` is committed at the repo root and mirrors `ci.yml`
+gate-for-gate (verified: all nine commands match). It runs three stages —
+`verify`, `integration_pg`, `e2e` — on the same Node 22 / Ubuntu stack.
+
+Why this one over Cirrus/CircleCI for this repo:
+
+- **Unlimited minutes and 10 parallel jobs for public repositories**, free, with
+  no payment method on file. The other hosted options cap you (CircleCI ~6,000
+  min/month, GitLab 400, Cirrus depends on your signed-up plan).
+- **Real pull-request checks** via the Azure Pipelines GitHub app — statuses
+  appear on the PR and can be made required in branch protection, restoring the
+  property that local CI cannot provide.
+- **Postgres and Playwright are covered**, so there is no "integration tests
+  only run locally" gap: the `integration_pg` stage starts `postgres:16-alpine`
+  and waits for `pg_isready`; the `e2e` stage installs Chromium with
+  `--with-deps`.
+
+Enable it (one-time, ~5 minutes, no credit card):
+
+1. Sign in at <https://dev.azure.com> with the GitHub account that owns the repo.
+2. Create an organisation and a project. The DevOps project may be private —
+   what matters for the free tier is that the **GitHub repository is public**.
+3. Pipelines → Create Pipeline → GitHub → `shamelali/leish_v2` →
+   "Existing Azure Pipelines YAML file" → branch `main`, path `/azure-pipelines.yml`
+   → Save. It runs on the next push/PR.
+4. Install the **Azure Pipelines** GitHub app for the repo (GitHub Marketplace →
+   Azure Pipelines → Free plan). Without this step no statuses appear on PRs.
+5. Once a run is green: repo → Settings → Branches → require the Azure check on
+   `main` in place of the `verify`/`integration-pg` entries that cannot pass
+   while Actions is locked.
+
+Honest caveats: it is a **third** copy of the gate list (`ci.yml`,
+`scripts/ci-local.sh`, `azure-pipelines.yml`) and they will drift if edited
+carelessly; and the free tier's Terms apply to public repos only — if the repo is
+ever made private, the 1,800 minutes/month private allowance kicks in.
+
+### D–E. Other hosted CI (Cirrus, CircleCI, GitLab mirror)
+
+All viable, all more work than C for this repo. GitLab can mirror a GitHub repo
+and post statuses back, but mirroring splits history and status across two hosts.
+Use these only if you already run one of them.
+
+### F. Local CI, now with reviewable evidence
+
+`scripts/ci-report.sh` runs `scripts/ci-local.sh` and posts (or refreshes) a
+single PR comment containing the gate table, commit SHA, and toolchain versions:
+
+```bash
+./scripts/ci-report.sh              # run gates, then post/refresh the PR comment
+./scripts/ci-report.sh --dry-run    # print the comment without posting
+```
+
+This narrows the "verifiable by a reviewer" gap in the table above — the comment
+is machine-generated, tied to a commit, and refreshed on each run rather than
+re-asserted by hand. It does **not** close it: nothing blocks merge on it, and
+the author still controls the machine. Treat it as a smoke test with a receipt.
+
+## Recommendation
+
+The decision reduces to one question: **is moving the repository acceptable?**
+
+**If yes → move it to the `Duta-Integra` organisation (A).** It is the only
+option that restores `ci.yml`, branch protection and `deploy.yml` exactly as
+written, with no second CI system to maintain. Billing follows the repository
+owner, and `Duta-Integra` is a separate GitHub organisation from the locked
+personal account.
+
+**If no → Azure Pipelines (C), using the committed `azure-pipelines.yml`.** Free
+and unlimited for public repos, real PR checks, Postgres and Playwright
+included. Roughly five minutes of clicking, then a branch-protection change.
+
+**Either way, keep F running now.** `scripts/ci-report.sh` costs nothing, needs
+no accounts, and gives reviewers a machine-generated receipt per commit while
+the decision is pending.
+
+Do not spend time on faster-runner services (H) — they cannot start a job while
+the account is locked because they replace the runner, not the scheduler.

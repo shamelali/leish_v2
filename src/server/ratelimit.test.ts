@@ -39,39 +39,58 @@ describe("memory rate limit store", () => {
 });
 
 describe("upstash rate limit store", () => {
-  function mockUpstash(handler: (path: string) => { result?: unknown; error?: string }) {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      const path = url.replace("https://example.upstash.io/", "");
-      const body = handler(path);
+  /**
+   * Mock the Upstash `/pipeline` endpoint. `handler` receives each command in
+   * order and returns its result, so tests can model the sorted-set state.
+   */
+  function mockUpstashPipeline(handler: (command: string, args: (string | number)[]) => unknown) {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("https://example.upstash.io/pipeline");
+      const commands = JSON.parse(String(init?.body)) as Array<[string, ...(string | number)[]]>;
+      const body = commands.map(([command, ...args]) => ({ result: handler(command, args) }));
       return new Response(JSON.stringify(body), { status: 200 });
     });
-    return createUpstashStore({ url: "https://example.upstash.io/", token: "t", fetchImpl });
+    return createUpstashStore({
+      url: "https://example.upstash.io/",
+      token: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
   }
 
   it("returns null without configuration", () => {
-    const prevUrl = process.env.UPSTASH_REST_URL;
-    const prevToken = process.env.UPSTASH_REST_TOKEN;
-    process.env.UPSTASH_REST_URL = "";
-    process.env.UPSTASH_REST_TOKEN = "";
+    vi.stubEnv("UPSTASH_REST_URL", "");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
     expect(createUpstashStore()).toBeNull();
-    if (prevUrl !== undefined) process.env.UPSTASH_REST_URL = prevUrl;
-    else delete process.env.UPSTASH_REST_URL;
-    if (prevToken !== undefined) process.env.UPSTASH_REST_TOKEN = prevToken;
-    else delete process.env.UPSTASH_REST_TOKEN;
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts either Upstash env-var naming", () => {
+    vi.stubEnv("UPSTASH_REST_URL", "");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://native.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "native-token");
+    expect(createUpstashStore()).not.toBeNull();
+    vi.unstubAllEnvs();
+
+    vi.stubEnv("UPSTASH_REST_URL", "https://short.upstash.io");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "short-token");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    expect(createUpstashStore()).not.toBeNull();
+    vi.unstubAllEnvs();
   });
 
   it("allows within the limit and counts entries", async () => {
     let zcard = 0;
-    const store = mockUpstash((path) => {
-      if (path.startsWith("ZREMRANGEBYSCORE")) return { result: 0 };
-      if (path.startsWith("ZADD")) {
+    const store = mockUpstashPipeline((command) => {
+      if (command === "ZADD") {
         zcard += 1;
-        return { result: 1 };
+        return 1;
       }
-      if (path.startsWith("ZCARD")) return { result: zcard };
-      if (path.startsWith("EXPIRE")) return { result: 1 };
-      return { result: null };
+      if (command === "ZCARD") return zcard;
+      return 0;
     });
     const result = await store!.checkAndIncrement("auth:1.2.3.4", 5, 60_000);
     expect(result.allowed).toBe(true);
@@ -81,20 +100,18 @@ describe("upstash rate limit store", () => {
   it("blocks once the limit is exceeded", async () => {
     // Simulate: 2 entries already in the sorted set, this request adds a 3rd → over limit.
     let zcard = 0;
-    const store = mockUpstash((path) => {
-      if (path.startsWith("ZREMRANGEBYSCORE")) return { result: 0 };
-      if (path.startsWith("ZADD")) {
+    const store = mockUpstashPipeline((command) => {
+      if (command === "ZADD") {
         zcard += 1;
-        return { result: 1 };
+        return 1;
       }
-      if (path.startsWith("ZCARD")) return { result: zcard };
-      if (path.startsWith("EXPIRE")) return { result: 1 };
-      if (path.startsWith("ZRANGE")) return { result: ["1000:abc", "1000"] };
-      if (path.startsWith("ZREM")) {
+      if (command === "ZCARD") return zcard;
+      if (command === "ZREM") {
         zcard -= 1;
-        return { result: 1 };
+        return 1;
       }
-      return { result: null };
+      if (command === "ZRANGE") return ["1000:abc", "1000"];
+      return 0;
     });
     // First two calls set zcard to 2.
     await store!.checkAndIncrement("k", 2, 60_000);
@@ -105,25 +122,117 @@ describe("upstash rate limit store", () => {
   });
 
   it("returns zero remaining and retry-after when blocked", async () => {
-    // Simulate: ZCARD returns limit+1 → over limit.
-    let zcard = 0;
-    const store = mockUpstash((path) => {
-      if (path.startsWith("ZREMRANGEBYSCORE")) return { result: 0 };
-      if (path.startsWith("ZADD")) {
-        zcard += 1;
-        return { result: 1 };
-      }
-      if (path.startsWith("ZCARD")) return { result: zcard };
-      if (path.startsWith("EXPIRE")) return { result: 1 };
-      if (path.startsWith("ZRANGE")) return { result: ["1000:abc", "1000"] };
-      if (path.startsWith("ZREM")) {
-        zcard -= 1;
-        return { result: 1 };
-      }
-      return { result: null };
+    const store = mockUpstashPipeline((command) => {
+      if (command === "ZCARD") return 1; // over a limit of 0
+      if (command === "ZRANGE") return ["1000:abc", "1000"];
+      return 0;
     });
     const blocked = await store!.checkAndIncrement("k", 0, 60_000);
     expect(blocked.allowed).toBe(false);
     expect(blocked.remaining).toBe(0);
+  });
+
+  it("uses a single pipeline round trip on the allowed path", async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        JSON.stringify([{ result: 0 }, { result: 1 }, { result: 1 }, { result: 1 }]),
+        { status: 200 },
+      );
+    });
+    const store = createUpstashStore({
+      url: "https://example.upstash.io",
+      token: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })!;
+
+    const result = await store.checkAndIncrement("k", 5, 60_000);
+    expect(result.allowed).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(String(init.method)).toBe("POST");
+    expect(JSON.parse(String(init.body))).toHaveLength(4);
+  });
+
+  it("throws on HTTP errors and malformed pipeline responses", async () => {
+    const failing = createUpstashStore({
+      url: "https://example.upstash.io",
+      token: "t",
+      fetchImpl: vi.fn(async () => new Response("no", { status: 500 })) as unknown as typeof fetch,
+    })!;
+    await expect(failing.checkAndIncrement("k", 1, 1000)).rejects.toThrow("Upstash error 500");
+
+    const malformed = createUpstashStore({
+      url: "https://example.upstash.io",
+      token: "t",
+      fetchImpl: vi.fn(async () => new Response("{}", { status: 200 })) as unknown as typeof fetch,
+    })!;
+    await expect(malformed.checkAndIncrement("k", 1, 1000)).rejects.toThrow("malformed");
+  });
+});
+
+describe("default rate limiter (env-driven store selection)", () => {
+  function stubAllUpstashEnv(url: string, token: string) {
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", url);
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", token);
+    vi.stubEnv("UPSTASH_REST_URL", "");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "");
+  }
+
+  it("uses the Upstash store when credentials are configured", async () => {
+    stubAllUpstashEnv("https://example.upstash.io", "token");
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        JSON.stringify([{ result: 0 }, { result: 1 }, { result: 1 }, { result: 1 }]),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    vi.resetModules();
+    const { rateLimit } = await import("./ratelimit");
+    const result = await rateLimit("default:upstash", 5, 60_000);
+
+    expect(result.allowed).toBe(true);
+    expect(result.remaining).toBe(4);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("falls back to memory when Upstash errors, then stops probing during the cooldown", async () => {
+    stubAllUpstashEnv("https://example.upstash.io", "token");
+    const fetchImpl = vi.fn(async () => new Response("upstash down", { status: 503 }));
+    vi.stubGlobal("fetch", fetchImpl);
+
+    vi.resetModules();
+    const { rateLimit } = await import("./ratelimit");
+
+    const first = await rateLimit("default:fallback", 2, 60_000);
+    expect(first.allowed).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    const second = await rateLimit("default:fallback", 2, 60_000);
+    expect(second.allowed).toBe(true);
+    expect(second.remaining).toBe(0);
+    // Circuit breaker: no further Upstash calls during the cooldown.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("stays on memory when Upstash is not configured", async () => {
+    stubAllUpstashEnv("", "");
+    const fetchImpl = vi.fn();
+    vi.stubGlobal("fetch", fetchImpl);
+
+    vi.resetModules();
+    const { rateLimit } = await import("./ratelimit");
+    expect((await rateLimit("default:memory", 5, 60_000)).allowed).toBe(true);
+    expect(fetchImpl).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 });

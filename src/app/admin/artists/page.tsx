@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetchAllPages } from "@/lib/pagination";
 
 interface ClaimedUser {
   user_id: string;
@@ -56,9 +57,13 @@ export default function AdminArtistsPage() {
   const [createError, setCreateError] = useState("");
 
   useEffect(() => {
-    fetch("/api/admin/artists")
-      .then((r) => r.json() as Promise<ArtistsResponse>)
-      .then((d) => setArtists(d.artists ?? []))
+    // The admin endpoint is paginated; walk the pages so the table shows every
+    // artist (client-side filter still applies over the full set).
+    fetchAllPages<Artist>("/api/admin/artists", (body) => {
+      const page = body as ArtistsResponse & { pagination?: { hasMore?: boolean } };
+      return { items: page.artists ?? [], hasMore: page.pagination?.hasMore === true };
+    })
+      .then((artists) => setArtists(artists))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

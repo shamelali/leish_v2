@@ -19,6 +19,7 @@ const handler = tryRoute(
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const result = await runBalanceReminderSweep();
 
     logger.info(
@@ -27,6 +28,8 @@ const handler = tryRoute(
         reminded: result.reminded,
         escalated: result.escalated,
         skipped: result.skipped,
+        durationMs: Date.now() - startedAt,
+        processedCount: result.reminded + result.escalated,
       },
       "balance reminder sweep complete",
     );

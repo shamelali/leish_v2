@@ -323,3 +323,17 @@ export async function retryFailedEmails(): Promise<{ retried: number; failed: nu
 
   return { retried, failed };
 }
+
+/**
+ * Number of emails still awaiting a retry — backlog gauge for cron alerting.
+ *
+ * Counts only rows the retry cron can still pick up (`attempts < max_attempts`);
+ * rows that exhausted their attempts are dead letters and would otherwise pin
+ * the alert on forever.
+ */
+export async function countPendingEmailRetries(): Promise<number> {
+  const row = (await getDb()
+    .prepare("SELECT COUNT(*) AS c FROM email_retries WHERE attempts < max_attempts")
+    .get()) as { c: number } | undefined;
+  return Number(row?.c ?? 0);
+}
