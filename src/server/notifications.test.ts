@@ -198,6 +198,54 @@ describe("server/notifications — notifySlackEmailRetryBacklog", () => {
   });
 });
 
+describe("server/notifications — notifySlackAuditFailure", () => {
+  it("posts the blocked action, target, and admin to the ops channel", async () => {
+    const n = await loadWithChannel("C01ABC123");
+    await expect(
+      n.notifySlackAuditFailure({
+        adminUserId: "admin-1",
+        action: "user.delete",
+        targetTable: "users",
+        targetId: "u-42",
+        error: "no such table: admin_audit_log",
+      }),
+    ).resolves.toBe(true);
+
+    const body = JSON.stringify(lastPostBody());
+    expect(body).toContain("🚨 Audit write failed");
+    expect(body).toContain("user.delete");
+    expect(body).toContain("users#u-42");
+    expect(body).toContain("admin-1");
+    expect(body).toContain("no such table: admin_audit_log");
+    expect(JSON.stringify(lastPostBody())).toContain("https://leish.test/admin/audit");
+  });
+
+  it("renders a target without an id and omits the error field", async () => {
+    const n = await loadWithChannel("C01ABC123");
+    await n.notifySlackAuditFailure({
+      adminUserId: "admin-2",
+      action: "settings.update",
+      targetTable: "platform_settings",
+    });
+
+    const body = JSON.stringify(lastPostBody());
+    expect(body).toContain("*Target:*\\nplatform_settings");
+    expect(body).not.toContain("*Error:*");
+  });
+
+  it("returns false when Slack is unconfigured", async () => {
+    const n = await loadWithChannel(undefined);
+    await expect(
+      n.notifySlackAuditFailure({
+        adminUserId: "admin-3",
+        action: "user.delete",
+        targetTable: "users",
+      }),
+    ).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("server/notifications — notifySlackPayment", () => {
   it("labels a deposit and converts the amount", async () => {
     const n = await loadWithChannel("C01ABC123");

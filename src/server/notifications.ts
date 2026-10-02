@@ -242,6 +242,62 @@ export async function notifySlackEmailRetryBacklog(params: {
   });
 }
 
+/**
+ * Alert the ops channel that a sensitive admin mutation could not be written to
+ * the audit trail. Sensitive mutations are fail-closed (`requireAudit`), so this
+ * fires exactly when an operator has to reconcile manually.
+ */
+export async function notifySlackAuditFailure(params: {
+  adminUserId: string;
+  action: string;
+  targetTable: string;
+  targetId?: string | null;
+  error?: string;
+}): Promise<boolean> {
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://leish.my"}/admin/audit`;
+  const target = params.targetId ? `${params.targetTable}#${params.targetId}` : params.targetTable;
+
+  return postToSlack({
+    blocks: [
+      {
+        type: "header",
+        text: { type: "plain_text", text: "🚨 Audit write failed", emoji: true },
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text:
+            `A sensitive admin action was *blocked* because it could not be audited. ` +
+            `The underlying mutation was rolled back — reconcile manually.`,
+        },
+      },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Action:*\n${params.action}` },
+          { type: "mrkdwn", text: `*Target:*\n${target}` },
+          { type: "mrkdwn", text: `*Admin user:*\n${params.adminUserId}` },
+          ...(params.error
+            ? [{ type: "mrkdwn" as const, text: `*Error:*\n${params.error.slice(0, 200)}` }]
+            : []),
+        ],
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "View Audit Log", emoji: true },
+            url: dashboardUrl,
+          },
+        ],
+      },
+    ],
+    text: `🚨 Audit write failed for ${params.action} on ${target} (admin ${params.adminUserId})`,
+  });
+}
+
 export async function notifySlackPayoutSummary(params: {
   settled: number;
   failed: number;
