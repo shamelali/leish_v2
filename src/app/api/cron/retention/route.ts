@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { authorizeCron } from "@/server/cron-auth";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
- * GET /api/cron/retention
+ * GET/POST /api/cron/retention
  * Placeholder retention sweep. Vercel Cron (see vercel.json) invokes this
  * daily with `Authorization: Bearer <CRON_SECRET>`. Heavy PII purging is
  * performed out-of-band by scripts/retain-purge.mjs against PostgreSQL.
@@ -20,3 +21,5 @@ export async function GET(req: Request) {
     timestamp: new Date().toISOString(),
   });
 }
+
+export const POST = GET;

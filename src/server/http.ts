@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAllowedOrigin } from "@/lib/ops/cors";
 import { logger } from "./logger";
 import { getClientIp, rateLimit } from "./ratelimit";
 import { reportError } from "./errors";
@@ -155,7 +156,7 @@ export function enforceSameOrigin(request: Request): NextResponse | null {
       }
     })();
 
-  if (origin && (expected.has(origin) || isArenaPreview)) return null;
+  if (origin && (expected.has(origin) || isAllowedOrigin(origin) || isArenaPreview)) return null;
   logger.warn({ origin: rawOrigin.trim() }, "cross-origin state-changing request blocked");
   return jsonError("Invalid origin", 403);
 }

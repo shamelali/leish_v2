@@ -12,26 +12,30 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "html"],
-      // Cover the business/logic layers. UI-heavy client components and pure
-      // type/data modules are excluded so the metric reflects tested logic.
-      include: ["src/lib/**", "src/server/**"],
+      reporter: ["text", "text-summary", "lcov", "html"],
+      // Cover the business/logic layers, cron routes, and request proxy.
+      // UI-heavy client components, browser SDK wrappers, and pure type/data
+      // modules are excluded so the metric reflects unit-testable logic.
+      include: ["src/lib/**", "src/server/**", "src/app/api/cron/**/*.ts", "src/proxy.ts"],
       exclude: [
         "src/lib/data.ts",
         "src/lib/types.ts",
         "src/lib/auth.tsx",
         "src/lib/theme.tsx",
+        "src/lib/agnost-client.ts",
+        "src/lib/ops/cron-auth.ts",
+        "src/lib/chat/**",
+        "src/lib/supabase/**",
+        "src/server/__integration__/**",
+        "**/*.d.ts",
         "**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // Audit target: 80% across all metrics (Phase 2 report).
-        // Current measured: ~68% statements / 62% branches / 70% functions/lines.
-        // Enforce a modest gate above the prior 60/55 baseline; raise to 80
-        // incrementally as referral/upload/turnstile coverage lands.
-        statements: 65,
-        branches: 60,
-        functions: 68,
-        lines: 68,
+        // Ratchet: floor CI enforces across all business/server/cron modules.
+        statements: 80,
+        branches: 80,
+        functions: 80,
+        lines: 80,
       },
     },
   },

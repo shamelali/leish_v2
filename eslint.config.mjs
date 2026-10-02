@@ -8,7 +8,14 @@ const eslintConfig = defineConfig([
   // Ignore _-prefixed variables (suppress no-unused-vars for cleaned-up params)
   {
     rules: {
-      "@typescript-eslint/no-unused-vars": ["warn", { varsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          varsIgnorePattern: "^_",
+          argsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
     },
   },
   // Override default ignores of eslint-config-next.

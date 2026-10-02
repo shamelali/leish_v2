@@ -2,6 +2,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
+import { SignJWT } from "jose";
 import {
   createSessionToken,
   verifySessionToken,
@@ -109,19 +110,36 @@ describe("rotateSessionIfNeeded", () => {
   });
 
   it("returns new token when token is old (more than 50% TTL)", async () => {
+    await seedUser("user-old-token");
+    const oldJti = randomUUID();
+    const secret = new TextEncoder().encode(
+      process.env.SESSION_SECRET || "test-or-dev-only-secret-not-for-production",
+    );
+    const fiveDaysAgo = Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 5;
+    const oldToken = await new SignJWT({
+      email: "a@b.com",
+      name: "Aina",
+      role: "customer",
+      jti: oldJti,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject("user-old-token")
+      .setIssuedAt(fiveDaysAgo)
+      .setExpirationTime(fiveDaysAgo + SESSION_TTL_SECONDS)
+      .sign(secret);
+
     const payload = {
-      sub: "user-1",
+      sub: "user-old-token",
       email: "a@b.com",
       name: "Aina",
       role: "customer" as const,
-      jti: randomUUID(),
+      jti: oldJti,
     };
-    const token = await createSessionToken(payload);
-    const rotated = await rotateSessionIfNeeded(token, payload);
-    // Since we just created the token, it should be fresh - but we can test the logic
-    // by manipulating the iat. However, that requires jwtVerify which we already test.
-    // This test ensures the function doesn't throw.
-    expect(typeof rotated === "string" || rotated === null).toBe(true);
+    const rotated = await rotateSessionIfNeeded(oldToken, payload);
+    expect(typeof rotated).toBe("string");
+    const verified = await verifySessionToken(rotated!);
+    expect(verified?.sub).toBe("user-old-token");
+    expect(verified?.jti).not.toBe(oldJti);
   });
 
   it("returns null for invalid token", async () => {
@@ -186,19 +204,20 @@ describe("sessionCookieOptions", () => {
 });
 
 describe("SESSION_SECRET fallback behavior", () => {
-  it("throws in production without SESSION_SECRET", () => {
+  it("throws in production without SESSION_SECRET", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    const origSecret = process.env.SESSION_SECRET;
-    delete process.env.SESSION_SECRET;
+    vi.stubEnv("SESSION_SECRET", "");
     try {
-      // The getSecret function is internal, but we can test the behavior
-      // by checking that createSessionToken throws without the secret
-      // in production. Since we're in test env, we can't easily test this
-      // without changing the env. We'll verify the logic exists.
-      expect(true).toBe(true);
+      await expect(
+        createSessionToken({
+          sub: "user-prod",
+          email: "prod@test.local",
+          name: "Prod",
+          role: "customer",
+        }),
+      ).rejects.toThrow(/SESSION_SECRET is required/);
     } finally {
       vi.unstubAllEnvs();
-      if (origSecret !== undefined) process.env.SESSION_SECRET = origSecret;
     }
   });
 });
