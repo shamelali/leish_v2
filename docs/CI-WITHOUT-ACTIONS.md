@@ -118,22 +118,60 @@ organisation with its own billing settings — the personal lock should not foll
 the repo. Public repositories get unlimited Actions minutes, so the org needs no
 payment method.
 
-```bash
-# Requires admin on the repo and create-repo rights on the org:
-gh api -X POST repos/shamelali/leish_v2/transfer \
-  -f new_owner="Duta-Integra"
+**A user account performs the transfer; CI and automation cannot.** The endpoint
+requires `Administration: write` on the repository. A GitHub App installation
+token (what this workspace uses) reports `admin=true` on the repo and still
+gets:
+
+```
+HTTP 403  X-Accepted-Github-Permissions: administration=write
+{"message":"Resource not accessible by integration"}
 ```
 
-- Transfers preserve issues, PRs (numbering included), stars and watchers, and
-  GitHub leaves redirects for the old URLs.
-- After transferring: re-point the Vercel Git connection (Vercel matches the
-  repo by full name), re-authorise any GitHub Apps (CodeRabbit, Arena), and
-  update `gh`/`git remote` locally.
-- Verify before relying on it: org → Settings → Billing should show no
-  outstanding issue, then re-run a workflow and confirm the job **executes
-  steps** rather than failing in ~3 s with zero steps.
-- If the org itself is later locked, the same logic moves the repo again — this
-  is a property of account boundaries, not of the organisation.
+So run it from a session logged in as `shamelali` — the browser is the
+reliable route (**Settings → General → Danger Zone → Transfer ownership**),
+or the CLI:
+
+```bash
+gh api -X POST repos/shamelali/leish_v2/transfer -f new_owner=Duta-Integra
+```
+
+The move is immediate: a transfer to an organisation you own needs no
+acceptance step, so a wrong target is not caught by a prompt.
+
+Prepare and verify with the checked-in script — it records the commit
+beforehand and tests the consequences afterwards:
+
+```bash
+./scripts/post-transfer-check.sh --preflight          # rights, org, name, SHA recorded
+./scripts/post-transfer-check.sh --expect-sha <sha>   # post-transfer verification
+```
+
+What it checks afterwards:
+
+- the old URL 301s to the new path and `git ls-remote` returns the same SHA
+  from both;
+- PR #23 and its numbering survived;
+- workflows are present and Actions is enabled;
+- **the decisive test** — every recent run's jobs report a non-zero step count.
+  Zero steps is the fingerprint of the billing lock, so a transfer that failed
+  to clear billing is caught here rather than assumed fixed;
+- branch protection exists and still requires `verify`, `integration-pg`,
+  `e2e` (GitHub can drop rules the new owner cannot support).
+
+Expect to redo by hand: re-point the Vercel Git connection (Vercel matches on
+`owner/repo`), re-install the GitHub Apps (CodeRabbit, Arena), re-check secrets
+(values are never readable), confirm the org allows members to create
+repositories, and update local remotes
+(`git remote set-url origin https://github.com/Duta-Integra/leish_v2.git`).
+
+Two gotchas worth knowing:
+
+- GitHub redirects the old path for web and git traffic — **until a new
+  repository takes that name**, which permanently deletes the redirect. Do not
+  re-create `shamelali/leish_v2`.
+- If the org is later locked, the same logic moves the repo again; this is a
+  property of account boundaries, not of the organisation.
 
 ### B. Fork into another (unlocked) account
 
