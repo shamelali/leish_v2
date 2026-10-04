@@ -66,8 +66,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#be123c" },
-    { media: "(prefers-color-scheme: dark)", color: "#881337" },
+    { media: "(prefers-color-scheme: light)", color: "#fdf2f8" },
+    { media: "(prefers-color-scheme: dark)", color: "#120a10" },
   ],
 };
 
@@ -95,7 +95,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
-      <body className="flex min-h-full flex-col bg-stone-50 font-sans text-stone-900 dark:bg-stone-950 dark:text-stone-100">
+      <body className="flex min-h-full flex-col bg-background font-sans text-foreground">
         {/* Theme bootstrap — nonce'd so script-src can omit 'unsafe-inline'. */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
 

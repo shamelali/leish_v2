@@ -33,38 +33,87 @@ function LoginForm() {
   }
 
   const inputCls =
-    "h-11 w-full rounded-xl border border-stone-300 bg-white px-4 text-sm text-stone-800 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-rose-500 dark:focus:ring-rose-900/40";
+    "h-11 w-full rounded-xl border border-line-strong bg-surface px-4 text-sm text-ink placeholder:text-ink-subtle transition-colors duration-[var(--dur-fast)] focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/30";
+
+  const socialCls =
+    "inline-flex h-11 items-center justify-center rounded-xl border border-line-strong bg-surface text-sm font-medium text-ink transition-colors duration-[var(--dur-fast)] hover:border-primary hover:text-link focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
   return (
     <div className="mx-auto flex max-w-md flex-col px-4 py-16 sm:px-6">
-      <h1 className="font-display text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
-        Welcome Back
-      </h1>
-      <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
+      <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">Welcome Back</h1>
+      <p className="mt-2 text-sm text-ink-muted">
         Sign in to manage your appointments, favorites, and profile.
       </p>
 
       <div className="mt-6 grid grid-cols-3 gap-2 text-center text-xs font-medium">
         {[
-          { role: "Client", icon: "👤" },
-          { role: "Pro MUA", icon: "🎨" },
-          { role: "Studio", icon: "💄" },
+          {
+            role: "Client",
+            icon: (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                aria-hidden="true"
+                className="h-4 w-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
+              </svg>
+            ),
+          },
+          {
+            role: "Pro MUA",
+            icon: (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                aria-hidden="true"
+                className="h-4 w-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15.5 3.5l5 5L8 21H3v-5L15.5 3.5z"
+                />
+              </svg>
+            ),
+          },
+          {
+            role: "Studio",
+            icon: (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                aria-hidden="true"
+                className="h-4 w-4"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 3h8l3 6-7 12L5 9l3-6z" />
+              </svg>
+            ),
+          },
         ].map((r) => (
           <span
             key={r.role}
-            className="rounded-full bg-stone-100 px-2 py-2 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+            className="flex items-center justify-center gap-1.5 rounded-full bg-surface-sunken px-2 py-2 text-ink-muted"
           >
-            {r.icon} {r.role}
+            {r.icon}
+            {r.role}
           </span>
         ))}
       </div>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div>
-          <label
-            htmlFor="login-email"
-            className="mb-1.5 block text-sm font-medium text-stone-800 dark:text-stone-200"
-          >
+          <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-ink">
             Email Address
           </label>
           <input
@@ -80,10 +129,7 @@ function LoginForm() {
           />
         </div>
         <div>
-          <label
-            htmlFor="login-password"
-            className="mb-1.5 block text-sm font-medium text-stone-800 dark:text-stone-200"
-          >
+          <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-ink">
             Password
           </label>
           <input
@@ -99,7 +145,7 @@ function LoginForm() {
           />
         </div>
         {error && (
-          <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">
+          <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">
             {error}
           </p>
         )}
@@ -111,20 +157,15 @@ function LoginForm() {
 
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-stone-200 dark:border-stone-700" />
+          <div className="w-full border-t border-line" />
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="bg-white px-3 text-stone-400 dark:bg-stone-950 dark:text-stone-500">
-            or continue with
-          </span>
+          <span className="bg-background px-3 text-ink-subtle">or continue with</span>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <a
-          href="/api/auth/oauth/google"
-          className="inline-flex h-11 items-center justify-center rounded-xl border border-stone-300 bg-white text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800"
-        >
+        <a href="/api/auth/oauth/google" aria-label="Continue with Google" className={socialCls}>
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
             <path
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
@@ -146,7 +187,8 @@ function LoginForm() {
         </a>
         <a
           href="/api/auth/oauth/facebook"
-          className="inline-flex h-11 items-center justify-center rounded-xl border border-stone-300 bg-white text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800"
+          aria-label="Continue with Facebook"
+          className={socialCls}
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#1877F2">
             <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -154,7 +196,8 @@ function LoginForm() {
         </a>
         <a
           href="/api/auth/oauth/instagram"
-          className="inline-flex h-11 items-center justify-center rounded-xl border border-stone-300 bg-white text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800"
+          aria-label="Continue with Instagram"
+          className={socialCls}
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="url(#ig-gradient)">
             <defs>
@@ -172,23 +215,17 @@ function LoginForm() {
       </div>
 
       <div className="mt-6 flex items-center justify-between text-sm">
-        <Link
-          href="/forgot-password"
-          className="text-rose-600 hover:text-rose-700 dark:text-rose-500 dark:hover:text-rose-400"
-        >
+        <Link href="/forgot-password" className="text-link hover:underline">
           Forgot Password?
         </Link>
-        <span className="text-stone-500 dark:text-stone-400">
+        <span className="text-ink-muted">
           Don&apos;t have an account?{" "}
-          <Link
-            href="/register"
-            className="font-medium text-rose-600 hover:text-rose-700 dark:text-rose-500 dark:hover:text-rose-400"
-          >
+          <Link href="/register" className="font-medium text-link hover:underline">
             Sign Up Free
           </Link>
         </span>
       </div>
-      <p className="mt-8 text-center text-xs text-stone-400 dark:text-stone-500">
+      <p className="mt-8 text-center text-xs text-ink-subtle">
         Accounts are stored securely in the demo database.
       </p>
     </div>
@@ -199,7 +236,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-md px-4 py-24 text-center text-stone-500">Loading…</div>
+        <div className="mx-auto max-w-md px-4 py-24 text-center text-ink-muted">Loading…</div>
       }
     >
       <LoginForm />

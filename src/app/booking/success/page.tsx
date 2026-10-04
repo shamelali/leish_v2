@@ -20,11 +20,7 @@ export default async function BookingSuccessPage({
 }) {
   const { bookingId } = await searchParams;
   if (!bookingId) {
-    return (
-      <main className="p-16 text-center text-stone-600 dark:text-stone-300">
-        Missing booking reference.
-      </main>
-    );
+    return <main className="p-16 text-center text-ink-muted">Missing booking reference.</main>;
   }
 
   const cookieStore = await cookies();
@@ -52,32 +48,31 @@ export default async function BookingSuccessPage({
   const isConfirmed = booking?.status === "confirmed" || booking?.status === "completed";
 
   return (
-    <main className="min-h-screen bg-stone-50 py-16 dark:bg-stone-950">
+    <main className="min-h-screen bg-background py-16">
       <div className="mx-auto max-w-lg px-4">
-        <div className="rounded-2xl border border-stone-200 bg-white p-8 shadow-sm dark:border-stone-800 dark:bg-stone-900 text-center">
+        <div className="rounded-2xl border border-line bg-surface p-8 text-center shadow-[var(--elev-card)]">
           {!booking ? (
             <>
-              <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">
-                Booking not found
-              </h1>
-              <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
+              <h1 className="text-2xl font-bold text-ink">Booking not found</h1>
+              <p className="mt-2 text-sm text-ink-muted">
                 We couldn&apos;t find this booking on your account.
               </p>
               <Link
                 href="/dashboard"
-                className="mt-6 inline-flex items-center justify-center rounded-xl bg-rose-600 px-5 py-2.5 font-semibold text-white hover:bg-rose-700"
+                className="mt-6 inline-flex items-center justify-center rounded-xl bg-primary px-5 py-2.5 font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
               >
                 Go to Dashboard
               </Link>
             </>
           ) : isConfirmed ? (
             <>
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100 dark:bg-green-950">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-success-soft">
                 <svg
-                  className="h-8 w-8 text-green-600 dark:text-green-400"
+                  className="h-8 w-8 text-success"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -87,21 +82,20 @@ export default async function BookingSuccessPage({
                   />
                 </svg>
               </div>
-              <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">
-                Booking confirmed!
-              </h1>
-              <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
+              <h1 className="text-2xl font-bold text-ink">Booking confirmed!</h1>
+              <p className="mt-2 text-sm text-ink-muted">
                 {booking.service} with {booking.artist_name} on {booking.date} at {booking.time}.
               </p>
             </>
           ) : (
             <>
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary-soft">
                 <svg
-                  className="h-8 w-8 text-amber-600 dark:text-amber-400"
+                  className="h-8 w-8 text-primary-soft-fg"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -111,10 +105,8 @@ export default async function BookingSuccessPage({
                   />
                 </svg>
               </div>
-              <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">
-                Payment processing…
-              </h1>
-              <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
+              <h1 className="text-2xl font-bold text-ink">Payment processing…</h1>
+              <p className="mt-2 text-sm text-ink-muted">
                 Your payment is being confirmed. We&apos;ll update this booking the moment the
                 payment clears.
               </p>
@@ -123,7 +115,7 @@ export default async function BookingSuccessPage({
 
           <Link
             href="/dashboard"
-            className="mt-8 inline-flex items-center justify-center rounded-xl bg-rose-600 px-5 py-2.5 font-semibold text-white hover:bg-rose-700"
+            className="mt-8 inline-flex items-center justify-center rounded-xl bg-primary px-5 py-2.5 font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
           >
             View in Dashboard
           </Link>

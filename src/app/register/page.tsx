@@ -9,10 +9,62 @@ import { Button } from "@/components/Button";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { cn } from "@/lib/utils";
 
-const ROLE_OPTIONS: { id: Role; label: string; hint: string; icon: string }[] = [
-  { id: "customer", label: "Client", hint: "Book artists & studios", icon: "👤" },
-  { id: "artist", label: "Artist", hint: "Pro MUA — get booked", icon: "🎨" },
-  { id: "studio", label: "Studio", hint: "Salon or studio", icon: "💄" },
+const ROLE_OPTIONS: { id: Role; label: string; hint: string; icon: React.ReactNode }[] = [
+  {
+    id: "customer",
+    label: "Client",
+    hint: "Book artists & studios",
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        aria-hidden="true"
+        className="h-5 w-5"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: "artist",
+    label: "Artist",
+    hint: "Pro MUA — get booked",
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        aria-hidden="true"
+        className="h-5 w-5"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.5 3.5l5 5L8 21H3v-5L15.5 3.5z" />
+      </svg>
+    ),
+  },
+  {
+    id: "studio",
+    label: "Studio",
+    hint: "Salon or studio",
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        aria-hidden="true"
+        className="h-5 w-5"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 3h8l3 6-7 12L5 9l3-6z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function RegisterPage() {
@@ -41,47 +93,46 @@ export default function RegisterPage() {
   }
 
   const inputCls =
-    "h-11 w-full rounded-xl border border-stone-300 bg-white px-4 text-sm text-stone-800 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-rose-500 dark:focus:ring-rose-900/40";
+    "h-11 w-full rounded-xl border border-line-strong bg-surface px-4 text-sm text-ink placeholder:text-ink-subtle transition-colors duration-[var(--dur-fast)] focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/30";
 
   return (
     <div className="mx-auto flex max-w-md flex-col px-4 py-16 sm:px-6">
-      <h1 className="font-display text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
+      <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
         Create your account
       </h1>
-      <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-        Choose your path — switch roles any time.
-      </p>
+      <p className="mt-2 text-sm text-ink-muted">Choose your path — switch roles any time.</p>
 
       <div className="mt-6 grid grid-cols-3 gap-2">
         {ROLE_OPTIONS.map((r) => (
           <button
             key={r.id}
             type="button"
+            aria-pressed={role === r.id}
             onClick={() => setRole(r.id)}
             className={cn(
-              "rounded-2xl border p-3 text-center transition-colors",
+              "rounded-2xl border p-3 text-center transition-all duration-[var(--dur-fast)]",
               role === r.id
-                ? "border-rose-600 bg-rose-50 ring-2 ring-rose-100 dark:border-rose-500 dark:bg-rose-500/10 dark:ring-rose-900/40"
-                : "border-stone-200 bg-white hover:border-stone-300 dark:border-stone-800 dark:bg-stone-900 dark:hover:border-stone-600",
+                ? "border-primary bg-primary-soft ring-2 ring-ring/30"
+                : "border-line-strong bg-surface hover:border-primary hover:bg-primary-soft/50",
             )}
           >
-            <span className="text-xl">{r.icon}</span>
-            <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">
-              {r.label}
-            </p>
-            <p className="mt-0.5 text-[11px] leading-4 text-stone-500 dark:text-stone-400">
-              {r.hint}
-            </p>
+            <span
+              className={cn(
+                "mx-auto flex h-9 w-9 items-center justify-center rounded-full transition-colors",
+                role === r.id ? "bg-primary text-primary-fg" : "bg-surface-sunken text-ink-muted",
+              )}
+            >
+              {r.icon}
+            </span>
+            <p className="mt-2 text-sm font-semibold text-ink">{r.label}</p>
+            <p className="mt-0.5 text-[11px] leading-4 text-ink-muted">{r.hint}</p>
           </button>
         ))}
       </div>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div>
-          <label
-            htmlFor="reg-name"
-            className="mb-1.5 block text-sm font-medium text-stone-800 dark:text-stone-200"
-          >
+          <label htmlFor="reg-name" className="mb-1.5 block text-sm font-medium text-ink">
             Full name
           </label>
           <input
@@ -96,10 +147,7 @@ export default function RegisterPage() {
           />
         </div>
         <div>
-          <label
-            htmlFor="reg-email"
-            className="mb-1.5 block text-sm font-medium text-stone-800 dark:text-stone-200"
-          >
+          <label htmlFor="reg-email" className="mb-1.5 block text-sm font-medium text-ink">
             Email Address
           </label>
           <input
@@ -115,10 +163,7 @@ export default function RegisterPage() {
           />
         </div>
         <div>
-          <label
-            htmlFor="reg-password"
-            className="mb-1.5 block text-sm font-medium text-stone-800 dark:text-stone-200"
-          >
+          <label htmlFor="reg-password" className="mb-1.5 block text-sm font-medium text-ink">
             Password
           </label>
           <input
@@ -140,21 +185,18 @@ export default function RegisterPage() {
             type="checkbox"
             checked={consent}
             onChange={(e) => setConsent(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-stone-300 text-rose-600 focus:ring-rose-500 dark:border-stone-700"
+            className="mt-0.5 h-4 w-4 rounded border-line-strong accent-[color:var(--primary)]"
           />
-          <label htmlFor="reg-consent" className="text-sm text-stone-600 dark:text-stone-400">
+          <label htmlFor="reg-consent" className="text-sm text-ink-muted">
             I consent to the collection and processing of my personal data in accordance with the{" "}
-            <Link
-              href="/privacy"
-              className="font-medium text-rose-600 hover:text-rose-700 dark:text-rose-500"
-            >
+            <Link href="/privacy" className="font-medium text-link hover:underline">
               Privacy Policy
             </Link>
             .
           </label>
         </div>
         {error && (
-          <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">
+          <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">
             {error}
           </p>
         )}
@@ -164,12 +206,9 @@ export default function RegisterPage() {
         </Button>
       </form>
 
-      <p className="mt-5 text-center text-sm text-stone-500 dark:text-stone-400">
+      <p className="mt-5 text-center text-sm text-ink-muted">
         Already have an account?{" "}
-        <Link
-          href="/login"
-          className="font-medium text-rose-600 hover:text-rose-700 dark:text-rose-500 dark:hover:text-rose-400"
-        >
+        <Link href="/login" className="font-medium text-link hover:underline">
           Log in
         </Link>
       </p>

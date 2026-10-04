@@ -1,38 +1,40 @@
 {
-  "name": "leish-chat",
-  "main": "src/workers/chat/index.ts",
-  "compatibility_date": "2025-03-07",
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Main web app (vinext). The realtime chat worker is separate — see
+  // src/workers/chat/wrangler.jsonc, deployed via `npm run chat:deploy`.
+  "name": "leish-my",
+  "main": "vinext/server/fetch-handler",
+  "compatibility_date": "2026-08-26",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": {
-    "enabled": true,
-    "head_sampling_rate": 1,
-  },
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "CHAT_ROOM",
-        "class_name": "ChatRoom",
-      },
-    ],
-  },
-  "queues": {
-    "producers": [
-      {
-        "queue": "leish-email-queue",
-        "binding": "leish_email_queue",
-      },
-    ],
-  },
-  "migrations": [
+  "account_id": "26565f2b5af4f08b4a28122e9484c9e4",
+  // Serve the production apex from this Worker. The `leish.my` record is
+  // proxied (orange cloud), so Cloudflare's edge runs this Worker instead of
+  // fetching the origin. A custom_domain cannot be used: the apex already has
+  // externally managed DNS records (Cloudflare error 100117).
+  "routes": [
     {
-      "tag": "v1",
-      "new_sqlite_classes": ["ChatRoom"],
+      "pattern": "leish.my/*",
+      "zone_name": "leish.my",
     },
   ],
-  "vars": {
-    "MAX_MESSAGE_LENGTH": "5000",
-    "MAX_HISTORY_MESSAGES": "100",
-    "PRESENCE_TIMEOUT_MS": "30000",
-    "TYPING_TIMEOUT_MS": "5000",
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS",
+  },
+  "cache": {
+    "enabled": true,
+  },
+  "images": {
+    "binding": "IMAGES",
+  },
+  "kv_namespaces": [
+    {
+      "binding": "VINEXT_KV_CACHE",
+      "id": "5e38802efc7040c8b576f50a479ef3fc",
+    },
+  ],
+  "observability": {
+    "enabled": true,
   },
 }

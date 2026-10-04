@@ -27,6 +27,8 @@
     "build:vinext": "vinext build",
     "start:vinext": "wrangler dev --config dist/server/wrangler.json",
     "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json --experimental-warm-cdn-cache",
+    "chat:dev": "wrangler dev --config src/workers/chat/wrangler.jsonc",
+    "chat:deploy": "wrangler deploy --config src/workers/chat/wrangler.jsonc",
     "deploy:trigger": "bash scripts/deploy.sh",
     "deploy:check": "bash scripts/deploy-status.sh"
   },

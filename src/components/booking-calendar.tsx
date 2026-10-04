@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 interface CatalogService {
   name: string;
@@ -39,6 +40,9 @@ function todayISO(): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${month}-${day}`;
 }
+
+const fieldCls =
+  "w-full rounded-xl border border-line-strong bg-surface p-3 text-base sm:text-sm text-ink placeholder:text-ink-subtle transition-colors duration-[var(--dur-fast)] focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/30";
 
 export default function BookingCalendar({
   artistId,
@@ -124,14 +128,15 @@ export default function BookingCalendar({
 
   if (createdBookingId) {
     return (
-      <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900">
-        <div className="rounded-xl bg-green-50 border border-green-200 p-5 dark:bg-green-950/40 dark:border-green-900">
+      <div className="rounded-2xl border border-line bg-surface p-6 shadow-[var(--elev-card)]">
+        <div className="rounded-xl border border-success/30 bg-success-soft p-5">
           <div className="flex items-start gap-3">
             <svg
-              className="h-6 w-6 text-green-600 dark:text-green-400 shrink-0"
+              className="h-6 w-6 shrink-0 text-success"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -141,10 +146,8 @@ export default function BookingCalendar({
               />
             </svg>
             <div>
-              <p className="font-semibold text-green-800 dark:text-green-200">
-                Booking request sent!
-              </p>
-              <p className="mt-1 text-sm text-green-700 dark:text-green-300">
+              <p className="font-semibold text-success">Booking request sent!</p>
+              <p className="mt-1 text-sm leading-6 text-ink-muted">
                 {artistName} will review your request and send a quotation (valid 24 hours). Pay the
                 RM {bookingFeeRM} booking fee from your dashboard to secure the date.
               </p>
@@ -153,7 +156,7 @@ export default function BookingCalendar({
         </div>
         <Link
           href="/dashboard"
-          className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 py-3 px-4 font-semibold text-white shadow-sm hover:bg-rose-700 transition-all"
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 px-4 font-semibold text-primary-fg shadow-sm transition-all duration-[var(--dur-fast)] hover:bg-primary-hover active:scale-[0.98]"
         >
           Track request in Dashboard &rarr;
         </Link>
@@ -162,13 +165,11 @@ export default function BookingCalendar({
   }
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900">
+    <div className="rounded-2xl border border-line bg-surface p-6 shadow-[var(--elev-card)]">
       <form onSubmit={handleBookingSubmit} className="space-y-6">
         {/* Step 1: Service Selection */}
         <div>
-          <label className="block text-sm font-semibold text-stone-900 dark:text-stone-100 mb-2">
-            1. Select Service
-          </label>
+          <label className="mb-2 block text-sm font-semibold text-ink">1. Select Service</label>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {services.map((s) => {
               const active = selectedService === s.name;
@@ -176,22 +177,20 @@ export default function BookingCalendar({
                 <button
                   type="button"
                   key={s.name}
+                  aria-pressed={active}
                   onClick={() => setSelectedService(s.name)}
                   disabled={isSubmitting}
-                  className={`flex flex-col text-left p-3.5 rounded-xl border transition-all ${
+                  className={cn(
+                    "flex flex-col rounded-xl border p-3.5 text-left transition-all duration-[var(--dur-fast)]",
                     active
-                      ? "border-rose-600 bg-rose-50/60 ring-2 ring-rose-500/20 dark:border-rose-500 dark:bg-rose-950/30"
-                      : "border-stone-200 hover:border-stone-300 dark:border-stone-800 dark:hover:border-stone-700 bg-white dark:bg-stone-900/60"
-                  }`}
+                      ? "border-primary bg-primary-soft/60 ring-2 ring-ring/30"
+                      : "border-line bg-surface hover:border-primary/50 hover:bg-primary-soft/30",
+                  )}
                 >
-                  <span className="font-medium text-sm text-stone-900 dark:text-stone-100">
-                    {s.name}
-                  </span>
+                  <span className="text-sm font-medium text-ink">{s.name}</span>
                   <div className="mt-2 flex items-center justify-between text-xs">
-                    <span className="font-semibold text-rose-600 dark:text-rose-400">
-                      RM {s.price}
-                    </span>
-                    <span className="text-stone-400">{s.duration}</span>
+                    <span className="font-semibold text-link">RM {s.price}</span>
+                    <span className="text-ink-subtle">{s.duration}</span>
                   </div>
                 </button>
               );
@@ -201,35 +200,42 @@ export default function BookingCalendar({
 
         {/* Step 2: Date, time & event type */}
         <div>
-          <label className="block text-sm font-semibold text-stone-900 dark:text-stone-100 mb-2">
+          <label htmlFor="booking-date" className="mb-2 block text-sm font-semibold text-ink">
             2. Choose Date &amp; Time
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <input
+              id="booking-date"
               type="date"
               value={date}
               min={todayISO()}
               onChange={(e) => setDate(e.target.value)}
               disabled={isSubmitting}
-              className="w-full rounded-xl border border-stone-300 bg-white p-3 text-base sm:text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:[color-scheme:dark] dark:focus:ring-rose-950"
+              className={fieldCls}
             />
             <input
+              id="booking-time"
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
               disabled={isSubmitting}
-              className="w-full rounded-xl border border-stone-300 bg-white p-3 text-base sm:text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:[color-scheme:dark] dark:focus:ring-rose-950"
+              aria-label="Booking time"
+              className={fieldCls}
             />
           </div>
 
-          <label className="block text-sm font-semibold text-stone-900 dark:text-stone-100 mt-4 mb-2">
+          <label
+            htmlFor="booking-event-type"
+            className="mb-2 mt-4 block text-sm font-semibold text-ink"
+          >
             3. Event Type
           </label>
           <select
+            id="booking-event-type"
             value={eventType}
             onChange={(e) => setEventType(e.target.value)}
             disabled={isSubmitting}
-            className="w-full rounded-xl border border-stone-300 bg-white p-3 text-base sm:text-sm text-stone-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:ring-rose-950"
+            className={fieldCls}
           >
             {eventTypes.map((et) => (
               <option key={et.id} value={et.label}>
@@ -241,28 +247,33 @@ export default function BookingCalendar({
 
         {/* Step 4: Optional Notes */}
         <div>
-          <label className="block text-sm font-semibold text-stone-900 dark:text-stone-100 mb-1.5">
+          <label htmlFor="booking-notes" className="mb-1.5 block text-sm font-semibold text-ink">
             4. Special Requests (Optional)
           </label>
           <textarea
+            id="booking-notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="E.g., Event venue in Bangsar, bridal look preference, early call time…"
             rows={2}
             disabled={isSubmitting}
             maxLength={2000}
-            className="w-full rounded-xl border border-stone-300 bg-white p-3 text-base sm:text-sm text-stone-800 placeholder-stone-400 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:ring-rose-950"
+            className={cn(fieldCls, "resize-none")}
           />
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 dark:bg-red-950/40 dark:border-red-900 dark:text-red-300 flex items-start gap-3">
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger"
+          >
             <svg
-              className="h-5 w-5 text-red-500 shrink-0 mt-0.5"
+              className="mt-0.5 h-5 w-5 shrink-0"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -276,7 +287,7 @@ export default function BookingCalendar({
               {needsVerification && (
                 <Link
                   href="/verify-email"
-                  className="mt-1 inline-block text-xs font-semibold text-rose-600 hover:underline dark:text-rose-400"
+                  className="mt-1 inline-block text-xs font-semibold underline"
                 >
                   Verify your email &rarr;
                 </Link>
@@ -287,16 +298,16 @@ export default function BookingCalendar({
 
         {/* Pricing Summary */}
         {service && (
-          <div className="rounded-xl bg-stone-50 p-4 dark:bg-stone-800/40 border border-stone-100 dark:border-stone-800 text-sm space-y-2">
-            <div className="flex justify-between text-stone-600 dark:text-stone-400">
+          <div className="space-y-2 rounded-xl border border-line bg-surface-sunken p-4 text-sm">
+            <div className="flex justify-between text-ink-muted">
               <span>Service price</span>
               <span>RM {servicePrice}</span>
             </div>
-            <div className="flex justify-between text-stone-600 dark:text-stone-400">
+            <div className="flex justify-between text-ink-muted">
               <span>Booking fee (after quotation, secures your date)</span>
               <span>RM {bookingFeeRM}</span>
             </div>
-            <div className="flex justify-between text-xs text-stone-500 border-t border-stone-200 dark:border-stone-700/60 pt-2">
+            <div className="flex justify-between border-t border-line pt-2 text-xs text-ink-subtle">
               <span>Balance due 3 days before event</span>
               <span>RM {Math.max(0, servicePrice - bookingFeeRM)}</span>
             </div>
@@ -305,15 +316,20 @@ export default function BookingCalendar({
 
         {/* Submit CTA — sticks to the viewport bottom on mobile so the
             primary action is always one thumb-tap away. */}
-        <div className="sticky bottom-0 -mx-6 -mb-6 bg-white/95 px-6 pb-4 pt-3 backdrop-blur rounded-b-2xl border-t border-stone-100 sm:static sm:mx-0 sm:mb-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none dark:border-stone-800 dark:bg-stone-900/95">
+        <div className="sticky bottom-0 -mx-6 -mb-6 rounded-b-2xl border-t border-line bg-surface/95 px-6 pb-4 pt-3 backdrop-blur sm:static sm:mx-0 sm:mb-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
           <button
             type="submit"
             disabled={!selectedService || !date || !time || isSubmitting}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 px-4 font-semibold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[48px]"
+            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 font-semibold text-primary-fg shadow-sm transition-all duration-[var(--dur-fast)] hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting ? (
               <>
-                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                <svg
+                  className="h-5 w-5 animate-spin text-primary-fg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
                   <circle
                     className="opacity-25"
                     cx="12"

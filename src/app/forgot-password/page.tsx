@@ -14,7 +14,7 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null);
 
   const inputCls =
-    "h-11 w-full rounded-xl border border-stone-300 bg-white px-4 text-sm text-stone-800 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-rose-500 dark:focus:ring-rose-900/40";
+    "h-11 w-full rounded-xl border border-line-strong bg-surface px-4 text-sm text-ink placeholder:text-ink-subtle transition-colors duration-[var(--dur-fast)] focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/30";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,27 +46,41 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="mx-auto flex max-w-md flex-col px-4 py-16 sm:px-6">
-      <h1 className="font-display text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
+      <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
         Reset your password
       </h1>
-      <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
+      <p className="mt-2 text-sm text-ink-muted">
         Enter your email and we&apos;ll send you a link to create a new password.
       </p>
 
       {message ? (
-        <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center dark:border-emerald-800/60 dark:bg-emerald-500/10">
-          <p className="text-lg font-semibold text-emerald-800 dark:text-emerald-400">
-            Check your inbox 📬
+        <div className="mt-8 rounded-2xl border border-success/30 bg-success-soft p-6 text-center">
+          <p className="flex items-center justify-center gap-2 text-lg font-semibold text-success">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              aria-hidden="true"
+              className="h-5 w-5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 8l9 6 9-6M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
+              />
+            </svg>
+            Check your inbox
           </p>
-          <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300/90">{message}</p>
+          <p className="mt-2 text-sm text-ink-muted">{message}</p>
           {devUrl && (
-            <div className="mt-4 rounded-xl bg-white/70 p-3 text-left dark:bg-stone-900/60">
-              <p className="text-xs font-medium text-stone-500 dark:text-stone-400">
+            <div className="mt-4 rounded-xl bg-surface p-3 text-left">
+              <p className="text-xs font-medium text-ink-muted">
                 Development reset link (no email provider configured):
               </p>
               <a
                 href={devUrl}
-                className="mt-1 block break-all text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-500"
+                className="mt-1 block break-all text-sm font-medium text-link hover:underline"
               >
                 {devUrl}
               </a>
@@ -81,10 +95,7 @@ export default function ForgotPasswordPage() {
       ) : (
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
-            <label
-              htmlFor="fp-email"
-              className="mb-1.5 block text-sm font-medium text-stone-800 dark:text-stone-200"
-            >
+            <label htmlFor="fp-email" className="mb-1.5 block text-sm font-medium text-ink">
               Email Address
             </label>
             <input
@@ -100,7 +111,7 @@ export default function ForgotPasswordPage() {
             />
           </div>
           {error && (
-            <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">
+            <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">
               {error}
             </p>
           )}
@@ -111,12 +122,9 @@ export default function ForgotPasswordPage() {
         </form>
       )}
 
-      <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
+      <p className="mt-6 text-center text-sm text-ink-muted">
         Remembered it?{" "}
-        <Link
-          href="/login"
-          className="font-medium text-rose-600 hover:text-rose-700 dark:text-rose-500 dark:hover:text-rose-400"
-        >
+        <Link href="/login" className="font-medium text-link hover:underline">
           Log in
         </Link>
       </p>

@@ -1,13 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
-import { Pool } from "pg";
+import { Client, Pool } from "pg";
 import fs from "node:fs";
 import path from "node:path";
 
 /**
  * Persistence facade with two interchangeable backends:
  *
- * - PostgreSQL (`DATABASE_URL` set): async `pg` Pool (works with Neon).
- *   Used in production / Vercel.
+ * - PostgreSQL (`DATABASE_URL` set): async `pg` client(s) (works with Neon).
+ *   Used in production / Vercel / Cloudflare Workers — see the
+ *   "Cloudflare Workers connection strategy" section below for why the
+ *   connection is scoped per request on Workers and pooled elsewhere.
  * - node:sqlite (no `DATABASE_URL`): Node's built-in SQLite, wrapped in the
  *   same async API. Used for local dev and tests (hermetic via
  *   LEISH_DB_PATH=:memory:).
@@ -73,23 +75,29 @@ export function resolveParams(compiled: CompiledSql, params: BindParam[]): BindV
 
 // ── PostgreSQL backend ───────────────────────────────────────────────────────
 
-function createPgFacade(pool: Pool, ensureReady: () => Promise<void>): DbFacade {
+/** `params === undefined` means "no bind values" → pg uses the simple query
+ *  protocol, which (unlike the extended protocol) allows several statements in
+ *  one string. The schema bootstrap relies on that. */
+type PgQueryResult = { rows: readonly unknown[]; rowCount: number | null };
+type PgQuery = (sql: string, params: BindValue[] | undefined) => Promise<PgQueryResult>;
+
+function createPgFacade(query: PgQuery, ensureReady: () => Promise<void>): DbFacade {
   const statement = (sql: string): Statement => {
     const compiled = compilePlaceholders(sql);
     return {
       async get<T>(...params: BindParam[]): Promise<T | undefined> {
         await ensureReady();
-        const { rows } = await pool.query(compiled.sql, resolveParams(compiled, params));
+        const { rows } = await query(compiled.sql, resolveParams(compiled, params));
         return rows[0] as T | undefined;
       },
       async all<T>(...params: BindParam[]): Promise<T[]> {
         await ensureReady();
-        const { rows } = await pool.query(compiled.sql, resolveParams(compiled, params));
+        const { rows } = await query(compiled.sql, resolveParams(compiled, params));
         return rows as T[];
       },
       async run(...params: BindParam[]): Promise<{ changes: number }> {
         await ensureReady();
-        const res = await pool.query(compiled.sql, resolveParams(compiled, params));
+        const res = await query(compiled.sql, resolveParams(compiled, params));
         return { changes: res.rowCount ?? 0 };
       },
     };
@@ -104,10 +112,117 @@ function createPgFacade(pool: Pool, ensureReady: () => Promise<void>): DbFacade 
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
       for (const s of statements) {
-        await pool.query(s);
+        await query(s, undefined);
       }
     },
   };
+}
+
+// ── Cloudflare Workers connection strategy ───────────────────────────────────
+//
+// workerd binds every outbound TCP socket to the I/O context of the request
+// that opened it. When that request completes the socket is destroyed — and it
+// goes down silently: `destroyed` stays `false`, no `close`/`error` event is
+// ever emitted, and further writes are swallowed. A `pg` Pool therefore hands
+// the *next* request a corpse, the query never settles, and the runtime cancels
+// the request with "your Worker's code had hung and would never generate a
+// response".
+//
+// Pooling across requests can never work here, so on Workers every statement
+// runs on its own short-lived connection: open → query → close in `finally`.
+// A connection is therefore never shared with (or inherited from) a different
+// request, and a stale socket can never turn into a hung Worker.
+//
+// This deliberately does NOT scope one connection per request via
+// `next/headers`: in Next 15+ `headers()` is async, and the awaited value is
+// not referentially stable across calls, so it cannot key a connection slot —
+// every statement would silently get its own never-closed client (a connection
+// leak). If per-request reuse is ever wanted, key it on a stable request
+// identifier from the hosting adapter (e.g. vinext's request context).
+//
+// Cost of per-statement connections: one TCP+TLS+auth handshake per query.
+// Point DATABASE_URL at the pooled endpoint (Neon pooler) so handshakes stay
+// cheap. On a long-lived Node process (Vercel, `next dev`, migration scripts)
+// sockets are not request-scoped, so the classic `pg` Pool is kept there.
+
+const isWorkersRuntime =
+  typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
+
+function envMs(name: string, fallback: number): number {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
+}
+
+/** Settle `promise` within `ms`, returning `fallback` if it is still pending.
+ *  Handlers are attached either way, so an abandoned promise can never surface
+ *  as an unhandled rejection. */
+function resolveWithin<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  if (!(ms > 0)) return promise;
+  return new Promise<T>((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(fallback);
+      }
+    }, ms);
+    const done = (value: T) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      }
+    };
+    promise.then(done, () => done(fallback));
+  });
+}
+
+/** Runs `fn` on a fresh connection that is always closed afterwards. Only the
+ *  close is time-bounded — the query itself must be allowed to run to
+ *  completion. A bounded close matters because a broken socket may never
+ *  answer `end()`; an unbounded one would hold the Worker open and retain the
+ *  client forever (one dangling close per failure). */
+async function withPgClient<T>(fn: (c: Client) => Promise<T>): Promise<T> {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    connectionTimeoutMillis: envMs("PG_CONNECTION_TIMEOUT_MS", 10_000),
+  });
+  await client.connect();
+  try {
+    return await fn(client);
+  } finally {
+    await resolveWithin(
+      client.end().then(
+        () => undefined,
+        () => undefined,
+      ),
+      envMs("PG_CLOSE_TIMEOUT_MS", 2_000),
+      undefined,
+    );
+  }
+}
+
+/**
+ * Runs one statement against PostgreSQL.
+ *
+ * Workers: one short-lived connection per statement (never shared across
+ * requests, always closed in `finally`).
+ * Node: the classic shared pool.
+ */
+function runPgQuery(sql: string, params: BindValue[] | undefined): Promise<PgQueryResult> {
+  if (!isWorkersRuntime) {
+    const pool = pgPool;
+    if (!pool) throw new Error("[db] pg pool is not initialised");
+    return (
+      params === undefined ? pool.query(sql) : pool.query(sql, params)
+    ) as Promise<PgQueryResult>;
+  }
+
+  const exec = (client: Client): Promise<PgQueryResult> =>
+    params === undefined
+      ? (client.query(sql) as Promise<PgQueryResult>)
+      : (client.query(sql, params) as Promise<PgQueryResult>);
+  return withPgClient(exec);
 }
 
 // ── node:sqlite backend ─────────────────────────────────────────────────────
@@ -881,24 +996,42 @@ export function getDb(): DbFacade {
   }
 
   if (isPostgres()) {
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: Number(process.env.PG_MAX ?? 10),
-      connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS ?? 10_000),
-      // Neon + serverless: short idle timeouts keep the pooler healthy.
-      idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS ?? 10_000),
-    });
-    pool.on("error", (err) => {
-      console.error("[db] pg pool error:", err.message);
-    });
-    pgPool = pool;
+    // The shared pool only exists on a long-lived Node process. On Workers,
+    // sockets do not survive the request that opened them, so `runPgQuery`
+    // opens a short-lived connection per statement instead (see above).
+    if (!isWorkersRuntime) {
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        max: Number(process.env.PG_MAX ?? 10),
+        connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS ?? 10_000),
+        // Neon + serverless: short idle timeouts keep the pooler healthy.
+        idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS ?? 10_000),
+      });
+      pool.on("error", (err) => {
+        console.error("[db] pg pool error:", err.message);
+      });
+      pgPool = pool;
+    }
+
+    const query: PgQuery = (sql, params) => runPgQuery(sql, params);
+
+    // One log line so the active backend is visible in production logs
+    // (the Workers/Node branch is chosen by runtime sniffing).
+    console.info(
+      `[db] pg backend: ${isWorkersRuntime ? "workers (short-lived connection per statement)" : "node pool"}`,
+    );
+
+    // Bootstrap through the same query path as every other statement. It is a
+    // single multi-statement string run with no bind values (simple protocol),
+    // so it costs exactly one short-lived connection on Workers.
     pgReady = (async () => {
-      await pool.query(PG_SCHEMA);
+      await query(PG_SCHEMA, undefined);
       // Applied separately so a missing payments.type on a legacy database
       // cannot roll back the rest of PG_SCHEMA. migrate.ts also creates this.
       try {
-        await pool.query(
+        await query(
           "CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type)",
+          undefined,
         );
       } catch (err) {
         console.error(
@@ -908,8 +1041,9 @@ export function getDb(): DbFacade {
       }
       // supabase_id index — column added lazily on legacy databases by migrate.ts
       try {
-        await pool.query(
+        await query(
           "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_supabase_id ON users(supabase_id)",
+          undefined,
         );
       } catch {
         // Column may not exist yet on legacy databases — safe to skip.
@@ -918,7 +1052,7 @@ export function getDb(): DbFacade {
       console.error("[db] pg schema migration failed:", err instanceof Error ? err.message : err);
       throw err;
     });
-    facade = createPgFacade(pool, () => pgReady!);
+    facade = createPgFacade(query, () => pgReady!);
     return facade;
   }
 
