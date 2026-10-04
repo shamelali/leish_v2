@@ -57,6 +57,12 @@ next-env.d.ts
 # Prevent git bundles from being committed
 *.bundle
 leish-v2.bundle
+
+# Stale copy of the leish monorepo snapshot (Sep 25) parked at the repo root.
+# Not part of the app build (also excluded from tsconfig/eslint/prettier in
+# e836c358); ignoring it here stops a stray `git add -A` from committing a
+# whole foreign repository. The live copy lives in ../leish-monorepo.
+leish-monorepo/
 .neon
 /dist/
 .vinext/
