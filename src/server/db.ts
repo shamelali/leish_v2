@@ -1,15 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
-import { Client, Pool } from "pg";
+import { Pool } from "pg";
+import { neonConfig, Pool as NeonPool } from "@neondatabase/serverless";
 import fs from "node:fs";
 import path from "node:path";
 
 /**
  * Persistence facade with two interchangeable backends:
  *
- * - PostgreSQL (`DATABASE_URL` set): async `pg` client(s) (works with Neon).
- *   Used in production / Vercel / Cloudflare Workers — see the
- *   "Cloudflare Workers connection strategy" section below for why the
- *   connection is scoped per request on Workers and pooled elsewhere.
+ * - PostgreSQL (`DATABASE_URL` set): async `pg` Pool on Node; Neon's
+ *   serverless driver (HTTPS, no TCP sockets) on Cloudflare Workers — see the
+ *   "Cloudflare Workers connection strategy" section below.
  * - node:sqlite (no `DATABASE_URL`): Node's built-in SQLite, wrapped in the
  *   same async API. Used for local dev and tests (hermetic via
  *   LEISH_DB_PATH=:memory:).
@@ -75,9 +75,10 @@ export function resolveParams(compiled: CompiledSql, params: BindParam[]): BindV
 
 // ── PostgreSQL backend ───────────────────────────────────────────────────────
 
-/** `params === undefined` means "no bind values" → pg uses the simple query
- *  protocol, which (unlike the extended protocol) allows several statements in
- *  one string. The schema bootstrap relies on that. */
+/** `params === undefined` means "no bind values". On Node, `pg` then uses the
+ *  simple query protocol (unlike the extended protocol, it allows several
+ *  statements in one string — the schema bootstrap relies on that). On
+ *  Workers the string is split into individual statements instead. */
 type PgQueryResult = { rows: readonly unknown[]; rowCount: number | null };
 type PgQuery = (sql: string, params: BindValue[] | undefined) => Promise<PgQueryResult>;
 
@@ -107,11 +108,7 @@ function createPgFacade(query: PgQuery, ensureReady: () => Promise<void>): DbFac
     prepare: statement,
     async exec(sql: string) {
       await ensureReady();
-      const statements = sql
-        .split(";")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-      for (const s of statements) {
+      for (const s of splitStatements(sql)) {
         await query(s, undefined);
       }
     },
@@ -121,95 +118,56 @@ function createPgFacade(query: PgQuery, ensureReady: () => Promise<void>): DbFac
 // ── Cloudflare Workers connection strategy ───────────────────────────────────
 //
 // workerd binds every outbound TCP socket to the I/O context of the request
-// that opened it. When that request completes the socket is destroyed — and it
-// goes down silently: `destroyed` stays `false`, no `close`/`error` event is
-// ever emitted, and further writes are swallowed. A `pg` Pool therefore hands
-// the *next* request a corpse, the query never settles, and the runtime cancels
-// the request with "your Worker's code had hung and would never generate a
-// response".
+// that opened it, and the Neon proxy drops raw `pg` TCP connections from
+// workerd altogether ("Connection terminated unexpectedly" on connect). So on
+// Workers we do NOT use `pg` at all: every statement goes through Neon's
+// serverless driver (`@neondatabase/serverless`) with `poolQueryViaFetch`,
+// i.e. plain HTTPS requests — no sockets to leak, hang, or get proxied away.
 //
-// Pooling across requests can never work here, so on Workers every statement
-// runs on its own short-lived connection: open → query → close in `finally`.
-// A connection is therefore never shared with (or inherited from) a different
-// request, and a stale socket can never turn into a hung Worker.
+// Multi-statement strings (the schema bootstrap) are split on `;` first,
+// because the SQL-over-HTTPS path runs one statement at a time — same
+// naive-split approach as the facade's `exec()` (the schema has no `;`
+// inside literals). Parameterised single statements pass through untouched.
 //
 // This deliberately does NOT scope one connection per request via
 // `next/headers`: in Next 15+ `headers()` is async, and the awaited value is
-// not referentially stable across calls, so it cannot key a connection slot —
-// every statement would silently get its own never-closed client (a connection
-// leak). If per-request reuse is ever wanted, key it on a stable request
-// identifier from the hosting adapter (e.g. vinext's request context).
-//
-// Cost of per-statement connections: one TCP+TLS+auth handshake per query.
-// Point DATABASE_URL at the pooled endpoint (Neon pooler) so handshakes stay
-// cheap. On a long-lived Node process (Vercel, `next dev`, migration scripts)
-// sockets are not request-scoped, so the classic `pg` Pool is kept there.
+// not referentially stable across calls, so it cannot key a connection slot.
+// On a long-lived Node process (Vercel, `next dev`, migration scripts) the
+// classic `pg` Pool is kept.
 
 const isWorkersRuntime =
   typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
 
-function envMs(name: string, fallback: number): number {
-  const raw = Number(process.env[name]);
-  return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
+/** Split a SQL script into individual statements. Strips `--` line comments
+ *  first so a semicolon inside a comment doesn't fracture a statement (e.g.
+ *  the idx_reviews_booking_id comment in the schema). Only for trusted,
+ *  application-authored SQL — the schema contains no `--` inside literals. */
+function splitStatements(script: string): string[] {
+  return script
+    .replace(/--[^\n]*/g, "")
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
-/** Settle `promise` within `ms`, returning `fallback` if it is still pending.
- *  Handlers are attached either way, so an abandoned promise can never surface
- *  as an unhandled rejection. */
-function resolveWithin<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  if (!(ms > 0)) return promise;
-  return new Promise<T>((resolve) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        resolve(fallback);
-      }
-    }, ms);
-    const done = (value: T) => {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timer);
-        resolve(value);
-      }
-    };
-    promise.then(done, () => done(fallback));
-  });
-}
+let neonPool: NeonPool | null = null;
 
-/** Runs `fn` on a fresh connection that is always closed afterwards. Only the
- *  close is time-bounded — the query itself must be allowed to run to
- *  completion. A bounded close matters because a broken socket may never
- *  answer `end()`; an unbounded one would hold the Worker open and retain the
- *  client forever (one dangling close per failure). */
-async function withPgClient<T>(fn: (c: Client) => Promise<T>): Promise<T> {
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    connectionTimeoutMillis: envMs("PG_CONNECTION_TIMEOUT_MS", 10_000),
-  });
-  await client.connect();
-  try {
-    return await fn(client);
-  } finally {
-    await resolveWithin(
-      client.end().then(
-        () => undefined,
-        () => undefined,
-      ),
-      envMs("PG_CLOSE_TIMEOUT_MS", 2_000),
-      undefined,
-    );
+/** Lazily-created Neon serverless pool (HTTPS, no TCP sockets). */
+function getNeonPool(): NeonPool {
+  if (!neonPool) {
+    neonConfig.poolQueryViaFetch = true;
+    neonPool = new NeonPool({ connectionString: process.env.DATABASE_URL });
   }
+  return neonPool;
 }
 
 /**
  * Runs one statement against PostgreSQL.
  *
- * Workers: one short-lived connection per statement (never shared across
- * requests, always closed in `finally`).
- * Node: the classic shared pool.
+ * Workers: Neon serverless driver over HTTPS.
+ * Node: the classic shared `pg` pool.
  */
-function runPgQuery(sql: string, params: BindValue[] | undefined): Promise<PgQueryResult> {
+async function runPgQuery(sql: string, params: BindValue[] | undefined): Promise<PgQueryResult> {
   if (!isWorkersRuntime) {
     const pool = pgPool;
     if (!pool) throw new Error("[db] pg pool is not initialised");
@@ -218,11 +176,16 @@ function runPgQuery(sql: string, params: BindValue[] | undefined): Promise<PgQue
     ) as Promise<PgQueryResult>;
   }
 
-  const exec = (client: Client): Promise<PgQueryResult> =>
-    params === undefined
-      ? (client.query(sql) as Promise<PgQueryResult>)
-      : (client.query(sql, params) as Promise<PgQueryResult>);
-  return withPgClient(exec);
+  const pool = getNeonPool();
+  if (params !== undefined) {
+    return (await pool.query(sql, params)) as unknown as PgQueryResult;
+  }
+  // No bind values: may be a multi-statement bootstrap string.
+  let last: PgQueryResult = { rows: [], rowCount: 0 };
+  for (const s of splitStatements(sql)) {
+    last = (await pool.query(s)) as unknown as PgQueryResult;
+  }
+  return last;
 }
 
 // ── node:sqlite backend ─────────────────────────────────────────────────────
@@ -996,9 +959,9 @@ export function getDb(): DbFacade {
   }
 
   if (isPostgres()) {
-    // The shared pool only exists on a long-lived Node process. On Workers,
-    // sockets do not survive the request that opened them, so `runPgQuery`
-    // opens a short-lived connection per statement instead (see above).
+    // The shared pool only exists on a long-lived Node process. On Workers
+    // there are no usable TCP sockets, so `runPgQuery` uses Neon's
+    // serverless driver (HTTPS) instead (see above).
     if (!isWorkersRuntime) {
       const pool = new Pool({
         connectionString: process.env.DATABASE_URL,
@@ -1018,12 +981,12 @@ export function getDb(): DbFacade {
     // One log line so the active backend is visible in production logs
     // (the Workers/Node branch is chosen by runtime sniffing).
     console.info(
-      `[db] pg backend: ${isWorkersRuntime ? "workers (short-lived connection per statement)" : "node pool"}`,
+      `[db] pg backend: ${isWorkersRuntime ? "workers (neon serverless over https)" : "node pool"}`,
     );
 
-    // Bootstrap through the same query path as every other statement. It is a
-    // single multi-statement string run with no bind values (simple protocol),
-    // so it costs exactly one short-lived connection on Workers.
+    // Bootstrap through the same query path as every other statement. On
+    // Workers the multi-statement string is split into individual HTTPS
+    // queries by runPgQuery.
     pgReady = (async () => {
       await query(PG_SCHEMA, undefined);
       // Applied separately so a missing payments.type on a legacy database
