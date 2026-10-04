@@ -7,6 +7,7 @@ import { authorizeCron } from "@/server/cron-auth";
 import { logger } from "@/server/logger";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * GET/POST /api/cron/quotation-expiry
@@ -22,6 +23,7 @@ const handler = tryRoute(
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const expired = await findExpiredQuotations();
     let marked = 0;
 
@@ -42,7 +44,15 @@ const handler = tryRoute(
       }
     }
 
-    logger.info({ found: expired.length, marked }, "quotation expiry sweep complete");
+    logger.info(
+      {
+        found: expired.length,
+        marked,
+        durationMs: Date.now() - startedAt,
+        processedCount: marked,
+      },
+      "quotation expiry sweep complete",
+    );
     return NextResponse.json({ found: expired.length, expired: marked });
   },
   { route: "/api/cron/quotation-expiry" },

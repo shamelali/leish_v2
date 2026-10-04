@@ -214,7 +214,7 @@ async function resendSend(message: EmailMessage, apiKey: string) {
 
 async function brevoSend(message: EmailMessage, apiKey: string) {
   const from = process.env.EMAIL_FROM ?? "Leish! <no-reply@leish.my>";
-  const nameMatch = from.match(/^(.*?)\s*<(.+?)>$/);
+  const nameMatch = from.match(/^([^<]*?)[ \t]*<([^>]+)>$/);
   const sender = nameMatch ? { email: nameMatch[2], name: nameMatch[1].trim() } : { email: from };
 
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -322,4 +322,18 @@ export async function retryFailedEmails(): Promise<{ retried: number; failed: nu
   }
 
   return { retried, failed };
+}
+
+/**
+ * Number of emails still awaiting a retry — backlog gauge for cron alerting.
+ *
+ * Counts only rows the retry cron can still pick up (`attempts < max_attempts`);
+ * rows that exhausted their attempts are dead letters and would otherwise pin
+ * the alert on forever.
+ */
+export async function countPendingEmailRetries(): Promise<number> {
+  const row = (await getDb()
+    .prepare("SELECT COUNT(*) AS c FROM email_retries WHERE attempts < max_attempts")
+    .get()) as { c: number } | undefined;
+  return Number(row?.c ?? 0);
 }

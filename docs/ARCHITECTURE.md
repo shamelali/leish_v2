@@ -54,9 +54,44 @@ Same async API either way. Schema migrations: `scripts/migrate.ts`
   the public loop is single-path.
 
 _Corrected 2026-09-04: this section previously described `/admin/**` as reading
-its data through the Supabase client, and referenced `src/proxy.ts` and
-`src/lib/types/database.ts`. Neither file exists, and the admin pages read
-through `getDb()` like everything else._
+its data through the Supabase client, and referenced `src/proxy.ts` (absent at
+the time) and `src/lib/types/database.ts`. The admin pages read through
+`getDb()` like everything else. `src/proxy.ts` exists again as of 2026-09-10 —
+as the CSP request proxy described below, not as an admin data path._
+
+## Content-Security-Policy comes from the request proxy, not `next.config.ts`
+
+A CSP that allows inline scripts by nonce **must** be regenerated per request:
+the nonce is single-use, so a static policy cannot contain it. The app
+therefore has exactly one source of CSP truth:
+
+- `src/lib/csp.ts` — pure policy builder. `generateNonce()` (128 bits of
+  CSPRNG, base64, padding stripped) and `buildContentSecurityPolicy()`, which
+  also owns the header names (`x-nonce`, `Content-Security-Policy`) that the
+  proxy and the root layout share.
+- `src/proxy.ts` — the Next.js 16 request proxy. Per matched request it mints a
+  nonce, sets the policy on the **response** (what the browser enforces) and
+  forwards it on the **request** (so `layout.tsx` can read `x-nonce` and nonce
+  the inline theme bootstrap script, and so Next.js can nonce its own
+  hydration scripts).
+- `next.config.ts` — deliberately sets **no** CSP. It still sets
+  `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`,
+  `Permissions-Policy` and HSTS.
+
+Two failure modes this layout avoids, both of which have shipped here before:
+
+1. **Wrong path.** Next resolves the proxy with the pattern `(?:src/)?proxy`,
+   so `src/proxy.ts` (or root `proxy.ts`) is the only place it is picked up.
+   When the file was moved to `src/app/proxy.ts` it was silently never loaded
+   and the app shipped with no CSP at all.
+2. **Two policies.** Browsers enforce _every_ `Content-Security-Policy` header
+   on a response, not just one. A nonce-less static policy in `next.config.ts`
+   alongside the proxy's nonce policy means the stricter one wins and every
+   script — including Next.js hydration — is blocked.
+
+If you add an inline script, a new third-party host, or a new image source,
+change `src/lib/csp.ts` and its tests. Do not add a CSP header to
+`next.config.ts`.
 
 ## Why one Postgres provider (not Neon + Supabase, not Drizzle)
 

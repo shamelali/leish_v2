@@ -1,8 +1,13 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from "vitest";
-import { getChatBus, publishToBooking, subscribeToBooking } from "./chat-bus";
-import { createUpstashBus } from "./chat-bus";
+import {
+  createMemoryBusForTest,
+  createUpstashBus,
+  getChatBus,
+  publishToBooking,
+  subscribeToBooking,
+} from "./chat-bus";
 
 describe("chat bus (in-memory fallback)", () => {
   it("delivers published messages to subscribers of the same booking", async () => {
@@ -51,12 +56,39 @@ describe("chat bus (in-memory fallback)", () => {
 
   it("returns the singleton instance", () => {
     expect(getChatBus()).toBe(getChatBus());
+    const mem = createMemoryBusForTest();
+    const got: string[] = [];
+    const off = mem.subscribe("b-mem", (m) => got.push(m.body));
+    mem.publish("b-mem", { id: "1", senderId: "u", senderName: "U", body: "m", createdAt: "" });
+    expect(got).toEqual(["m"]);
+    off();
   });
 });
 
 describe("chat bus (upstash backend)", () => {
   it("returns null without configuration", () => {
-    expect(createUpstashBus({ url: undefined, token: undefined })).toBeNull();
+    vi.stubEnv("UPSTASH_REST_URL", "");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    expect(createUpstashBus()).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts either Upstash env-var naming", () => {
+    vi.stubEnv("UPSTASH_REST_URL", "");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://native.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "native-token");
+    expect(createUpstashBus()).not.toBeNull();
+    vi.unstubAllEnvs();
+
+    vi.stubEnv("UPSTASH_REST_URL", "https://short.upstash.io");
+    vi.stubEnv("UPSTASH_REST_TOKEN", "short-token");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    expect(createUpstashBus()).not.toBeNull();
+    vi.unstubAllEnvs();
   });
 
   it("publishes to the upstash publish endpoint", () => {
@@ -174,5 +206,27 @@ describe("chat bus (upstash backend)", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(fetchMock).toHaveBeenCalledTimes(1);
     void abortSpy;
+  });
+
+  it("handles upstream non-OK response, multiple listeners, and publish errors gracefully", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockRejectedValueOnce(new Error("network down"));
+
+    const bus = createUpstashBus({
+      url: "https://example.upstash.io",
+      token: "tok",
+      fetchImpl: fetchMock,
+    })!;
+
+    const unsub1 = bus.subscribe("b-err", () => {});
+    const unsub2 = bus.subscribe("b-err", () => {});
+    bus.publish("b-err", { id: "m1", senderId: "u", senderName: "U", body: "hi", createdAt: "" });
+
+    await new Promise((r) => setTimeout(r, 20));
+    unsub1();
+    unsub2();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

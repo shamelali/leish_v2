@@ -2,7 +2,11 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { getDb } from "@/server/db";
-import { autoCompletePastBookings, autoCancelStaleBookings } from "./booking-transitions";
+import {
+  autoCompletePastBookings,
+  autoCancelStaleBookings,
+  runAllAutoTransitions,
+} from "./booking-transitions";
 
 // Mock email so tests don't depend on the email provider.
 vi.mock("@/server/booking-emails", () => ({
@@ -170,5 +174,24 @@ describe("autoCancelStaleBookings", () => {
       status: string;
     };
     expect(unchanged.status).toBe("accepted");
+  });
+});
+
+describe("runAllAutoTransitions", () => {
+  it("runs both autoCompletePastBookings and autoCancelStaleBookings together", async () => {
+    await seedUser("u-both");
+    await seedBooking("b-both-past", "u-both", {
+      status: "confirmed",
+      date: "2020-01-01",
+    });
+    await seedBooking("b-both-stale", "u-both", {
+      status: "requested",
+      created_at: new Date(Date.now() - 60 * 3_600_000).toISOString(),
+    });
+
+    const summary = await runAllAutoTransitions();
+    expect(summary.completed).toBeGreaterThanOrEqual(1);
+    expect(summary.cancelled).toBeGreaterThanOrEqual(1);
+    expect(summary.notified).toBeGreaterThanOrEqual(2);
   });
 });

@@ -91,7 +91,7 @@ Conformance language: **shall** = mandatory, **should** = recommended, **may** =
                          ┌────────▼────────────────────────┐
                          │     Vercel Edge / Node          │
                          │  API Routes (src/app/api/*)     │
-                         │  Middleware auth (proxy.ts)     │
+                         │  Request proxy (src/proxy.ts)     │
                          │  Headers: CSP nonce, HSTS, etc  │
                          └────────┬────────────────────────┘
                                   │
@@ -229,7 +229,7 @@ None beyond standard web client/server. Server requires PG or local disk for SQL
 #### 4.4 Communications Interfaces
 
 - **HTTP** only (HTTPS in prod). `Strict-Transport-Security` set via `next.config.ts`.
-- **Security headers** (`next.config.ts`): `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, CSP with per-request nonce (no `unsafe-inline` for scripts except theme toggle).
+- **Security headers**: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` and HSTS are set in `next.config.ts`. `Content-Security-Policy` is **not** — it is minted per request by `src/proxy.ts` using the policy builder in `src/lib/csp.ts`, carrying a fresh nonce so `script-src` can omit `unsafe-inline`. A second, nonce-less policy in `next.config.ts` would be enforced _alongside_ it and block every script, so the proxy is the single source of truth.
 - **Email**: via provider abstraction; outbox at `email_outbox` when `EMAIL_PROVIDER=dev`.
 - **Chat SSE**: `GET /api/bookings/[id]/messages/stream` — `text/event-stream`, replay + live.
 - **Health**: `GET /api/health` → 200 JSON.
@@ -411,7 +411,7 @@ Per `docs/PDPA_RETENTION_GUIDELINES.md`: users/bookings retained for audit perio
 - Passwords: scrypt + pepper, never logged.
 - Sessions: httpOnly, secure in prod, JTI revocation.
 - Inputs: zod on every API boundary.
-- Headers: CSP nonce, `DENY`, `nosniff`, `strict-origin-when-cross-origin`.
+- Headers: CSP nonce (`src/proxy.ts`, per request), `DENY`, `nosniff`, `strict-origin-when-cross-origin` (both `next.config.ts`).
 - Rate limiting: sliding window, 429.
 - Audit: every admin mutation logged.
 

@@ -1,11 +1,13 @@
 import { EventEmitter } from "node:events";
 import { logger } from "./logger";
+import { resolveUpstashCredentials } from "./upstash";
 
 /**
  * Chat pub/sub used by the SSE live-chat stream.
  *
  * Backends (chosen at first use, based on env):
- * - Upstash Redis (`UPSTASH_REST_URL` + `UPSTASH_REST_TOKEN` set): HTTP
+ * - Upstash Redis (`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`, or
+ *   the legacy `UPSTASH_REST_URL` + `UPSTASH_REST_TOKEN`, set): HTTP
  *   pub/sub — `POST /publish/<channel>` broadcasts, `GET /subscribe/<channel>`
  *   streams events. Works across instances (multi-region / multiple pods).
  * - In-memory EventEmitter: single-instance deployments (local dev, tests,
@@ -74,8 +76,9 @@ function createUpstashBusInner(opts?: {
   token?: string;
   fetchImpl?: typeof fetch;
 }): ChatBus | null {
-  const url = opts?.url ?? process.env.UPSTASH_REST_URL;
-  const token = opts?.token ?? process.env.UPSTASH_REST_TOKEN;
+  const credentials = resolveUpstashCredentials();
+  const url = opts?.url ?? credentials?.url;
+  const token = opts?.token ?? credentials?.token;
   if (!url || !token) return null;
   const doFetch = opts?.fetchImpl ?? fetch;
   const base = url.replace(/\/$/, "");

@@ -197,6 +197,107 @@ export async function notifySlackOverdueBalance(params: {
   });
 }
 
+/** Failed-email backlog above which the ops channel is warned (cron). */
+export const EMAIL_RETRY_BACKLOG_THRESHOLD = 100;
+
+/**
+ * Warn the ops channel that the failed-email retry backlog is growing.
+ * Returns `true` when a warning was posted (i.e. the threshold was exceeded),
+ * `false` when the backlog is healthy or Slack is unconfigured.
+ */
+export async function notifySlackEmailRetryBacklog(params: {
+  pending: number;
+  threshold?: number;
+}): Promise<boolean> {
+  const threshold = params.threshold ?? EMAIL_RETRY_BACKLOG_THRESHOLD;
+  if (params.pending <= threshold) return false;
+
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://leish.my"}/admin`;
+
+  return postToSlack({
+    blocks: [
+      {
+        type: "header",
+        text: { type: "plain_text", text: "⚠️ Email retry backlog", emoji: true },
+      },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Pending retries:*\n${params.pending}` },
+          { type: "mrkdwn", text: `*Alert threshold:*\n${threshold}` },
+        ],
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "View Admin", emoji: true },
+            url: dashboardUrl,
+          },
+        ],
+      },
+    ],
+    text: `⚠️ Email retry backlog: ${params.pending} pending (threshold ${threshold})`,
+  });
+}
+
+/**
+ * Alert the ops channel that a sensitive admin mutation could not be written to
+ * the audit trail. Sensitive mutations are fail-closed (`requireAudit`), so this
+ * fires exactly when an operator has to reconcile manually.
+ */
+export async function notifySlackAuditFailure(params: {
+  adminUserId: string;
+  action: string;
+  targetTable: string;
+  targetId?: string | null;
+  error?: string;
+}): Promise<boolean> {
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://leish.my"}/admin/audit`;
+  const target = params.targetId ? `${params.targetTable}#${params.targetId}` : params.targetTable;
+
+  return postToSlack({
+    blocks: [
+      {
+        type: "header",
+        text: { type: "plain_text", text: "🚨 Audit write failed", emoji: true },
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text:
+            `A sensitive admin action was *blocked* because it could not be audited. ` +
+            `The underlying mutation was rolled back — reconcile manually.`,
+        },
+      },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Action:*\n${params.action}` },
+          { type: "mrkdwn", text: `*Target:*\n${target}` },
+          { type: "mrkdwn", text: `*Admin user:*\n${params.adminUserId}` },
+          ...(params.error
+            ? [{ type: "mrkdwn" as const, text: `*Error:*\n${params.error.slice(0, 200)}` }]
+            : []),
+        ],
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "View Audit Log", emoji: true },
+            url: dashboardUrl,
+          },
+        ],
+      },
+    ],
+    text: `🚨 Audit write failed for ${params.action} on ${target} (admin ${params.adminUserId})`,
+  });
+}
+
 export async function notifySlackPayoutSummary(params: {
   settled: number;
   failed: number;

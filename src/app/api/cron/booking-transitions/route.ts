@@ -5,6 +5,7 @@ import { authorizeCron } from "@/server/cron-auth";
 import { logger } from "@/server/logger";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * GET/POST /api/cron/booking-transitions
@@ -25,6 +26,7 @@ const handler = tryRoute(
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const result = await runAllAutoTransitions();
 
     logger.info(
@@ -32,6 +34,8 @@ const handler = tryRoute(
         autoCompleted: result.completed,
         autoCancelled: result.cancelled,
         notified: result.notified,
+        durationMs: Date.now() - startedAt,
+        processedCount: result.completed + result.cancelled,
       },
       "booking transition sweep complete",
     );

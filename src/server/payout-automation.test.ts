@@ -175,4 +175,64 @@ describe("payout automation", () => {
     expect(result.settled).toBe(0);
     expect(result.pendingRemaining).toBe(2);
   });
+
+  it("handles unclaimed artist payouts and non-fatal notification/slack errors", async () => {
+    const { notifyPayoutSettled } = await import("./booking-emails");
+    const { notifySlackPayoutSummary } = await import("./notifications");
+    vi.mocked(notifyPayoutSettled).mockRejectedValueOnce(new Error("smtp down"));
+    vi.mocked(notifySlackPayoutSummary).mockRejectedValueOnce(new Error("slack down"));
+
+    // 1. Claimed artist whose email notification throws (still settles)
+    const bkId1 = await createTestBooking(customerUserId, "2026-08-01");
+    await getDb()
+      .prepare("INSERT INTO artist_profiles (user_id, artist_id, claimed_at) VALUES (?, ?, ?)")
+      .run(artistUserId, "aisha-azman", new Date().toISOString());
+    await createPayoutForBooking(bkId1, {
+      artistId: "aisha-azman",
+      eventDate: "2026-08-01",
+      quoteTotalSen: 100_000,
+    });
+
+    // 2. Unclaimed artist (artist_user_id is null)
+    const bkId2 = await createTestBooking(customerUserId, "2026-08-02");
+    await createPayoutForBooking(bkId2, {
+      artistId: "unclaimed-artist",
+      eventDate: "2026-08-02",
+      quoteTotalSen: 80_000,
+    });
+
+    const result = await runPayoutAutomation();
+    expect(result.settled).toBe(2);
+    expect(result.notified).toBe(1);
+    expect(result.failed).toBe(0);
+  });
+
+  it("counts failed payouts when updatePayoutStatus returns null or throws", async () => {
+    const payoutsMod = await import("./payouts");
+    const bkId1 = await createTestBooking(customerUserId, "2026-08-01");
+    const bkId2 = await createTestBooking(customerUserId, "2026-08-02");
+    await createPayoutForBooking(bkId1, {
+      artistId: "aisha-azman",
+      eventDate: "2026-08-01",
+      quoteTotalSen: 100_000,
+    });
+    await createPayoutForBooking(bkId2, {
+      artistId: "aisha-azman",
+      eventDate: "2026-08-02",
+      quoteTotalSen: 100_000,
+    });
+
+    const spy = vi
+      .spyOn(payoutsMod, "updatePayoutStatus")
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new Error("db write failed"));
+
+    try {
+      const result = await runPayoutAutomation();
+      expect(result.settled).toBe(0);
+      expect(result.failed).toBe(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });

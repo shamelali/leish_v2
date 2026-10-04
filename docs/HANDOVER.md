@@ -1,5 +1,41 @@
 # Handover — read this first
 
+## 2026-09-10 — CSP request proxy restored at `src/proxy.ts`
+
+The app was shipping with no working Content-Security-Policy. Two defects
+compounded:
+
+1. `src/proxy.ts` had been moved to `src/app/proxy.ts`. Next.js resolves the
+   proxy with the pattern `(?:src/)?proxy`, so the moved file was never loaded
+   — it was dead code and no CSP was emitted at all.
+2. `next.config.ts` still sent a static, nonce-less CSP. Browsers enforce
+   _every_ CSP header on a response, so once the proxy did run, the static
+   policy would be enforced alongside it and block every script, including
+   Next.js hydration.
+
+Fixed by consolidating on one source of truth:
+
+- **`src/lib/csp.ts`** (new) — pure, tested policy builder: `generateNonce()`,
+  `buildContentSecurityPolicy()`, and the shared `x-nonce` /
+  `Content-Security-Policy` header names.
+- **`src/proxy.ts`** (new) — the request proxy, at the path Next.js actually
+  reads. Sets the policy on the response and forwards the nonce on the request
+  so `layout.tsx` can nonce the inline theme script.
+- **`src/middleware.ts`** and **`src/app/proxy.ts`** (deleted) — the former was
+  a weaker duplicate (`script-src` only); the latter was the mislocated dead
+  file.
+- **`next.config.ts`** — CSP entry removed (comment left explaining why it must
+  not come back). Other security headers unchanged.
+- **`src/app/layout.tsx`** — reads the nonce via the shared `CSP_NONCE_HEADER`
+  constant instead of a hardcoded string.
+
+Covered by `src/lib/csp.test.ts` + `src/proxy.test.ts` (17 tests), including a
+guard that the nonce appears in `script-src` exactly once and a matcher test
+asserting API routes and static assets are excluded.
+
+If you ever need a new script host or image source, change `src/lib/csp.ts`.
+Never re-add a CSP header to `next.config.ts`.
+
 ## 2026-08-17 — public booking loop unified onto the db-facade backend
 
 The repo briefly shipped two parallel booking implementations: the public
@@ -20,9 +56,10 @@ RM 200 fee → webhook). The public loop was unified onto the db-facade path:
 - The single Billplz webhook is `POST /api/payments/webhook`.
 - `/admin/**` recognises OAuth sign-ins via the Supabase client, so
   `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` are needed for
-  that path. **Note (2026-09-04):** `src/proxy.ts` no longer exists, and admin
-  pages read their data through `getDb()`, not Supabase — Supabase is an OAuth
-  provider only.
+  that path. **Note (2026-09-04, updated 2026-09-10):** admin pages read their
+  data through `getDb()`, not Supabase — Supabase is an OAuth provider only.
+  (`src/proxy.ts` was absent when this note was written; it has since been
+  restored as the CSP request proxy — see the 2026-09-10 entry below.)
 
 ## Why this rebuild happened
 

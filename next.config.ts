@@ -9,10 +9,11 @@ const securityHeaders = [
     value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
   },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
-  // ⚠️ CSP is managed per-request via src/proxy.ts + src/lib/csp.ts.
-  // The static CSP here would be clobbered by the per-request nonce injection;
-  // removing it ensures the per-request policy is the only one the browser sees.
-  // Other security headers unchanged.
+  // No Content-Security-Policy here on purpose. A static CSP cannot carry a
+  // per-request nonce, and shipping one alongside the nonce policy from
+  // `src/proxy.ts` emits two CSP headers — the browser enforces *both*, so the
+  // stricter nonce-less one wins and every script is blocked. The proxy is the
+  // single source of truth; see `src/lib/csp.ts`.
 ];
 
 const supabasePattern = {

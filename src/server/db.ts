@@ -461,11 +461,17 @@ export const PG_SCHEMA = `
     created_at      TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_artists_state_area ON artists(state, area);
+  -- Budget range filtering (price_from <= ?) on the public catalog listings.
+  CREATE INDEX IF NOT EXISTS idx_artists_price ON artists(price_from);
   CREATE INDEX IF NOT EXISTS idx_studios_state_area ON studios(state, area);
   CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_type, referrer_id);
   CREATE INDEX IF NOT EXISTS idx_referrals_referee ON referrals(referee_type, referee_id);
   CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status);
   CREATE INDEX IF NOT EXISTS idx_reviews_entity ON reviews(entity_type, entity_id);
+  -- findReviewableBooking() LEFT JOINs reviews on booking_id. booking_id is
+  -- UNIQUE (implicit index); declared explicitly for older databases that may
+  -- predate the constraint.
+  CREATE INDEX IF NOT EXISTS idx_reviews_booking_id ON reviews(booking_id);
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
@@ -736,11 +742,17 @@ const SQLITE_SCHEMA = `
     created_at      TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_artists_state_area ON artists(state, area);
+  -- Budget range filtering (price_from <= ?) on the public catalog listings.
+  CREATE INDEX IF NOT EXISTS idx_artists_price ON artists(price_from);
   CREATE INDEX IF NOT EXISTS idx_studios_state_area ON studios(state, area);
   CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_type, referrer_id);
   CREATE INDEX IF NOT EXISTS idx_referrals_referee ON referrals(referee_type, referee_id);
   CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status);
   CREATE INDEX IF NOT EXISTS idx_reviews_entity ON reviews(entity_type, entity_id);
+  -- findReviewableBooking() LEFT JOINs reviews on booking_id. booking_id is
+  -- UNIQUE (implicit index); declared explicitly for older databases that may
+  -- predate the constraint.
+  CREATE INDEX IF NOT EXISTS idx_reviews_booking_id ON reviews(booking_id);
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);

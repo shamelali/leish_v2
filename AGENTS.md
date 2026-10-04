@@ -203,9 +203,11 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 - `POSTGRES_URL` — read only by `scripts/retain-purge.mjs`, which falls back
   to `DATABASE_URL`. Not validated anywhere; not needed by the app
-- `UPSTASH_REST_URL` / `UPSTASH_REST_TOKEN` — **currently inert.**
-  `src/server/ratelimit.ts` hardcodes the in-memory store, so rate limits are
-  per-instance regardless of these values
+- `UPSTASH_REST_URL` / `UPSTASH_REST_TOKEN` (or the native
+  `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`) — distributed rate
+  limiting, chat pub/sub, and catalog caching. The default limiter selects the
+  Upstash store automatically when either pair is set; without it, rate limits
+  are per-instance
 - `SENTRY_DSN` — error reporting
 - `ERROR_WEBHOOK_URL` — fallback error sink
 - `LOG_WEBHOOK_URL` — log forwarding
@@ -280,8 +282,11 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 ### 4. Rate Limiting
 
-- Distributed via Upstash Redis (optional): `UPSTASH_REST_URL`, `UPSTASH_REST_TOKEN`
-- Falls back to in-memory when unset — not suitable for multi-instance prod
+- Distributed via Upstash Redis (optional but recommended in prod):
+  `UPSTASH_REDIS_REST_URL`/`_TOKEN` or `UPSTASH_REST_URL`/`_TOKEN` (either pair;
+  resolved by `src/server/upstash.ts`)
+- `rateLimit` auto-selects the Upstash store when configured and falls back to
+  in-memory (per-instance) on missing credentials or a 30s outage cooldown
 
 ### 5. Headers
 
