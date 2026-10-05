@@ -3,7 +3,7 @@
   "main": "index.ts",
   "compatibility_date": "2026-08-26",
   "compatibility_flags": ["nodejs_compat"],
-  // Single per-minute trigger; the handler dispatches the original vercel.json
+  // Single per-minute trigger; the handler dispatches the original
   // schedules by wall-clock time (see index.ts). One trigger because the
   // account's Free-plan cron quota is nearly exhausted.
   "triggers": {

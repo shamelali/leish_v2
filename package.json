@@ -28,9 +28,7 @@
     "start:vinext": "wrangler dev --config dist/server/wrangler.json",
     "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json --experimental-warm-cdn-cache",
     "chat:dev": "wrangler dev --config src/workers/chat/wrangler.jsonc",
-    "chat:deploy": "wrangler deploy --config src/workers/chat/wrangler.jsonc",
-    "deploy:trigger": "bash scripts/deploy.sh",
-    "deploy:check": "bash scripts/deploy-status.sh"
+    "chat:deploy": "wrangler deploy --config src/workers/chat/wrangler.jsonc"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.810.0",
@@ -40,8 +38,6 @@
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.4",
     "@upstash/redis": "^1.38.3",
-    "@vercel/blob": "^2.8.0",
-    "@vercel/connect": "^2.0.1",
     "@vinext/cloudflare": "1.0.0-beta.6",
     "agnostai": "^0.2.0",
     "axios": "^1.19.0",

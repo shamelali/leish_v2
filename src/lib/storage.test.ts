@@ -1,20 +1,55 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-const origToken = process.env.BLOB_READ_WRITE_TOKEN;
+const R2_VARS = {
+  R2_ENDPOINT: "https://test.r2.cloudflarestorage.com",
+  R2_ACCESS_KEY_ID: "test-key",
+  R2_SECRET_ACCESS_KEY: "test-secret",
+  R2_BUCKET: "test-bucket",
+  R2_PUBLIC_BASE_URL: "https://pub-test.r2.dev",
+} as const;
 
-const { mockPut, mockDel, mockList, mockHead } = vi.hoisted(() => ({
-  mockPut: vi.fn(),
-  mockDel: vi.fn(),
-  mockList: vi.fn(),
-  mockHead: vi.fn(),
+const origEnv: Record<string, string | undefined> = {};
+
+const { mockSend } = vi.hoisted(() => ({
+  mockSend: vi.fn(),
 }));
 
-vi.mock("@vercel/blob", () => ({
-  put: mockPut,
-  del: mockDel,
-  list: mockList,
-  head: mockHead,
-}));
+vi.mock("@aws-sdk/client-s3", () => {
+  class S3Client {
+    send = mockSend;
+  }
+  class PutObjectCommand {
+    input: unknown;
+    constructor(input: unknown) {
+      this.input = input;
+    }
+  }
+  class DeleteObjectCommand {
+    input: unknown;
+    constructor(input: unknown) {
+      this.input = input;
+    }
+  }
+  class HeadObjectCommand {
+    input: unknown;
+    constructor(input: unknown) {
+      this.input = input;
+    }
+  }
+  class ListObjectsV2Command {
+    input: unknown;
+    constructor(input: unknown) {
+      this.input = input;
+    }
+  }
+  return {
+    S3Client,
+    PutObjectCommand,
+    DeleteObjectCommand,
+    HeadObjectCommand,
+    ListObjectsV2Command,
+  };
+});
 
 import {
   uploadObject,
@@ -27,49 +62,51 @@ import {
 } from "./storage";
 
 beforeEach(() => {
-  process.env.BLOB_READ_WRITE_TOKEN = "test-token";
+  for (const [k, v] of Object.entries(R2_VARS)) {
+    origEnv[k] = process.env[k];
+    process.env[k] = v;
+  }
   vi.clearAllMocks();
 });
 
 afterEach(() => {
-  if (origToken !== undefined) process.env.BLOB_READ_WRITE_TOKEN = origToken;
-  else delete process.env.BLOB_READ_WRITE_TOKEN;
+  for (const k of Object.keys(R2_VARS)) {
+    if (origEnv[k] !== undefined) process.env[k] = origEnv[k];
+    else delete process.env[k];
+  }
   vi.clearAllMocks();
 });
 
 describe("uploadObject", () => {
-  it("uploads Buffer with correct options", async () => {
-    mockPut.mockResolvedValue({ url: "https://blob.example.com/key" });
+  it("uploads Buffer with correct bucket/key/content-type", async () => {
+    mockSend.mockResolvedValue({});
     const buffer = Buffer.from("test content");
 
     await uploadObject("test/key.txt", buffer, "text/plain");
 
-    expect(mockPut).toHaveBeenCalledTimes(1);
-    const [key, body, options] = mockPut.mock.calls[0];
-    expect(key).toBe("test/key.txt");
-    expect(Buffer.isBuffer(body)).toBe(true);
-    expect(options).toMatchObject({
-      access: "public",
-      contentType: "text/plain",
-      token: "test-token",
-      addRandomSuffix: false,
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    const cmd = mockSend.mock.calls[0][0] as { input: Record<string, unknown> };
+    expect(cmd.input).toMatchObject({
+      Bucket: "test-bucket",
+      Key: "test/key.txt",
+      ContentType: "text/plain",
     });
+    expect(Buffer.isBuffer(cmd.input.Body)).toBe(true);
   });
 
   it("uploads Uint8Array", async () => {
-    mockPut.mockResolvedValue({ url: "https://blob.example.com/key" });
+    mockSend.mockResolvedValue({});
     const uint8 = new Uint8Array([1, 2, 3, 4]);
 
     await uploadObject("test/key.bin", uint8, "application/octet-stream");
 
-    expect(mockPut).toHaveBeenCalledTimes(1);
-    const [, body] = mockPut.mock.calls[0];
-    expect(Buffer.isBuffer(body)).toBe(true);
-    expect(Buffer.from(body).equals(Buffer.from(uint8))).toBe(true);
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    const cmd = mockSend.mock.calls[0][0] as { input: Record<string, unknown> };
+    expect(Buffer.from(cmd.input.Body as Uint8Array).equals(Buffer.from(uint8))).toBe(true);
   });
 
   it("uploads ReadableStream by converting to buffer", async () => {
-    mockPut.mockResolvedValue({ url: "https://blob.example.com/key" });
+    mockSend.mockResolvedValue({});
     const stream = new ReadableStream({
       start(controller) {
         controller.enqueue(new TextEncoder().encode("stream data"));
@@ -79,37 +116,42 @@ describe("uploadObject", () => {
 
     await uploadObject("test/key.txt", stream, "text/plain");
 
-    expect(mockPut).toHaveBeenCalledTimes(1);
-    const [, body] = mockPut.mock.calls[0];
-    expect(Buffer.isBuffer(body)).toBe(true);
-    expect(body.toString()).toBe("stream data");
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    const cmd = mockSend.mock.calls[0][0] as { input: Record<string, unknown> };
+    expect((cmd.input.Body as Buffer).toString()).toBe("stream data");
+  });
+
+  it("throws when R2 env is missing", async () => {
+    delete process.env.R2_BUCKET;
+    await expect(uploadObject("k", Buffer.from("x"), "text/plain")).rejects.toThrow(
+      "R2 storage misconfigured",
+    );
   });
 });
 
 describe("deleteObject", () => {
-  it("deletes object with token", async () => {
-    mockDel.mockResolvedValue(undefined);
+  it("deletes object by key", async () => {
+    mockSend.mockResolvedValue({});
 
     await deleteObject("test/key.txt");
 
-    expect(mockDel).toHaveBeenCalledTimes(1);
-    expect(mockDel.mock.calls[0][0]).toBe("test/key.txt");
-    expect(mockDel.mock.calls[0][1]).toEqual({ token: "test-token" });
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    const cmd = mockSend.mock.calls[0][0] as { input: Record<string, unknown> };
+    expect(cmd.input).toMatchObject({ Bucket: "test-bucket", Key: "test/key.txt" });
   });
 });
 
 describe("objectExists", () => {
   it("returns true when head succeeds", async () => {
-    mockHead.mockResolvedValue({});
+    mockSend.mockResolvedValue({});
 
     const exists = await objectExists("test/key.txt");
 
     expect(exists).toBe(true);
-    expect(mockHead).toHaveBeenCalledWith("test/key.txt", { token: "test-token" });
   });
 
   it("returns false when head throws", async () => {
-    mockHead.mockRejectedValue(new Error("not found"));
+    mockSend.mockRejectedValue(new Error("not found"));
 
     const exists = await objectExists("test/key.txt");
 
@@ -118,36 +160,33 @@ describe("objectExists", () => {
 });
 
 describe("listObjects", () => {
-  it("returns array of pathnames", async () => {
-    mockList.mockResolvedValue({
-      blobs: [{ pathname: "prefix/file1.txt" }, { pathname: "prefix/file2.txt" }],
-    });
+  it("returns array of keys and follows pagination", async () => {
+    mockSend
+      .mockResolvedValueOnce({
+        Contents: [{ Key: "prefix/file1.txt" }],
+        IsTruncated: true,
+        NextContinuationToken: "tok",
+      })
+      .mockResolvedValueOnce({ Contents: [{ Key: "prefix/file2.txt" }], IsTruncated: false });
 
     const objects = await listObjects("prefix/");
 
     expect(objects).toEqual(["prefix/file1.txt", "prefix/file2.txt"]);
-    expect(mockList).toHaveBeenCalledWith({ prefix: "prefix/", token: "test-token" });
+    expect(mockSend).toHaveBeenCalledTimes(2);
   });
 });
 
 describe("getBlobUrl", () => {
-  it("returns url when blob found", async () => {
-    mockList.mockResolvedValue({
-      blobs: [{ pathname: "test/key.txt", url: "https://blob.example.com/test/key.txt" }],
-    });
+  it("returns public URL when object exists", async () => {
+    mockSend.mockResolvedValue({});
 
     const url = await getBlobUrl("test/key.txt");
 
-    expect(url).toBe("https://blob.example.com/test/key.txt");
-    expect(mockList).toHaveBeenCalledWith({
-      prefix: "test/key.txt",
-      limit: 1,
-      token: "test-token",
-    });
+    expect(url).toBe("https://pub-test.r2.dev/test/key.txt");
   });
 
-  it("throws when blob not found", async () => {
-    mockList.mockResolvedValue({ blobs: [] });
+  it("throws when object missing", async () => {
+    mockSend.mockRejectedValue(new Error("not found"));
 
     await expect(getBlobUrl("test/key.txt")).rejects.toThrow("Blob not found: test/key.txt");
   });

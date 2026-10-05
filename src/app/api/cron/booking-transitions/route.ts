@@ -16,10 +16,10 @@ export const maxDuration = 60;
  *   2. Requested bookings waiting on artist response for >48h → "cancelled"
  *
  * Owner notifications (email) are sent for both transitions. This runs every
- * hour via Vercel Cron (see vercel.json) to keep calendars and payout
+ * hour via the leish-cron Cloudflare worker to keep calendars and payout
  * timelines accurate without admin intervention.
  *
- * Guarded by CRON_SECRET (Vercel Cron Bearer token or x-cron-secret header).
+ * Guarded by CRON_SECRET (scheduler Bearer token or x-cron-secret header).
  */
 const handler = tryRoute(
   async function run(request: Request) {

@@ -13,8 +13,8 @@ import { corsHeaders, isAllowedOrigin } from "@/lib/ops/cors";
  * Request proxy (Next.js 16 "proxy" convention, formerly "middleware"):
  *
  * 1. `/api/*`: Applies the dynamic CORS allowlist (`https://leish.my`,
- *    `https://www.leish.my`, plus `CORS_ALLOWED_ORIGINS` / `ALLOWED_ORIGINS`
- *    and optional `CORS_VERCEL_PREVIEW_PREFIX`; see `src/lib/ops/cors.ts`).
+ *    `https://www.leish.my`, plus `CORS_ALLOWED_ORIGINS` / `ALLOWED_ORIGINS`;
+ *    see `src/lib/ops/cors.ts`).
  *    Same-origin requests carry no cross-origin Origin and pass through
  *    untouched; no CSP nonce is minted for JSON endpoints.
  *

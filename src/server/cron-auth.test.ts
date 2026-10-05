@@ -25,9 +25,9 @@ describe("authorizeCron", () => {
     expect(authorizeCron(req)).toBeNull();
   });
 
-  it("allows Vercel cron with correct Bearer", () => {
+  it("allows scheduler cron with correct Bearer", () => {
     vi.stubEnv("CRON_SECRET", "my-secret");
-    const req = makeRequest({ authorization: "Bearer my-secret", "x-vercel-cron": "1" });
+    const req = makeRequest({ authorization: "Bearer my-secret" });
     expect(authorizeCron(req)).toBeNull();
   });
 
@@ -52,9 +52,9 @@ describe("authorizeCron", () => {
     expect(res!.status).toBe(401);
   });
 
-  it("rejects Vercel cron header without correct Bearer", () => {
+  it("rejects unknown headers without correct Bearer", () => {
     vi.stubEnv("CRON_SECRET", "my-secret");
-    const req = makeRequest({ "x-vercel-cron": "1" });
+    const req = makeRequest({ "x-scheduler": "1" });
     const res = authorizeCron(req);
     expect(res).not.toBeNull();
     expect(res!.status).toBe(401);

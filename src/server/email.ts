@@ -17,8 +17,8 @@ import { getConnectToken } from "./connect";
  * - "postmark": sends via the Postmark API. Configure POSTMARK_SERVER_TOKEN
  *   and EMAIL_FROM, set EMAIL_PROVIDER=postmark.
  *
- * API keys are resolved from Vercel Connect first (API-key connectors),
- * falling back to environment variables for backward compatibility.
+ * API keys live in environment variables (locally `.env.local` / `.dev.vars`,
+ * in production Cloudflare secrets via `wrangler secret put`).
  * If a provider's key is missing we fall back to dev with a warning so
  * local/CI runs never fail on misconfiguration.
  *
@@ -35,8 +35,9 @@ export interface EmailMessage {
 export type EmailProvider = "dev" | "resend" | "postmark" | "brevo";
 
 /**
- * Connector names for Vercel Connect API-key connectors.
- * These must match the connector IDs created in the Vercel Connect dashboard.
+ * Connector UIDs resolve to plain environment variables
+ * (see `src/server/connect.ts`). Kept so API-key connectors stay
+ * addressable by their former UID without code changes.
  */
 const EMAIL_CONNECTORS: Record<string, string> = {
   resend: "api-key/resend",
@@ -45,7 +46,8 @@ const EMAIL_CONNECTORS: Record<string, string> = {
 } as const;
 
 /**
- * Resolve an API key from Vercel Connect first, falling back to env var.
+ * Resolve an API key from the environment.
+ * `getConnectToken` maps the connector UID to its env var (see connect.ts).
  */
 async function resolveApiKey(connector: string, envKey: string): Promise<string | null> {
   try {

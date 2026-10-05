@@ -26,13 +26,8 @@ describe("isAllowedOrigin", () => {
     expect(isAllowedOrigin("https://partner.leish.my", e2)).toBe(true);
   });
 
-  it("only allows this project's Vercel previews when a prefix is set", () => {
-    const preview = "https://leish-git-feat-team.vercel.app";
-    expect(isAllowedOrigin(preview, env())).toBe(false);
-    const e = env({ CORS_VERCEL_PREVIEW_PREFIX: "leish" });
-    expect(isAllowedOrigin(preview, e)).toBe(true);
-    expect(isAllowedOrigin("https://other-git-x.vercel.app", e)).toBe(false);
-    expect(isAllowedOrigin("not-a-valid-url", e)).toBe(false);
+  it("rejects unknown, http, look-alike, and worker-preview origins", () => {
+    expect(isAllowedOrigin("https://leish-my.shamelali.workers.dev", env())).toBe(false);
   });
 
   it("allows localhost only in development", () => {

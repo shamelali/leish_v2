@@ -7,7 +7,7 @@ export const maxDuration = 60;
 
 /**
  * GET/POST /api/cron/retention
- * Placeholder retention sweep. Vercel Cron (see vercel.json) invokes this
+ * Placeholder retention sweep. The leish-cron Cloudflare worker invokes this
  * daily with `Authorization: Bearer <CRON_SECRET>`. Heavy PII purging is
  * performed out-of-band by scripts/retain-purge.mjs against PostgreSQL.
  *

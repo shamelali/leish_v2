@@ -46,6 +46,8 @@ export default function AdminArtistsPage() {
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
   const [creating, setCreating] = useState(false);
   const [createForm, setCreateForm] = useState({
     name: "",
@@ -85,6 +87,26 @@ export default function AdminArtistsPage() {
       priceFrom: artist.priceFrom,
       verified: artist.verified,
     });
+  }
+
+  async function handleDelete(artist: Artist) {
+    if (!window.confirm(`Delete artist "${artist.name}"? This cannot be undone.`)) return;
+    setActionError("");
+    setDeletingId(artist.id);
+    try {
+      const res = await fetch(`/api/admin/artists/${artist.id}`, { method: "DELETE" });
+      const data: { error?: string } = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActionError(data.error ?? "Failed to delete artist");
+        return;
+      }
+      setArtists((prev) => prev.filter((a) => a.id !== artist.id));
+      if (selected?.id === artist.id) setSelected(null);
+    } catch {
+      setActionError("Failed to delete artist");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   async function saveOverrides() {
@@ -226,6 +248,12 @@ export default function AdminArtistsPage() {
         </div>
       )}
 
+      {actionError && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-400">
+          {actionError}
+        </p>
+      )}
+
       <div className="rounded-xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
         <div className="border-b border-stone-200 px-6 py-4 dark:border-stone-800">
           <input
@@ -300,12 +328,21 @@ export default function AdminArtistsPage() {
                     )}
                   </td>
                   <td className="whitespace-nowrap px-6 py-3">
-                    <button
-                      onClick={() => openDetail(a)}
-                      className="rounded-md bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400 dark:hover:bg-rose-900/30"
-                    >
-                      View / Edit
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openDetail(a)}
+                        className="rounded-md bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400 dark:hover:bg-rose-900/30"
+                      >
+                        View / Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(a)}
+                        disabled={deletingId === a.id}
+                        className="rounded-md bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                      >
+                        {deletingId === a.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -470,6 +507,13 @@ export default function AdminArtistsPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
+                <button
+                  onClick={() => selected && handleDelete(selected)}
+                  disabled={saving || (selected ? deletingId === selected.id : false)}
+                  className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  {selected && deletingId === selected.id ? "Deleting…" : "Delete Artist"}
+                </button>
                 <button
                   onClick={() => setSelected(null)}
                   className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800"

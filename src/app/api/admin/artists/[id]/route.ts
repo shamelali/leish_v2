@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/server/db";
 import { requireAdmin, logAdminAction } from "@/server/admin-auth";
 import { jsonError, readJson, statefulRoute, tryRoute } from "@/server/http";
-import { getArtistById, updateArtist, listEntityReviews } from "@/server/catalog";
+import { getArtistById, updateArtist, deleteArtist, listEntityReviews } from "@/server/catalog";
 
 interface ArtistProfileRow {
   user_id: string;
@@ -81,4 +81,45 @@ export const PATCH = statefulRoute(
     return NextResponse.json({ ok: true, artist: updated });
   },
   { route: "PATCH /api/admin/artists/[id]" },
+);
+
+export const DELETE = statefulRoute(
+  async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { user, error } = await requireAdmin(request);
+    if (error) return error;
+
+    const { id } = await params;
+    const existing = await getArtistById(id);
+    if (!existing) return jsonError("Artist not found", 404);
+
+    // Hard deletes leave dangling bookings/reviews (no FK), so refuse when
+    // the profile is referenced. Delete is for erroneous/duplicate listings.
+    const db = getDb();
+    const bookingCount = (await db
+      .prepare("SELECT COUNT(*) AS n FROM bookings WHERE artist_id = ?")
+      .get<{ n: number }>(id))?.n;
+    if (bookingCount) {
+      return jsonError(`Cannot delete: artist has ${bookingCount} booking(s)`, 409);
+    }
+    const claimCount = (await db
+      .prepare("SELECT COUNT(*) AS n FROM artist_profiles WHERE artist_id = ?")
+      .get<{ n: number }>(id))?.n;
+    if (claimCount) {
+      return jsonError("Cannot delete: artist profile is claimed by a user", 409);
+    }
+    const reviewCount = (await db
+      .prepare("SELECT COUNT(*) AS n FROM reviews WHERE entity_type = 'artist' AND entity_id = ?")
+      .get<{ n: number }>(id))?.n;
+    if (reviewCount) {
+      return jsonError(`Cannot delete: artist has ${reviewCount} review(s)`, 409);
+    }
+
+    const ok = await deleteArtist(id);
+    if (!ok) return jsonError("Artist not found", 404);
+
+    await logAdminAction(user.id, "catalog_delete", "artists", id, { name: existing.name }, { requireAudit: true });
+
+    return NextResponse.json({ ok: true });
+  },
+  { route: "DELETE /api/admin/artists/[id]" },
 );

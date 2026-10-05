@@ -23,7 +23,9 @@ const supabasePattern = {
 };
 const blobPattern = {
   protocol: "https" as const,
-  hostname: "*.public.blob.vercel-storage.com",
+  // Cloudflare R2 public hostname (r2.dev subdomain or custom domain).
+  // Override with R2_PUBLIC_HOSTNAME when using a custom domain.
+  hostname: process.env.R2_PUBLIC_HOSTNAME ?? "*.r2.dev",
   pathname: "/**" as const,
 };
 

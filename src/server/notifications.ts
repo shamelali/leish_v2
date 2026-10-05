@@ -3,18 +3,13 @@ import { logger } from "./logger";
 import type { BookingStatus } from "./bookings";
 
 /**
- * Slack notifications via Vercel Connect.
+ * Slack notifications via bot token.
  *
  * Posts booking lifecycle events to a configured Slack channel.
- * No Slack API key lives in env vars — Connect provides runtime tokens.
  *
  * Required env:
  *   SLACK_CHANNEL_ID — target channel (e.g. "C01ABC123")
- *
- * Required Vercel Connect setup:
- *   1. Create a Slack connector in the Vercel dashboard
- *   2. Install the Vercel Slack app in your workspace
- *   3. Link the connector to your project
+ *   SLACK_BOT_TOKEN  — Slack bot token (xoxb-...)
  */
 
 const SLACK_CHANNEL = process.env.SLACK_CHANNEL_ID;

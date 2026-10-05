@@ -131,16 +131,6 @@ export function enforceSameOrigin(request: Request): NextResponse | null {
     .filter((value): value is string => Boolean(value));
   const expected = new Set([appOrigin(request), requestOrigin(request), ...allowed]);
 
-  const vercelUrl = process.env.VERCEL_URL?.trim();
-  if (vercelUrl) {
-    const vercelOrigin = normalizeOrigin(
-      vercelUrl.startsWith("http://") || vercelUrl.startsWith("https://")
-        ? vercelUrl
-        : `https://${vercelUrl}`,
-    );
-    if (vercelOrigin) expected.add(vercelOrigin);
-  }
-
   // Arena's browser preview is an HTTPS proxy around the local dev server.
   // It may not forward Host in every environment, so allow only the platform's
   // well-defined preview hostname while running outside production.

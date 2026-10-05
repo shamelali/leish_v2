@@ -14,7 +14,7 @@ export const maxDuration = 60;
  * Marks pending quotations past their 24h window as expired and emails the
  * clients. Guarded by CRON_SECRET so only the scheduler can run it.
  *
- * Vercel Cron (configured in vercel.json) issues a GET with
+ * The leish-cron Cloudflare worker issues a GET with
  * `Authorization: Bearer <CRON_SECRET>`; manual callers may use the
  * `x-cron-secret` header instead.
  */

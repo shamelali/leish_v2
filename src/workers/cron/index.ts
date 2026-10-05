@@ -1,16 +1,15 @@
 /**
  * leish-cron — scheduled trigger worker.
  *
- * Replaces the Vercel Cron schedules (see vercel.json) for the Cloudflare
- * deployment. Cloudflare Free allows few cron triggers per account and this
- * account already uses most of them, so this worker has ONE per-minute
- * trigger and dispatches the original schedules by wall-clock time.
+ * Cloudflare scheduled worker for the production deployment. Cloudflare Free
+ * allows few cron triggers per account and this account already uses most of
+ * them, so this worker has ONE per-minute trigger and dispatches the original
+ * schedules by wall-clock time.
  *
- * All jobs are idempotent timestamp-gated sweeps (safe if a tick fires twice),
- * mirroring vercel.json: email-retries every 5 min, quotation-expiry +
- * booking-transitions hourly, retention 02:00, payout-automation 03:00, and
- * the balance-reminders / review-requests / quotation-recovery morning
- * sweeps at 09:00 UTC.
+ * All jobs are idempotent timestamp-gated sweeps (safe if a tick fires twice):
+ * email-retries every 5 min, quotation-expiry + booking-transitions hourly,
+ * retention 02:00, payout-automation 03:00, and the balance-reminders /
+ * review-requests / quotation-recovery morning sweeps at 09:00 UTC.
  *
  * Secrets: CRON_SECRET (wrangler secret put --config <this file>)
  */

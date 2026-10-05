@@ -13,7 +13,7 @@ export const maxDuration = 60;
  * releases slots for bookings the client never completed. Guarded by
  * CRON_SECRET so only the scheduler can run it.
  *
- * Vercel Cron (configured in vercel.json) issues a GET with
+ * The leish-cron Cloudflare worker issues a GET with
  * `Authorization: Bearer <CRON_SECRET>`; manual callers may use the
  * `x-cron-secret` header instead.
  */

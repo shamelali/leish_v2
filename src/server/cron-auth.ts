@@ -4,10 +4,8 @@ import { NextResponse } from "next/server";
 /**
  * Authorize a cron invocation.
  *
- * Supports both callers:
- *  - Vercel Cron: issues a GET with `Authorization: Bearer <CRON_SECRET>`
- *    (and an `x-vercel-cron: 1` header on the platform).
- *  - Manual/self-hosted schedulers: may send `x-cron-secret: <CRON_SECRET>`.
+ * Callers (the leish-cron Cloudflare worker, or manual schedulers) send
+ * `Authorization: Bearer <CRON_SECRET>` or `x-cron-secret: <CRON_SECRET>`.
  *
  * Fails closed: when `CRON_SECRET` is unset the request is rejected with 500,
  * except in local development (`NODE_ENV === "development"`) so the endpoints

@@ -1,9 +1,8 @@
 /**
  * CORS allowlist for /api/*.
  *
- * Static vercel.json headers can only carry one Access-Control-Allow-Origin
- * value, which blocked the apex domain (leish.my) and preview deployments.
- * Instead we echo the request Origin back when it is allowed.
+ * We echo the request Origin back when it is allowed (a static single-origin
+ * header would block the apex domain plus legitimate alternates).
  *
  * Extra origins can be added with CORS_ALLOWED_ORIGINS or ALLOWED_ORIGINS
  * (comma-separated).
@@ -29,21 +28,6 @@ export function isAllowedOrigin(
   if (!origin) return false;
   const normalized = origin.trim().replace(/\/$/, "");
   if (allowedOrigins(env).includes(normalized)) return true;
-  // This project's own Vercel preview deployments, e.g.
-  // https://leish-git-feature-x-team.vercel.app — only when explicitly enabled.
-  const prefix = env.CORS_VERCEL_PREVIEW_PREFIX?.trim();
-  if (prefix) {
-    try {
-      const { protocol, hostname } = new URL(normalized);
-      return (
-        protocol === "https:" &&
-        hostname.startsWith(`${prefix}-`) &&
-        hostname.endsWith(".vercel.app")
-      );
-    } catch {
-      return false;
-    }
-  }
   return false;
 }
 
