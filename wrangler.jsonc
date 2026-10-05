@@ -37,4 +37,10 @@
   "observability": {
     "enabled": true,
   },
+  "vars": {
+    // Traffic-driven crons (see src/server/cron-scheduler.ts). Vercel keeps
+    // real cron schedules instead, so this flag lives only in the
+    // Cloudflare deployment config.
+    "CRON_TRAFFIC_SCHEDULER": "1",
+  },
 }
