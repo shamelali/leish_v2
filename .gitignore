@@ -68,3 +68,4 @@ leish-monorepo/
 .vinext/
 .wrangler/
 -w
+wrangler-state-stale/
