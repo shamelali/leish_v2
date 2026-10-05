@@ -32,12 +32,27 @@ export async function requireAdmin(request: Request) {
 
   const token = request.headers.get("cookie")?.match(/(?:^|;\s*)leish_session=([^;]+)/)?.[1];
   const payload = token ? await verifySessionToken(token) : null;
-  if (!payload) {
-    return { error: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
+  let user = payload
+    ? ((await getDb().prepare("SELECT * FROM users WHERE id = ?").get(payload.sub)) as
+        | UserRow
+        | undefined)
+    : undefined;
+
+  // Fallback to Supabase session (OAuth users) — mirrors src/app/admin/layout.tsx.
+  if (!user) {
+    try {
+      const { getSupabaseUser } = await import("@/lib/supabase/auth");
+      const sbUser = await getSupabaseUser();
+      if (sbUser) {
+        user = (await getDb().prepare("SELECT * FROM users WHERE id = ?").get(sbUser.id)) as
+          | UserRow
+          | undefined;
+      }
+    } catch {
+      // Supabase env vars may not be set — fall through to 401.
+    }
   }
 
-  const user = (await getDb().prepare("SELECT * FROM users WHERE id = ?").get(payload.sub)) as
-    UserRow | undefined;
   if (!user) {
     return { error: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
   }

@@ -96,3 +96,16 @@ export function payoutStatusVariant(status: string): BadgeVariant {
       return "warning";
   }
 }
+
+export function referralStatusVariant(status: string): BadgeVariant {
+  switch (status) {
+    case "paid":
+      return "success";
+    case "qualified":
+      return "info";
+    case "pending":
+      return "warning";
+    default:
+      return "default";
+  }
+}
