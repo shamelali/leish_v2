@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { BrevoClient } from "@getbrevo/brevo";
 import { getDb } from "./db";
 import { logger } from "./logger";
 import { getConnectToken } from "./connect";
@@ -215,27 +216,22 @@ async function resendSend(message: EmailMessage, apiKey: string) {
 async function brevoSend(message: EmailMessage, apiKey: string) {
   const from = process.env.EMAIL_FROM ?? "Leish! <no-reply@leish.my>";
   const nameMatch = from.match(/^([^<]*?)[ \t]*<([^>]+)>$/);
-  const sender = nameMatch ? { email: nameMatch[2], name: nameMatch[1].trim() } : { email: from };
+  const sender = nameMatch
+    ? { email: nameMatch[2], name: nameMatch[1].trim() || undefined }
+    : { email: from };
 
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "api-key": apiKey,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
+  const client = new BrevoClient({ apiKey });
+  try {
+    await client.transactionalEmails.sendTransacEmail({
       sender,
       to: [{ email: message.to }],
       subject: message.subject,
       textContent: message.text,
       htmlContent: message.html,
-    }),
-  });
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    logger.error({ status: res.status, detail }, "brevo email failed");
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    logger.error({ detail }, "brevo email failed");
     throw new Error("Failed to send email");
   }
   logger.info({ to: message.to, subject: message.subject }, "email sent via brevo");

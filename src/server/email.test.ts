@@ -11,6 +11,15 @@ import {
   sendEmail,
 } from "./email";
 
+const { mockBrevoSend } = vi.hoisted(() => ({ mockBrevoSend: vi.fn() }));
+
+vi.mock("@getbrevo/brevo", () => ({
+  BrevoClient: class {
+    transactionalEmails = { sendTransacEmail: mockBrevoSend };
+    constructor(_options?: unknown) {}
+  },
+}));
+
 const OUTBOX =
   "INSERT INTO email_outbox (id, to_email, subject, text, html, created_at) VALUES (?, ?, ?, ?, ?, ?)";
 
@@ -158,13 +167,14 @@ describe("email service", () => {
     it("sends via brevo and does not touch the outbox", async () => {
       process.env.EMAIL_PROVIDER = "brevo";
       process.env.BREVO_API_KEY = "test-key";
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as typeof fetch;
+      mockBrevoSend.mockResolvedValue({ messageId: "abc" });
       try {
         await sendEmail({ to: "a@b.c", subject: "Brevo!", text: "x" });
-        expect(globalThis.fetch).toHaveBeenCalledWith(
-          "https://api.brevo.com/v3/smtp/email",
-          expect.objectContaining({ method: "POST" }),
+        expect(mockBrevoSend).toHaveBeenCalledWith(
+          expect.objectContaining({
+            to: [{ email: "a@b.c" }],
+            subject: "Brevo!",
+          }),
         );
         expect(await getDb().prepare("SELECT COUNT(*) AS c FROM email_outbox").get()).toMatchObject(
           {
@@ -172,7 +182,7 @@ describe("email service", () => {
           },
         );
       } finally {
-        globalThis.fetch = originalFetch;
+        mockBrevoSend.mockReset();
       }
     });
 
@@ -225,12 +235,7 @@ describe("email service", () => {
     it("queues a brevo failure for retry and rethrows", async () => {
       process.env.EMAIL_PROVIDER = "brevo";
       process.env.BREVO_API_KEY = "test-key";
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: () => Promise.resolve("boom"),
-      }) as typeof fetch;
+      mockBrevoSend.mockRejectedValue(new Error("boom"));
       try {
         await expect(sendEmail({ to: "a@b.c", subject: "Fail", text: "x" })).rejects.toThrow(
           "Failed to send email",
@@ -241,7 +246,7 @@ describe("email service", () => {
         expect(row.to_email).toBe("a@b.c");
         expect(row.max_attempts).toBe(3);
       } finally {
-        globalThis.fetch = originalFetch;
+        mockBrevoSend.mockReset();
       }
     });
   });
