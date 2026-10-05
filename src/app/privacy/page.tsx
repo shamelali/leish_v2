@@ -7,11 +7,11 @@ export const metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalDoc title="Privacy Policy" updated="23 Aug 2026">
+    <LegalDoc title="Privacy Policy" updated="6 Oct 2026">
       <p>
         Leish! (&ldquo;we&rdquo;, &ldquo;us&rdquo;), operated by{" "}
-        <strong>[LEISH OPERATING COMPANY SDN BHD]</strong> (company no. <strong>[NUMBER]</strong>),
-        respects and is committed to the protection of your personal data under the{" "}
+        <strong>Duta Integra Solutions</strong>, respects and is committed to the protection of your
+        personal data under the{" "}
         <strong>Personal Data Protection Act 2010 (&ldquo;PDPA&rdquo;)</strong>. This policy
         explains what we collect, why, who we share it with, and your rights.
       </p>
@@ -89,16 +89,16 @@ export default function PrivacyPage() {
           <tr>
             <td>Invoices &amp; payment records</td>
             <td>
-              [7 years], as required by Malaysian law; personal identifiers are then stripped.
+              7 years, as required by Malaysian tax law; personal identifiers are then stripped.
             </td>
           </tr>
           <tr>
             <td>Bookings</td>
-            <td>Anonymised [2 years] after the event date.</td>
+            <td>Anonymised 2 years after the event date.</td>
           </tr>
           <tr>
             <td>Security &amp; request logs</td>
-            <td>[30 days].</td>
+            <td>30 days.</td>
           </tr>
           <tr>
             <td>Account data</td>
@@ -118,9 +118,9 @@ export default function PrivacyPage() {
       <p>
         Under PDPA you may request access to your personal data, corrections, or withdrawal of
         consent (which may end our ability to provide services). You can also export a copy of your
-        booking data anytime from your dashboard. Write to <strong>[DPO / PRIVACY EMAIL]</strong> —
-        we respond within [21 days]. You may complain to the Personal Data Protection Department
-        (JPDP) at any time.
+        booking data anytime from your dashboard. Write to{" "}
+        <a href="mailto:privacy@leish.my">privacy@leish.my</a> — we respond within 21 days. You may
+        complain to the Personal Data Protection Department (JPDP) at any time.
       </p>
 
       <h2>7. Cookies</h2>
