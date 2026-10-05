@@ -7,7 +7,7 @@ import {
   generateNonce,
 } from "@/lib/csp";
 import { corsHeaders, isAllowedOrigin } from "@/lib/ops/cors";
-import { kickCronScheduler } from "@/server/cron-scheduler";
+// NOTE: cron-scheduler import removed with the disabled hook above.
 
 /**
  * Request proxy (Next.js 16 "proxy" convention, formerly "middleware"):
@@ -29,13 +29,16 @@ import { kickCronScheduler } from "@/server/cron-scheduler";
 export function proxy(request: NextRequest) {
   const pathname = request.nextUrl?.pathname ?? new URL(request.url).pathname;
 
-  // Traffic-driven crons (Cloudflare only — no-op unless enabled). Never
-  // awaits: scheduling happens after the response via after().
-  try {
-    kickCronScheduler(new URL(request.url).origin);
-  } catch {
-    // A malformed request URL must never break the proxy.
-  }
+  // Traffic-driven crons are DISABLED for now: vinext's after() appears to
+  // hold the response open until background work finishes, so the first
+  // request per isolate hung behind full cron ticks (edge 524s). The
+  // scheduler module stays for a future explicit trigger; see
+  // src/server/cron-scheduler.ts.
+  // try {
+  //   kickCronScheduler(new URL(request.url).origin);
+  // } catch {
+  //   // A malformed request URL must never break the proxy.
+  // }
 
   if (pathname === "/api" || pathname.startsWith("/api/")) {
     const origin = request.headers.get("origin");
