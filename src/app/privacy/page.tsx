@@ -10,8 +10,8 @@ export default function PrivacyPage() {
     <LegalDoc title="Privacy Policy" updated="6 Oct 2026">
       <p>
         Leish! (&ldquo;we&rdquo;, &ldquo;us&rdquo;), operated by{" "}
-        <strong>Duta Integra Solutions</strong>, respects and is committed to the protection of your
-        personal data under the{" "}
+        <strong>Duta Integra Solutions</strong> (SSM no. 202503195000 (TR0325441-K)), respects and is
+        committed to the protection of your personal data under the{" "}
         <strong>Personal Data Protection Act 2010 (&ldquo;PDPA&rdquo;)</strong>. This policy
         explains what we collect, why, who we share it with, and your rights.
       </p>
