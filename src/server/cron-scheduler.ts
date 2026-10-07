@@ -33,7 +33,7 @@ export interface CronJob {
 }
 
 export const CRON_JOBS: CronJob[] = [
-  { name: "email-retries", intervalMs: 5 * 60_000, path: "/api/cron/email-retries" },
+  { name: "email-retries", intervalMs: 15 * 60_000, path: "/api/cron/email-retries" },
   { name: "quotation-expiry", intervalMs: 60 * 60_000, path: "/api/cron/quotation-expiry" },
   { name: "booking-transitions", intervalMs: 60 * 60_000, path: "/api/cron/booking-transitions" },
   { name: "retention", intervalMs: 22 * 60 * 60_000, hourUTC: 2, path: "/api/cron/retention" },

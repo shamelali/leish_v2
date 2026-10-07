@@ -29,8 +29,8 @@ describe("dueJobs", () => {
     expect(due.map((j) => j.name)).toContain("quotation-expiry");
   });
 
-  it("fires email-retries after 5 minutes", () => {
-    const last = new Map([["cron_last_email-retries", MORNING - 5 * 60_000]]);
+  it("fires email-retries after 15 minutes", () => {
+    const last = new Map([["cron_last_email-retries", MORNING - 15 * 60_000]]);
     expect(dueJobs(last, MORNING).map((j) => j.name)).toContain("email-retries");
   });
 

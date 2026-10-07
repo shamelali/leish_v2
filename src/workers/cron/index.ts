@@ -7,7 +7,7 @@
  * schedules by wall-clock time.
  *
  * All jobs are idempotent timestamp-gated sweeps (safe if a tick fires twice):
- * email-retries every 5 min, quotation-expiry + booking-transitions hourly,
+ * email-retries every 15 min, quotation-expiry + booking-transitions hourly,
  * retention 02:00, payout-automation 03:00, and the balance-reminders /
  * review-requests / quotation-recovery morning sweeps at 09:00 UTC.
  *
@@ -29,7 +29,7 @@ const MORNING = [
 /** Route paths due at this UTC wall-clock time. */
 function duePaths(now: Date): string[] {
   const paths: string[] = [];
-  if (now.getUTCMinutes() % 5 === 0) paths.push("/api/cron/email-retries");
+  if (now.getUTCMinutes() % 15 === 0) paths.push("/api/cron/email-retries");
   if (now.getUTCMinutes() === 0) {
     paths.push(...HOURLY);
     const h = now.getUTCHours();
