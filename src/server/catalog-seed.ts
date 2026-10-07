@@ -245,6 +245,11 @@ let ensurePromise: Promise<void> | null = null;
 export function ensureCatalogSeeded(): Promise<void> {
   if (!ensurePromise) {
     ensurePromise = (async () => {
+      // Production guard: never (re)seed a live catalog unless explicitly
+      // enabled — deleted seed rows must stay deleted.
+      if (process.env.NODE_ENV === "production" && process.env.ALLOW_CATALOG_SEED !== "1") {
+        return;
+      }
       const db = getDb();
       const marker = (await db
         .prepare("SELECT value FROM platform_settings WHERE key = ?")
