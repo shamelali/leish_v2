@@ -31,30 +31,26 @@ const footerLinks = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-950">
+    <footer className="border-t border-line bg-surface">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
         <div className="grid gap-10 md:grid-cols-4">
           <div>
             <Logo />
-            <p className="mt-3 text-sm leading-6 text-stone-500 dark:text-stone-400">
+            <p className="mt-3 text-sm leading-6 text-ink-muted">
               Book beauty anywhere. Malaysia&apos;s marketplace for makeup artists and beauty
               studios.
             </p>
-            <p className="mt-4 text-xs text-stone-400 dark:text-stone-500">
-              Cyberjaya · Selangor · Malaysia
-            </p>
+            <p className="mt-4 text-xs text-ink-subtle">Cyberjaya · Selangor · Malaysia</p>
           </div>
           {footerLinks.map((col) => (
             <div key={col.title}>
-              <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                {col.title}
-              </h3>
+              <h3 className="text-sm font-semibold text-ink">{col.title}</h3>
               <ul className="mt-3 space-y-2">
                 {col.links.map((link) => (
                   <li key={link.label}>
                     <a
                       href={link.href}
-                      className="text-sm text-stone-500 transition-colors hover:text-rose-600 dark:text-stone-400 dark:hover:text-rose-400"
+                      className="text-sm text-ink-muted transition-colors duration-[var(--dur-fast)] hover:text-link focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     >
                       {link.label}
                     </a>
@@ -64,7 +60,7 @@ export function Footer() {
             </div>
           ))}
         </div>
-        <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-stone-100 pt-6 text-xs text-stone-400 sm:flex-row dark:border-stone-800 dark:text-stone-500">
+        <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-line pt-6 text-xs text-ink-subtle sm:flex-row">
           <p>© {BUILD_YEAR} Leish! · Duta Integra Solutions.</p>
           <p>Made with ♥ in Malaysia</p>
         </div>

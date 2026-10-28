@@ -185,6 +185,21 @@ describe("csrf", () => {
     const res = await handler(req);
     expect(res.status).toBe(200);
   });
+
+  it("allows both https://leish.my and https://www.leish.my via the CORS allowlist", async () => {
+    const handler = csrf(async (req: Request) => {
+      void req;
+      return NextResponse.json({ done: true });
+    });
+    const apex = await handler(
+      fakeRequest("https://www.leish.my/api/bookings", { origin: "https://leish.my" }),
+    );
+    const www = await handler(
+      fakeRequest("https://leish.my/api/bookings", { origin: "https://www.leish.my" }),
+    );
+    expect(apex.status).toBe(200);
+    expect(www.status).toBe(200);
+  });
 });
 
 describe("statefulRoute", () => {

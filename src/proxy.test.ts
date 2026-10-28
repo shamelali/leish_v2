@@ -2,19 +2,30 @@ import type { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
 // `next/server` pulls in the whole server runtime; the proxy only needs
-// `NextResponse.next()` to capture forwarded request headers and expose a
-// mutable response header bag, so a small stand-in keeps this test fast.
+// `new NextResponse()` and `NextResponse.next()` to capture forwarded request
+// headers and expose a mutable response header bag, so a small stand-in keeps
+// this test fast.
 vi.mock("next/server", () => {
   class MockNextResponse {
-    readonly headers = new Headers();
+    readonly headers: Headers;
+    readonly status: number;
     readonly forwardedRequestHeaders: Headers | undefined;
 
-    private constructor(options?: { request?: { headers?: Headers } }) {
-      this.forwardedRequestHeaders = options?.request?.headers;
+    constructor(
+      _body?: BodyInit | null,
+      init?: {
+        status?: number;
+        headers?: HeadersInit;
+        request?: { headers?: Headers };
+      },
+    ) {
+      this.status = init?.status ?? 200;
+      this.headers = new Headers(init?.headers);
+      this.forwardedRequestHeaders = init?.request?.headers;
     }
 
     static next(options?: { request?: { headers?: Headers } }) {
-      return new MockNextResponse(options);
+      return new MockNextResponse(null, { request: options?.request });
     }
   }
 
@@ -27,20 +38,21 @@ import { PATHNAME_HEADER } from "@/lib/request-headers";
 import { config, proxy } from "./proxy";
 
 interface MockResponse {
+  status: number;
   headers: Headers;
   forwardedRequestHeaders: Headers | undefined;
 }
 
 function runProxy(
   url = "https://leish.my/artists/aisha-azman",
-  headers: Record<string, string> = {},
+  init?: { method?: string; headers?: Record<string, string> },
 ): MockResponse {
   const request = {
-    headers: new Headers(headers),
+    headers: new Headers(init?.headers),
     url,
     // NextRequest always carries a parsed nextUrl; the proxy reads its pathname.
     nextUrl: new URL(url),
-    method: "GET",
+    method: init?.method ?? "GET",
   } as unknown as NextRequest;
 
   return proxy(request) as unknown as MockResponse;
@@ -96,10 +108,51 @@ describe("proxy", () => {
   it("overwrites a client-supplied pathname header", () => {
     // Otherwise a crafted header could drive the post-login redirect off-site.
     const response = runProxy("https://leish.my/dashboard", {
-      [PATHNAME_HEADER]: "//evil.example",
+      headers: { [PATHNAME_HEADER]: "//evil.example" },
     });
 
     expect(response.forwardedRequestHeaders?.get(PATHNAME_HEADER)).toBe("/dashboard");
+  });
+
+  it("attaches CORS headers on /api/* for leish.my and www.leish.my", () => {
+    const apex = runProxy("https://www.leish.my/api/artists", {
+      headers: { origin: "https://leish.my" },
+    });
+    expect(apex.headers.get("Access-Control-Allow-Origin")).toBe("https://leish.my");
+    expect(apex.headers.get("Vary")).toBe("Origin");
+    expect(apex.headers.get(CONTENT_SECURITY_POLICY_HEADER)).toBeNull();
+
+    const www = runProxy("https://leish.my/api/artists", {
+      headers: { origin: "https://www.leish.my" },
+    });
+    expect(www.headers.get("Access-Control-Allow-Origin")).toBe("https://www.leish.my");
+  });
+
+  it("handles OPTIONS preflight on /api/* for allowed and disallowed origins", () => {
+    const allowed = runProxy("https://leish.my/api/bookings", {
+      method: "OPTIONS",
+      headers: { origin: "https://www.leish.my" },
+    });
+    expect(allowed.status).toBe(204);
+    expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe("https://www.leish.my");
+
+    const rejected = runProxy("https://leish.my/api/bookings", {
+      method: "OPTIONS",
+      headers: { origin: "https://evil.example" },
+    });
+    expect(rejected.status).toBe(403);
+    expect(rejected.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(rejected.headers.get("Vary")).toBe("Origin");
+  });
+
+  it("omits CORS headers on /api/* when Origin is disallowed or absent", () => {
+    const evil = runProxy("https://leish.my/api/artists", {
+      headers: { origin: "https://evil.example" },
+    });
+    expect(evil.headers.get("Access-Control-Allow-Origin")).toBeNull();
+
+    const sameOrigin = runProxy("https://leish.my/api/artists");
+    expect(sameOrigin.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 });
 
@@ -114,7 +167,7 @@ describe("proxy matcher", () => {
     expect(pattern.test("/onboarding")).toBe(true);
   });
 
-  it("excludes API routes, Next.js internals and static files", () => {
+  it("excludes API routes, Next.js internals and static files from document matcher", () => {
     expect(pattern.test("/api/bookings")).toBe(false);
     expect(pattern.test("/_next/static/chunks/main.js")).toBe(false);
     expect(pattern.test("/_next/image?url=%2Fhero.jpg")).toBe(false);
@@ -123,5 +176,9 @@ describe("proxy matcher", () => {
     expect(pattern.test("/robots.txt")).toBe(false);
     expect(pattern.test("/sitemap.xml")).toBe(false);
     expect(pattern.test("/icon.svg")).toBe(false);
+  });
+
+  it("includes /api/:path* for CORS handling", () => {
+    expect(config.matcher).toContain("/api/:path*");
   });
 });

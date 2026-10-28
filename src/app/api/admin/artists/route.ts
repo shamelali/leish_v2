@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/server/db";
 import { requireAdmin } from "@/server/admin-auth";
 import { statefulRoute, tryRoute, readJson, jsonError } from "@/server/http";
-import { listAllArtists, createArtist } from "@/server/catalog";
+import { countArtists, listAllArtists, createArtist } from "@/server/catalog";
+import { paginationHeaders, paginationMeta, parsePagination } from "@/lib/pagination";
 
 import { z } from "zod";
 import { logAdminAction } from "@/server/admin-auth";
@@ -66,16 +67,26 @@ export const GET = tryRoute(
     const { error } = await requireAdmin(request);
     if (error) return error;
 
-    const [artists, profiles] = await Promise.all([
-      listAllArtists(),
-      getDb()
-        .prepare(
-          `SELECT ap.user_id, ap.artist_id, ap.claimed_at, u.name AS user_name, u.email AS user_email
-         FROM artist_profiles ap
-         JOIN users u ON u.id = ap.user_id`,
-        )
-        .all<ArtistProfileRow>(),
-    ]);
+    const { searchParams } = new URL(request.url);
+    const { limit, offset } = parsePagination(searchParams, {
+      defaultLimit: 50,
+      maxLimit: 200,
+    });
+
+    const [artists, total] = await Promise.all([listAllArtists({ limit, offset }), countArtists()]);
+
+    // Fetch claim rows only for the artists on this page.
+    const artistIds = artists.map((a) => a.id);
+    const profiles = artistIds.length
+      ? ((await getDb()
+          .prepare(
+            `SELECT ap.user_id, ap.artist_id, ap.claimed_at, u.name AS user_name, u.email AS user_email
+             FROM artist_profiles ap
+             JOIN users u ON u.id = ap.user_id
+             WHERE ap.artist_id IN (${artistIds.map(() => "?").join(",")})`,
+          )
+          .all(...artistIds)) as ArtistProfileRow[])
+      : [];
 
     const profilesByArtist = new Map<string, ArtistProfileRow[]>();
     for (const p of profiles) {
@@ -84,9 +95,16 @@ export const GET = tryRoute(
       profilesByArtist.set(p.artist_id, list);
     }
 
-    return NextResponse.json({
-      artists: artists.map((a) => ({ ...a, claimedBy: profilesByArtist.get(a.id) ?? [] })),
-    });
+    return NextResponse.json(
+      {
+        artists: artists.map((a) => ({ ...a, claimedBy: profilesByArtist.get(a.id) ?? [] })),
+        total,
+        limit,
+        offset,
+        pagination: paginationMeta(total, { limit, offset }, artists.length),
+      },
+      { headers: paginationHeaders(total) },
+    );
   },
   { route: "GET /api/admin/artists" },
 );

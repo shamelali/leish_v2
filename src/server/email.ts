@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { BrevoClient } from "@getbrevo/brevo";
 import { getDb } from "./db";
 import { logger } from "./logger";
 import { getConnectToken } from "./connect";
@@ -16,8 +17,8 @@ import { getConnectToken } from "./connect";
  * - "postmark": sends via the Postmark API. Configure POSTMARK_SERVER_TOKEN
  *   and EMAIL_FROM, set EMAIL_PROVIDER=postmark.
  *
- * API keys are resolved from Vercel Connect first (API-key connectors),
- * falling back to environment variables for backward compatibility.
+ * API keys live in environment variables (locally `.env.local` / `.dev.vars`,
+ * in production Cloudflare secrets via `wrangler secret put`).
  * If a provider's key is missing we fall back to dev with a warning so
  * local/CI runs never fail on misconfiguration.
  *
@@ -34,8 +35,9 @@ export interface EmailMessage {
 export type EmailProvider = "dev" | "resend" | "postmark" | "brevo";
 
 /**
- * Connector names for Vercel Connect API-key connectors.
- * These must match the connector IDs created in the Vercel Connect dashboard.
+ * Connector UIDs resolve to plain environment variables
+ * (see `src/server/connect.ts`). Kept so API-key connectors stay
+ * addressable by their former UID without code changes.
  */
 const EMAIL_CONNECTORS: Record<string, string> = {
   resend: "api-key/resend",
@@ -44,7 +46,8 @@ const EMAIL_CONNECTORS: Record<string, string> = {
 } as const;
 
 /**
- * Resolve an API key from Vercel Connect first, falling back to env var.
+ * Resolve an API key from the environment.
+ * `getConnectToken` maps the connector UID to its env var (see connect.ts).
  */
 async function resolveApiKey(connector: string, envKey: string): Promise<string | null> {
   try {
@@ -214,28 +217,23 @@ async function resendSend(message: EmailMessage, apiKey: string) {
 
 async function brevoSend(message: EmailMessage, apiKey: string) {
   const from = process.env.EMAIL_FROM ?? "Leish! <no-reply@leish.my>";
-  const nameMatch = from.match(/^(.*?)\s*<(.+?)>$/);
-  const sender = nameMatch ? { email: nameMatch[2], name: nameMatch[1].trim() } : { email: from };
+  const nameMatch = from.match(/^([^<]*?)[ \t]*<([^>]+)>$/);
+  const sender = nameMatch
+    ? { email: nameMatch[2], name: nameMatch[1].trim() || undefined }
+    : { email: from };
 
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "api-key": apiKey,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
+  const client = new BrevoClient({ apiKey });
+  try {
+    await client.transactionalEmails.sendTransacEmail({
       sender,
       to: [{ email: message.to }],
       subject: message.subject,
       textContent: message.text,
       htmlContent: message.html,
-    }),
-  });
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    logger.error({ status: res.status, detail }, "brevo email failed");
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    logger.error({ detail }, "brevo email failed");
     throw new Error("Failed to send email");
   }
   logger.info({ to: message.to, subject: message.subject }, "email sent via brevo");
@@ -322,4 +320,18 @@ export async function retryFailedEmails(): Promise<{ retried: number; failed: nu
   }
 
   return { retried, failed };
+}
+
+/**
+ * Number of emails still awaiting a retry — backlog gauge for cron alerting.
+ *
+ * Counts only rows the retry cron can still pick up (`attempts < max_attempts`);
+ * rows that exhausted their attempts are dead letters and would otherwise pin
+ * the alert on forever.
+ */
+export async function countPendingEmailRetries(): Promise<number> {
+  const row = (await getDb()
+    .prepare("SELECT COUNT(*) AS c FROM email_retries WHERE attempts < max_attempts")
+    .get()) as { c: number } | undefined;
+  return Number(row?.c ?? 0);
 }

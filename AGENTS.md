@@ -15,7 +15,10 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 - Source: `src/` (app router, components, lib, server)
 - Config: `.env.local` (production), `.env.example` (template)
-- Deploy: Vercel (`vercel deploy --prod`)
+- Deploy: Cloudflare Workers via vinext (`npm run deploy:vinext`), custom
+  domain `leish.my`; crons via the `leish-cron` worker
+  (`src/workers/cron/`); chat via the `leish-chat` worker
+  (`src/workers/chat/`)
 
 ---
 
@@ -117,9 +120,9 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - Provider abstraction: `sendEmail()` dispatches to dev outbox / Resend / Postmark / Brevo
 - Selected by `EMAIL_PROVIDER`; `resend` needs `RESEND_API_KEY`, `postmark` needs
   `POSTMARK_SERVER_TOKEN`, `brevo` needs `BREVO_API_KEY`, and all use `EMAIL_FROM`
-- **Vercel Connect support**: API keys are resolved from Connect API-key connectors
-  (`api-key/resend`, `api-key/postmark`, `api-key/brevo`) first, falling back to
-  env vars. This lets you manage email credentials centrally in the Vercel dashboard.
+- Keys come from env vars (locally `.env.local`, in production Cloudflare
+  secrets); see `src/server/connect.ts` for the connector-UID → env mapping
+  kept for call-site compatibility
 - Failed emails are queued in `email_retries` with exponential backoff (1min, 5min, 25min)
 - Booking emails composed in `src/server/booking-emails.ts`
 
@@ -197,9 +200,9 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - `DATABASE_URL` — PostgreSQL connection string (Neon/Supabase pooler)
 - `BILLPLZ_API_KEY` (also the webhook HMAC secret), `BILLPLZ_COLLECTION_ID`
 - `EMAIL_PROVIDER` — `dev` | `resend` | `postmark` | `brevo` (default: `dev`)
-- `RESEND_API_KEY` — required when `EMAIL_PROVIDER=resend` (or use Vercel Connect API-key connector)
-- `POSTMARK_SERVER_TOKEN` — required when `EMAIL_PROVIDER=postmark` (or use Vercel Connect API-key connector)
-- `BREVO_API_KEY` — required when `EMAIL_PROVIDER=brevo` (or use Vercel Connect API-key connector)
+- `RESEND_API_KEY` — required when `EMAIL_PROVIDER=resend`
+- `POSTMARK_SERVER_TOKEN` — required when `EMAIL_PROVIDER=postmark`
+- `BREVO_API_KEY` — required when `EMAIL_PROVIDER=brevo`
 - `EMAIL_FROM` — sender address (default: `Leish! <no-reply@leish.my>`)
 - `LOG_LEVEL` — `info` | `debug` | `warn` | `error`
 - `PG_MAX` / `PG_CONNECTION_TIMEOUT_MS` / `PG_IDLE_TIMEOUT_MS` (optional pool tuning)
@@ -208,9 +211,11 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 - `POSTGRES_URL` — read only by `scripts/retain-purge.mjs`, which falls back
   to `DATABASE_URL`. Not validated anywhere; not needed by the app
-- `UPSTASH_REST_URL` / `UPSTASH_REST_TOKEN` — **currently inert.**
-  `src/server/ratelimit.ts` hardcodes the in-memory store, so rate limits are
-  per-instance regardless of these values
+- `UPSTASH_REST_URL` / `UPSTASH_REST_TOKEN` (or the native
+  `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`) — distributed rate
+  limiting, chat pub/sub, and catalog caching. The default limiter selects the
+  Upstash store automatically when either pair is set; without it, rate limits
+  are per-instance
 - `SENTRY_DSN` — error reporting
 - `ERROR_WEBHOOK_URL` — fallback error sink
 - `LOG_WEBHOOK_URL` — log forwarding
@@ -219,12 +224,15 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - `AGNOST_ORG_ID` — Agnost AI analytics org ID
 - `NEXT_PUBLIC_AGNOST_ORG_ID` — client-side Agnost tracking
 
-### 2. Vercel Settings
+### 2. Cloudflare Settings
 
-- Set all env vars in the Vercel dashboard (Production & Preview)
-- `NEXT_PUBLIC_SITE_URL` must match the Vercel domain or custom domain
-- `output: "standalone"` is set in `next.config.ts` (used by the Dockerfile;
-  Vercel ignores it and uses its own build output)
+- Set secrets with `wrangler secret put <KEY> --config dist/server/wrangler.json`
+  (after `npm run build:vinext`); plain vars live in `wrangler.jsonc`
+- `NEXT_PUBLIC_SITE_URL` must match the custom domain (`https://leish.my`)
+- Object storage is Cloudflare R2 (S3-compatible): `R2_ENDPOINT`,
+  `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE_URL`
+- Crons run on the `leish-cron` worker (one per-minute trigger dispatching by
+  wall-clock time) calling `/api/cron/*` with `CRON_SECRET` as Bearer token
 
 ### 3. Database Migrations
 
@@ -268,7 +276,7 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 ### 1. Session Secrets
 
 - `SESSION_SECRET` **must** be 32 random bytes (base64) in production
-- Never commit to repo — use Vercel/env or CI secrets
+- Never commit to repo — use Cloudflare secrets (`wrangler secret put`) or CI secrets
 - Rotate periodically; bump `PEPPER_VERSION` when rotating password pepper
 
 ### 2. Database Access
@@ -288,8 +296,11 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 ### 4. Rate Limiting
 
-- Distributed via Upstash Redis (optional): `UPSTASH_REST_URL`, `UPSTASH_REST_TOKEN`
-- Falls back to in-memory when unset — not suitable for multi-instance prod
+- Distributed via Upstash Redis (optional but recommended in prod):
+  `UPSTASH_REDIS_REST_URL`/`_TOKEN` or `UPSTASH_REST_URL`/`_TOKEN` (either pair;
+  resolved by `src/server/upstash.ts`)
+- `rateLimit` auto-selects the Upstash store when configured and falls back to
+  in-memory (per-instance) on missing credentials or a 30s outage cooldown
 
 ### 5. Headers
 
@@ -371,8 +382,8 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 ### 1. Next.js Config
 
-- `output: "standalone"` — standalone output for Docker/Vercel
-- `images.remotePatterns` restricted to `*.supabase.co`
+- `output: "standalone"` — standalone output for Docker/self-hosting
+- `images.remotePatterns` restricted to `*.supabase.co` + R2 public host
 - Headers: security directives (frame-options, content-type, referrer)
 
 ### 2. Tailwind CSS 4
@@ -454,7 +465,7 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
   `EMAIL_ALLOW_DEV=1`; `SKIP_DB_GUARD=1` is the db-facade's SQLite escape hatch
 - Only `EMAIL_FROM`, `PEPPER_SECRET`, `SENTRY_DSN` and `ERROR_WEBHOOK_URL` warn
 - **Do not** set `SESSION_SECRET` during `next build` — it will fail
-- Set all vars in `.env.local` or Vercel dashboard
+- Set all vars in `.env.local` (local) or Cloudflare secrets (production)
 
 ### 2. Database Backend Switching
 
@@ -483,9 +494,8 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
 ### 5. Email Delivery
 
 - Provider selected by `EMAIL_PROVIDER`: `dev` (default), `resend`, `postmark`, or `brevo`
-- `resend` needs `RESEND_API_KEY`; `postmark` needs `POSTMARK_SERVER_TOKEN`
-- **Vercel Connect**: If API-key connectors are configured, keys are resolved from
-  Connect first, falling back to env vars. This lets you manage credentials centrally.
+- `resend` needs `RESEND_API_KEY`; `postmark` needs `POSTMARK_SERVER_TOKEN`;
+  `brevo` needs `BREVO_API_KEY` (all from env / Cloudflare secrets)
 - Missing credentials fall back to the dev outbox with a warning (never silent)
 - Outbox stored in `email_outbox` table when using the dev provider (`/dev/emails`)
 
@@ -518,7 +528,7 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
 - **Forgot `DATABASE_URL`** → pg pool fails; falls through to sqlite (different data)
 - **Billplz webhook without `BILLPLZ_API_KEY`** → `verifyBillplzSignature()` returns false and every callback is rejected; bookings never confirm
 - **`NEXT_PUBLIC_` prefix** — only expose non-secret vars to browser
-- **Vercel `NODE_ENV=production`** — `validateEnv()` runs and throws only on a missing `SESSION_SECRET`; a missing `DATABASE_URL` merely warns and silently falls back to SQLite on ephemeral disk
+- Production runs with `NODE_ENV=production` — `validateEnv()` runs and throws only on a missing `SESSION_SECRET`; a missing `DATABASE_URL` merely warns and silently falls back to SQLite on ephemeral disk
 
 ### 11. Catalog & 404 Gotchas
 

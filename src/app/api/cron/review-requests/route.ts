@@ -5,6 +5,7 @@ import { authorizeCron } from "@/server/cron-auth";
 import { logger } from "@/server/logger";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * GET/POST /api/cron/review-requests
@@ -17,6 +18,7 @@ const handler = tryRoute(
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const result = await runReviewRequestSweep();
 
     logger.info(
@@ -24,6 +26,8 @@ const handler = tryRoute(
         requested: result.requested,
         skipped: result.skipped,
         errors: result.errors,
+        durationMs: Date.now() - startedAt,
+        processedCount: result.requested,
       },
       "review request sweep complete",
     );

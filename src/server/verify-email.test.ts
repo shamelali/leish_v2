@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
 import { hashPassword } from "./password";
 import {
+  createVerifyUrl,
   invalidateVerificationTokens,
   storeVerificationToken,
   validateVerificationToken,
@@ -48,6 +49,19 @@ describe("email verification tokens", () => {
     const userId = await createTestUser();
     const token = await storeVerificationToken(userId);
     await invalidateVerificationTokens(userId);
+    expect(await validateVerificationToken(token)).toBeNull();
+  });
+
+  it("builds a full verification URL and rejects expired tokens", async () => {
+    const userId = await createTestUser();
+    const url = await createVerifyUrl(userId);
+    expect(url).toContain("/api/auth/verify-email?token=");
+
+    // Expire all tokens for this user and verify rejection
+    await getDb()
+      .prepare("UPDATE email_verifications SET expires_at = ? WHERE user_id = ?")
+      .run(new Date(Date.now() - 60_000).toISOString(), userId);
+    const token = new URL(url).searchParams.get("token")!;
     expect(await validateVerificationToken(token)).toBeNull();
   });
 });

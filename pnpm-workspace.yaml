@@ -1,3 +1,5 @@
+packages: []
+
 # pnpm (v10+) disables dependency build scripts by default. No dependency needs
 # a postinstall build to run/build this app; the one transitive package that
 # ships a build script (unrs-resolver, via lint tooling) is intentionally

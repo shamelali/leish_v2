@@ -20,10 +20,45 @@ users, bookings, quotations, payments and **sessions** all live in this store.
 - [ ] Set all required vars from `.env.example` in the **Production** environment:
       `SESSION_SECRET` (required), `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL=https://leish.my`.
 - [ ] Set Billplz + email provider vars if launching payments/email (see sections 3–4).
-- [ ] Set `CRON_SECRET` so the scheduled jobs in `vercel.json` are authenticated.
-- [ ] Confirm no `NEXT_PUBLIC_*` var is marked "sensitive" (breaks the client bundle).
-- [ ] Connect the domain, confirm DNS points at Vercel correctly.
-- [ ] Turn off auto-deploy from any bot/agent commit path — human review required on `main`.
+- [ ] **Set `CRON_SECRET` in Production _and_ Preview** — every cron route in
+      `src/app/api/cron/*` fails closed (HTTP 500) when it is unset, so Vercel's
+      scheduler would look "broken" rather than skip work.
+- [ ] Remove the stale personal Vercel git integrations listed at the end of this
+      section so only **Vercel Deployments – Duta Integra** runs on commits.
+- [ ] For the monorepo repo (`shamelali/leish`, project `duta-integra/leish-monorepo`),
+      set the same variable there (`--project leish-monorepo --team duta-integra`).
+
+### Setting `CRON_SECRET`
+
+```bash
+# Generate (equivalent to `openssl rand -hex 32`) and print it as a dry run:
+node scripts/setup-vercel-cron-secret.mjs
+
+# Write it to the project (Production + Preview) via the Vercel REST API:
+VERCEL_TOKEN=... node scripts/setup-vercel-cron-secret.mjs --apply \
+  --project leish-v2 --team shamelalis-projects
+
+# Or paste it manually:
+# Vercel → Project Settings → Environment Variables → CRON_SECRET (sensitive),
+# targets Production + Preview.
+
+# Verify after the next deploy (200 = wired up, 500 = var missing at runtime,
+# 401 = var present but the value differs):
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  https://<domain>/api/cron/retention
+```
+
+### Stale Vercel integrations
+
+In the Vercel dashboard → project → Settings → Git (and the account's
+Settings → Integrations), remove the old personal hooks: `leish-deploy`,
+`leish-v2`, `leish_v2`, `leish_v2-9fnc`, `leishv2`, `leishv2-deploy`,
+`shamelali-leish_v2`.
+
+Duplicate integrations each post their own commit status and can shadow the real
+deployment result — after cleanup, a commit should show exactly one Vercel
+status pair (`Vercel` + `Vercel Deployments – Duta Integra`).
 
 ## 3. Billplz (single payment path — no second webhook route)
 

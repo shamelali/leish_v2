@@ -24,6 +24,7 @@ import {
   IconQuotation,
   IconSettings,
   IconStore,
+  IconUsers,
 } from "./icons";
 
 interface NavItem {
@@ -51,6 +52,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/artists", label: "Artists", icon: IconPalette },
       { href: "/admin/studios", label: "Studios", icon: IconStore },
+      { href: "/admin/referrals", label: "Referrals", icon: IconChart },
     ],
   },
   {
@@ -61,11 +63,13 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/payouts", label: "Payouts", icon: IconCard },
       { href: "/admin/quotations", label: "Quotations", icon: IconQuotation },
       { href: "/admin/messages", label: "Messages", icon: IconMessage },
+      { href: "/admin/chat", label: "Chat", icon: IconMessage },
     ],
   },
   {
     label: "System",
     items: [
+      { href: "/admin/users", label: "Users", icon: IconUsers },
       { href: "/admin/emails", label: "Email Outbox", icon: IconMail },
       { href: "/admin/audit", label: "Audit Log", icon: IconAudit },
       { href: "/admin/settings", label: "Settings", icon: IconSettings },

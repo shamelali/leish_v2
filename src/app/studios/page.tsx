@@ -13,11 +13,11 @@ export default async function StudiosPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <p className="text-sm font-medium text-rose-600 dark:text-rose-500">Beauty studios</p>
-      <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
+      <p className="text-sm font-semibold uppercase tracking-wider text-link">Beauty studios</p>
+      <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight text-ink">
         Browse Studios
       </h1>
-      <p className="mt-2 max-w-2xl text-stone-500 dark:text-stone-400">
+      <p className="mt-2 max-w-2xl text-ink-muted">
         Discover premium beauty studios across Malaysia.
       </p>
 
@@ -28,10 +28,10 @@ export default async function StudiosPage() {
       </div>
 
       {studios.length === 0 && (
-        <div className="mt-8 rounded-2xl border border-dashed border-stone-300 bg-white p-16 text-center dark:border-stone-700 dark:bg-stone-900">
-          <p className="text-lg font-semibold text-stone-900 dark:text-stone-100">No studios yet</p>
-          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            We are currently onboarding studios in KL and Selangor.
+        <div className="mt-8 rounded-2xl border border-dashed border-line-strong bg-surface p-16 text-center">
+          <p className="text-lg font-semibold text-ink">No studios found</p>
+          <p className="mt-1 text-sm text-ink-muted">
+            New studios join Leish! every week — check back soon.
           </p>
         </div>
       )}

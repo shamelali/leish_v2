@@ -11,6 +11,7 @@ import { getBookingFeeSen } from "@/server/settings";
 import { getActiveQuotation, serializeQuotation } from "@/server/quotations";
 import { notifyBookingCreated } from "@/server/booking-emails";
 import { jsonError, readJson, statefulRoute, tryRoute } from "@/server/http";
+import { paginationMeta, parsePagination } from "@/lib/pagination";
 import { logger } from "@/server/logger";
 import { isAgnostEnabled, agnost } from "@/server/agnost";
 
@@ -90,8 +91,7 @@ export const GET = tryRoute(
 
     // Pagination: ?limit= (default 20, max 100) & ?offset= (default 0).
     const url = new URL(request.url);
-    const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 20) || 20, 1), 100);
-    const offset = Math.max(Number(url.searchParams.get("offset") ?? 0) || 0, 0);
+    const { limit, offset } = parsePagination(url.searchParams);
 
     const isArtistRole = user!.role === "artist" || user!.role === "studio";
     let rows: BookingRow[];
@@ -142,7 +142,7 @@ export const GET = tryRoute(
 
     return NextResponse.json({
       bookings: await Promise.all(rows.map(serializeBooking)),
-      pagination: { total, limit, offset, hasMore: offset + rows.length < total },
+      pagination: paginationMeta(total, { limit, offset }, rows.length),
     });
   },
   { route: "GET /api/bookings" },

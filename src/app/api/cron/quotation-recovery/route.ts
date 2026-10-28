@@ -5,6 +5,7 @@ import { authorizeCron } from "@/server/cron-auth";
 import { logger } from "@/server/logger";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * GET/POST /api/cron/quotation-recovery
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
  * releases slots for bookings the client never completed. Guarded by
  * CRON_SECRET so only the scheduler can run it.
  *
- * Vercel Cron (configured in vercel.json) issues a GET with
+ * The leish-cron Cloudflare worker issues a GET with
  * `Authorization: Bearer <CRON_SECRET>`; manual callers may use the
  * `x-cron-secret` header instead.
  */
@@ -21,9 +22,15 @@ const handler = tryRoute(
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const result = await runQuotationRecoverySweep();
     logger.info(
-      { route: "/api/cron/quotation-recovery", ...result },
+      {
+        route: "/api/cron/quotation-recovery",
+        ...result,
+        durationMs: Date.now() - startedAt,
+        processedCount: result.recovered + result.released,
+      },
       "quotation recovery sweep complete",
     );
     return NextResponse.json(result);

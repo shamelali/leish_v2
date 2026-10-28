@@ -5,6 +5,7 @@ import { authorizeCron } from "@/server/cron-auth";
 import { logger } from "@/server/logger";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * GET/POST /api/cron/booking-transitions
@@ -15,16 +16,17 @@ export const dynamic = "force-dynamic";
  *   2. Requested bookings waiting on artist response for >48h → "cancelled"
  *
  * Owner notifications (email) are sent for both transitions. This runs every
- * hour via Vercel Cron (see vercel.json) to keep calendars and payout
+ * hour via the leish-cron Cloudflare worker to keep calendars and payout
  * timelines accurate without admin intervention.
  *
- * Guarded by CRON_SECRET (Vercel Cron Bearer token or x-cron-secret header).
+ * Guarded by CRON_SECRET (scheduler Bearer token or x-cron-secret header).
  */
 const handler = tryRoute(
   async function run(request: Request) {
     const unauthorized = authorizeCron(request);
     if (unauthorized) return unauthorized;
 
+    const startedAt = Date.now();
     const result = await runAllAutoTransitions();
 
     logger.info(
@@ -32,6 +34,8 @@ const handler = tryRoute(
         autoCompleted: result.completed,
         autoCancelled: result.cancelled,
         notified: result.notified,
+        durationMs: Date.now() - startedAt,
+        processedCount: result.completed + result.cancelled,
       },
       "booking transition sweep complete",
     );

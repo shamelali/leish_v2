@@ -20,34 +20,46 @@ interface ExtendedEnv extends Env {
 
 // ── CORS Headers ──────────────────────────────────────────────────────────────
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  "Access-Control-Max-Age": "86400",
-};
+const ALLOWED_WORKER_ORIGINS = new Set(["https://leish.my", "https://www.leish.my"]);
 
-function corsResponse(body: string | object, status = 200): Response {
+function buildCorsHeaders(origin?: string | null): Record<string, string> {
+  const allowedOrigin =
+    origin && ALLOWED_WORKER_ORIGINS.has(origin) ? origin : "https://www.leish.my";
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
+}
+
+function corsResponse(body: string | object, status = 200, origin?: string | null): Response {
   return new Response(typeof body === "string" ? body : JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...corsHeaders },
+    headers: { "Content-Type": "application/json", ...buildCorsHeaders(origin) },
   });
 }
 
-function errorResponse(message: string, status = 400): Response {
-  return corsResponse({ error: message }, status);
+function errorResponse(message: string, status = 400, origin?: string | null): Response {
+  return corsResponse({ error: message }, status, origin);
 }
 
 // ── Worker Entry Point ────────────────────────────────────────────────────────
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 export default {
   async fetch(request: Request, env: ExtendedEnv, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
+    const origin = request.headers.get("origin");
 
     // Handle CORS preflight
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders });
+      if (origin && !ALLOWED_WORKER_ORIGINS.has(origin)) {
+        return new Response(null, { status: 403, headers: { Vary: "Origin" } });
+      }
+      return new Response(null, { status: 204, headers: buildCorsHeaders(origin) });
     }
 
     // ── WebSocket Upgrade Route ──────────────────────────────────────────────
@@ -383,6 +395,7 @@ async function handleAdmin(request: Request, env: ExtendedEnv, path: string): Pr
 
   return errorResponse("Admin endpoint not found", 404);
 }
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 // ── Export Durable Object ────────────────────────────────────────────────────
 

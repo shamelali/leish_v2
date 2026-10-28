@@ -8,6 +8,7 @@ import { useAuth, ROLE_LABELS } from "@/lib/auth";
 import { getTurnstileToken } from "@/lib/turnstile-token";
 import type { Artist } from "@/lib/types";
 import { catalogImageSrc, catalogPath, formatRM } from "@/lib/utils";
+import { fetchAllPages } from "@/lib/pagination";
 import { Button } from "@/components/Button";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 
@@ -149,10 +150,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    fetch("/api/catalog/artists")
-      .then((res) => (res.ok ? (res.json() as Promise<{ artists: Artist[] }>) : { artists: [] }))
-      .then((body) => {
-        if (!cancelled) setCatalog(body.artists ?? []);
+    // The catalog API is paginated; walk the pages so the claim-profile
+    // selector and appointment lookups still see every artist.
+    fetchAllPages<Artist>("/api/catalog/artists", (body) => {
+      const page = body as { artists?: Artist[]; pagination?: { hasMore?: boolean } };
+      return { items: page.artists ?? [], hasMore: page.pagination?.hasMore === true };
+    })
+      .then((artists) => {
+        if (!cancelled) setCatalog(artists);
       })
       .catch(() => undefined);
     return () => {

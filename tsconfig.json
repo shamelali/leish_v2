@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "src/workers", "redis-js-main"]
+  "exclude": ["node_modules", "src/workers", "redis-js-main", "leish-monorepo"]
 }

@@ -13,6 +13,9 @@
 #   ./scripts/ci-local.sh --pg     # also run Postgres integration tests
 #   ./scripts/ci-local.sh --all    # everything
 #
+# Set CI_LOCAL_SUMMARY=<path> to also write a TSV gate/status/seconds summary,
+# which scripts/ci-report.sh posts to the pull request as CI evidence.
+#
 # Keep the gate list in sync with ci.yml. If they drift, this stops being
 # evidence of anything.
 
@@ -51,6 +54,13 @@ PASSED=()
 LOGDIR="$(mktemp -d)"
 trap 'rm -rf "$LOGDIR"' EXIT
 
+# Optional machine-readable gate summary (TSV: gate, status, seconds).
+# Consumed by scripts/ci-report.sh; unset means no file is written.
+SUMMARY_FILE="${CI_LOCAL_SUMMARY:-}"
+if [ -n "$SUMMARY_FILE" ]; then
+  printf 'gate\tstatus\tseconds\n' >"$SUMMARY_FILE"
+fi
+
 # Run a gate, streaming nothing unless it fails — a passing run should be quiet
 # enough to read at a glance, a failing one should show everything.
 gate() {
@@ -58,15 +68,21 @@ gate() {
   local log="$LOGDIR/${name// /_}.log"
   printf "%s▸ %-12s%s " "$DIM" "$name" "$RESET"
   local start=$SECONDS
+  local status
   if "$@" >"$log" 2>&1; then
     PASSED+=("$name")
+    status="pass"
     printf "%s✓%s %ss\n" "$GREEN" "$RESET" "$((SECONDS - start))"
   else
     FAILED+=("$name")
+    status="fail"
     printf "%s✗%s %ss\n" "$RED" "$RESET" "$((SECONDS - start))"
     echo "$DIM─── $name output ───$RESET"
     tail -n 40 "$log"
     echo "$DIM───$RESET"
+  fi
+  if [ -n "$SUMMARY_FILE" ]; then
+    printf '%s\t%s\t%s\n' "$name" "$status" "$((SECONDS - start))" >>"$SUMMARY_FILE"
   fi
 }
 

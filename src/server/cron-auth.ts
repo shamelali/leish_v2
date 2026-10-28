@@ -1,47 +1,37 @@
-import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
-import { logger } from "./logger";
+import { NextResponse } from "next/server";
 
 /**
  * Authorize a cron invocation.
  *
- * Supports both callers:
- *  - Vercel Cron: issues a GET with `Authorization: Bearer <CRON_SECRET>`
- *    (and an `x-vercel-cron: 1` header on the platform).
- *  - Manual/self-hosted schedulers: may send `x-cron-secret: <SECRET>`.
- *  - Internal callers: `Authorization: Bearer <INTERNAL_API_SECRET>`.
+ * Callers (the leish-cron Cloudflare worker, or manual schedulers) send
+ * `Authorization: Bearer <CRON_SECRET>` or `x-cron-secret: <CRON_SECRET>`.
  *
- * FAIL CLOSED. These endpoints send email, expire quotations and drive
- * payouts, so "no secret configured" must never mean "publicly triggerable".
- * In production an unconfigured secret produces a 503 instead of an open
- * endpoint; the no-op dev bypass keeps `npm run dev` and tests frictionless.
+ * Fails closed: when `CRON_SECRET` is unset the request is rejected with 500,
+ * except in local development (`NODE_ENV === "development"`) so the endpoints
+ * remain callable without configuration.
+ *
+ * Returns a 401/500 response when the caller is not authorized, otherwise `null`.
  */
-
-function safeEqual(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 export function authorizeCron(request: Request): NextResponse | null {
-  const secrets = [process.env.CRON_SECRET, process.env.INTERNAL_API_SECRET].filter(
-    (value): value is string => Boolean(value && value.length > 0),
-  );
-
-  if (secrets.length === 0) {
-    if (process.env.NODE_ENV === "production") {
-      logger.error({}, "cron invoked without CRON_SECRET configured — refusing request");
-      return NextResponse.json({ error: "Cron authentication is not configured" }, { status: 503 });
-    }
-    return null;
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "development") return null;
+    return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 500 });
   }
 
-  const authHeader = request.headers.get("authorization");
-  const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
-  const provided = bearer ?? request.headers.get("x-cron-secret");
+  const auth = request.headers.get("authorization");
+  const bearer = auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length) : null;
+  const header = request.headers.get("x-cron-secret");
 
-  if (provided && secrets.some((secret) => safeEqual(provided, secret))) return null;
+  if (safeEqual(bearer, secret) || safeEqual(header, secret)) return null;
 
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+function safeEqual(candidate: string | null, secret: string): boolean {
+  if (!candidate) return false;
+  const a = Buffer.from(candidate);
+  const b = Buffer.from(secret);
+  return a.length === b.length && timingSafeEqual(a, b);
 }

@@ -1,13 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
 import { Pool } from "pg";
+import { neonConfig, Pool as NeonPool } from "@neondatabase/serverless";
 import fs from "node:fs";
 import path from "node:path";
 
 /**
  * Persistence facade with two interchangeable backends:
  *
- * - PostgreSQL (`DATABASE_URL` set): async `pg` Pool (works with Neon).
- *   Used in production / Vercel.
+ * - PostgreSQL (`DATABASE_URL` set): async `pg` Pool on Node; Neon's
+ *   serverless driver (HTTPS, no TCP sockets) on Cloudflare Workers — see the
+ *   "Cloudflare Workers connection strategy" section below.
  * - node:sqlite (no `DATABASE_URL`): Node's built-in SQLite, wrapped in the
  *   same async API. Used for local dev and tests (hermetic via
  *   LEISH_DB_PATH=:memory:).
@@ -73,23 +75,30 @@ export function resolveParams(compiled: CompiledSql, params: BindParam[]): BindV
 
 // ── PostgreSQL backend ───────────────────────────────────────────────────────
 
-function createPgFacade(pool: Pool, ensureReady: () => Promise<void>): DbFacade {
+/** `params === undefined` means "no bind values". On Node, `pg` then uses the
+ *  simple query protocol (unlike the extended protocol, it allows several
+ *  statements in one string — the schema bootstrap relies on that). On
+ *  Workers the string is split into individual statements instead. */
+type PgQueryResult = { rows: readonly unknown[]; rowCount: number | null };
+type PgQuery = (sql: string, params: BindValue[] | undefined) => Promise<PgQueryResult>;
+
+function createPgFacade(query: PgQuery, ensureReady: () => Promise<void>): DbFacade {
   const statement = (sql: string): Statement => {
     const compiled = compilePlaceholders(sql);
     return {
       async get<T>(...params: BindParam[]): Promise<T | undefined> {
         await ensureReady();
-        const { rows } = await pool.query(compiled.sql, resolveParams(compiled, params));
+        const { rows } = await query(compiled.sql, resolveParams(compiled, params));
         return rows[0] as T | undefined;
       },
       async all<T>(...params: BindParam[]): Promise<T[]> {
         await ensureReady();
-        const { rows } = await pool.query(compiled.sql, resolveParams(compiled, params));
+        const { rows } = await query(compiled.sql, resolveParams(compiled, params));
         return rows as T[];
       },
       async run(...params: BindParam[]): Promise<{ changes: number }> {
         await ensureReady();
-        const res = await pool.query(compiled.sql, resolveParams(compiled, params));
+        const res = await query(compiled.sql, resolveParams(compiled, params));
         return { changes: res.rowCount ?? 0 };
       },
     };
@@ -99,15 +108,84 @@ function createPgFacade(pool: Pool, ensureReady: () => Promise<void>): DbFacade 
     prepare: statement,
     async exec(sql: string) {
       await ensureReady();
-      const statements = sql
-        .split(";")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-      for (const s of statements) {
-        await pool.query(s);
+      for (const s of splitStatements(sql)) {
+        await query(s, undefined);
       }
     },
   };
+}
+
+// ── Cloudflare Workers connection strategy ───────────────────────────────────
+//
+// workerd binds every outbound TCP socket to the I/O context of the request
+// that opened it, and the Neon proxy drops raw `pg` TCP connections from
+// workerd altogether ("Connection terminated unexpectedly" on connect). So on
+// Workers we do NOT use `pg` at all: every statement goes through Neon's
+// serverless driver (`@neondatabase/serverless`) with `poolQueryViaFetch`,
+// i.e. plain HTTPS requests — no sockets to leak, hang, or get proxied away.
+//
+// Multi-statement strings (the schema bootstrap) are split on `;` first,
+// because the SQL-over-HTTPS path runs one statement at a time — same
+// naive-split approach as the facade's `exec()` (the schema has no `;`
+// inside literals). Parameterised single statements pass through untouched.
+//
+// This deliberately does NOT scope one connection per request via
+// `next/headers`: in Next 15+ `headers()` is async, and the awaited value is
+// not referentially stable across calls, so it cannot key a connection slot.
+// On a long-lived Node process (Vercel, `next dev`, migration scripts) the
+// classic `pg` Pool is kept.
+
+const isWorkersRuntime =
+  typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
+
+/** Split a SQL script into individual statements. Strips `--` line comments
+ *  first so a semicolon inside a comment doesn't fracture a statement (e.g.
+ *  the idx_reviews_booking_id comment in the schema). Only for trusted,
+ *  application-authored SQL — the schema contains no `--` inside literals. */
+function splitStatements(script: string): string[] {
+  return script
+    .replace(/--[^\n]*/g, "")
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+let neonPool: NeonPool | null = null;
+
+/** Lazily-created Neon serverless pool (HTTPS, no TCP sockets). */
+function getNeonPool(): NeonPool {
+  if (!neonPool) {
+    neonConfig.poolQueryViaFetch = true;
+    neonPool = new NeonPool({ connectionString: process.env.DATABASE_URL });
+  }
+  return neonPool;
+}
+
+/**
+ * Runs one statement against PostgreSQL.
+ *
+ * Workers: Neon serverless driver over HTTPS.
+ * Node: the classic shared `pg` pool.
+ */
+async function runPgQuery(sql: string, params: BindValue[] | undefined): Promise<PgQueryResult> {
+  if (!isWorkersRuntime) {
+    const pool = pgPool;
+    if (!pool) throw new Error("[db] pg pool is not initialised");
+    return (
+      params === undefined ? pool.query(sql) : pool.query(sql, params)
+    ) as Promise<PgQueryResult>;
+  }
+
+  const pool = getNeonPool();
+  if (params !== undefined) {
+    return (await pool.query(sql, params)) as unknown as PgQueryResult;
+  }
+  // No bind values: may be a multi-statement bootstrap string.
+  let last: PgQueryResult = { rows: [], rowCount: 0 };
+  for (const s of splitStatements(sql)) {
+    last = (await pool.query(s)) as unknown as PgQueryResult;
+  }
+  return last;
 }
 
 // ── node:sqlite backend ─────────────────────────────────────────────────────
@@ -465,11 +543,17 @@ export const PG_SCHEMA = `
     created_at      TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_artists_state_area ON artists(state, area);
+  -- Budget range filtering (price_from <= ?) on the public catalog listings.
+  CREATE INDEX IF NOT EXISTS idx_artists_price ON artists(price_from);
   CREATE INDEX IF NOT EXISTS idx_studios_state_area ON studios(state, area);
   CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_type, referrer_id);
   CREATE INDEX IF NOT EXISTS idx_referrals_referee ON referrals(referee_type, referee_id);
   CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status);
   CREATE INDEX IF NOT EXISTS idx_reviews_entity ON reviews(entity_type, entity_id);
+  -- findReviewableBooking() LEFT JOINs reviews on booking_id. booking_id is
+  -- UNIQUE (implicit index); declared explicitly for older databases that may
+  -- predate the constraint.
+  CREATE INDEX IF NOT EXISTS idx_reviews_booking_id ON reviews(booking_id);
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
@@ -744,11 +828,17 @@ const SQLITE_SCHEMA = `
     created_at      TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_artists_state_area ON artists(state, area);
+  -- Budget range filtering (price_from <= ?) on the public catalog listings.
+  CREATE INDEX IF NOT EXISTS idx_artists_price ON artists(price_from);
   CREATE INDEX IF NOT EXISTS idx_studios_state_area ON studios(state, area);
   CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_type, referrer_id);
   CREATE INDEX IF NOT EXISTS idx_referrals_referee ON referrals(referee_type, referee_id);
   CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status);
   CREATE INDEX IF NOT EXISTS idx_reviews_entity ON reviews(entity_type, entity_id);
+  -- findReviewableBooking() LEFT JOINs reviews on booking_id. booking_id is
+  -- UNIQUE (implicit index); declared explicitly for older databases that may
+  -- predate the constraint.
+  CREATE INDEX IF NOT EXISTS idx_reviews_booking_id ON reviews(booking_id);
   CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
@@ -895,24 +985,42 @@ export function getDb(): DbFacade {
   }
 
   if (isPostgres()) {
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: Number(process.env.PG_MAX ?? 10),
-      connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS ?? 10_000),
-      // Neon + serverless: short idle timeouts keep the pooler healthy.
-      idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS ?? 10_000),
-    });
-    pool.on("error", (err) => {
-      console.error("[db] pg pool error:", err.message);
-    });
-    pgPool = pool;
+    // The shared pool only exists on a long-lived Node process. On Workers
+    // there are no usable TCP sockets, so `runPgQuery` uses Neon's
+    // serverless driver (HTTPS) instead (see above).
+    if (!isWorkersRuntime) {
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        max: Number(process.env.PG_MAX ?? 10),
+        connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS ?? 10_000),
+        // Neon + serverless: short idle timeouts keep the pooler healthy.
+        idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS ?? 10_000),
+      });
+      pool.on("error", (err) => {
+        console.error("[db] pg pool error:", err.message);
+      });
+      pgPool = pool;
+    }
+
+    const query: PgQuery = (sql, params) => runPgQuery(sql, params);
+
+    // One log line so the active backend is visible in production logs
+    // (the Workers/Node branch is chosen by runtime sniffing).
+    console.info(
+      `[db] pg backend: ${isWorkersRuntime ? "workers (neon serverless over https)" : "node pool"}`,
+    );
+
+    // Bootstrap through the same query path as every other statement. On
+    // Workers the multi-statement string is split into individual HTTPS
+    // queries by runPgQuery.
     pgReady = (async () => {
-      await pool.query(PG_SCHEMA);
+      await query(PG_SCHEMA, undefined);
       // Applied separately so a missing payments.type on a legacy database
       // cannot roll back the rest of PG_SCHEMA. migrate.ts also creates this.
       try {
-        await pool.query(
+        await query(
           "CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_booking_type ON payments(booking_id, type)",
+          undefined,
         );
       } catch (err) {
         console.error(
@@ -922,8 +1030,9 @@ export function getDb(): DbFacade {
       }
       // supabase_id index — column added lazily on legacy databases by migrate.ts
       try {
-        await pool.query(
+        await query(
           "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_supabase_id ON users(supabase_id)",
+          undefined,
         );
       } catch {
         // Column may not exist yet on legacy databases — safe to skip.
@@ -932,7 +1041,11 @@ export function getDb(): DbFacade {
       // deliveries inert. Sweep pending duplicates first (keeping the earliest
       // row) or the index creation fails; settled rows are never deleted.
       try {
-        await pool.query(`
+        // `query()` routes to whichever backend is live (node pool or the
+        // Workers Neon driver); referencing a local `pool` would only work on
+        // one of them.
+        await query(
+          `
           DELETE FROM payouts AS p
           USING (
             SELECT ctid, row_number() OVER (PARTITION BY booking_id ORDER BY created_at, id) AS rn
@@ -940,9 +1053,12 @@ export function getDb(): DbFacade {
             WHERE status = 'pending'
           ) AS d
           WHERE p.ctid = d.ctid AND d.rn > 1
-        `);
-        await pool.query(
+        `,
+          undefined,
+        );
+        await query(
           "CREATE UNIQUE INDEX IF NOT EXISTS uq_payouts_booking ON payouts(booking_id)",
+          undefined,
         );
       } catch (err) {
         console.error(
@@ -954,7 +1070,7 @@ export function getDb(): DbFacade {
       console.error("[db] pg schema migration failed:", err instanceof Error ? err.message : err);
       throw err;
     });
-    facade = createPgFacade(pool, () => pgReady!);
+    facade = createPgFacade(query, () => pgReady!);
     return facade;
   }
 

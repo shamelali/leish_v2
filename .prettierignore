@@ -21,6 +21,9 @@ data
 # Nested git worktree (separate checkout with its own node_modules and .next)
 .qoder-pr
 
+# Legacy monorepo snapshot — not part of the app build
+leish-monorepo
+
 # Agent skill packs (vendored docs, synced from upstream)
 .agents/skills
 

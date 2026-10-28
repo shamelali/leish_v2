@@ -1,27 +1,18 @@
 {
-  // Keep this list to tools the repo actually configures. Everything here is
-  // already used by package.json scripts or a checked-in config file:
-  // eslint.config.mjs, .prettierrc.json, vitest.config.mts, playwright.config.ts,
-  // .env.example, .github/workflows/*.
   "recommendations": [
-    // Theme (pre-existing)
     "lautarograc.glitch-vsc",
-    // Gates that run in CI and pre-push
     "dbaeumer.vscode-eslint",
     "esbenp.prettier-vscode",
     "editorconfig.editorconfig",
-    // Framework: Next 16 app router, Tailwind 4
     "bradlc.vscode-tailwindcss",
     "yoavbls.pretty-ts-errors",
     "usernamehw.errorlens",
-    // Test runners: vitest (unit) + playwright (e2e)
     "vitest.explorer",
     "ms-playwright.playwright",
-    // Config + env: .env.example, vercel.json, wrangler.jsonc, *.mts
     "mikestead.dotenv",
     "redhat.vscode-yaml",
     "ms-azuretools.vscode-docker",
-    // Delivery: PR review, workflow logs, manual calls against /api/*
+    "ckolkman.vscode-postgres",
     "github.vscode-github-actions",
     "github.vscode-pull-request-github",
     "humao.rest-client",

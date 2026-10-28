@@ -31,17 +31,15 @@ export default function Error({
 
   return (
     <div className="mx-auto max-w-lg px-4 py-32 text-center">
-      <p className="font-display text-7xl font-semibold text-rose-200 dark:text-rose-900/40">500</p>
-      <h1 className="mt-4 font-display text-3xl font-semibold text-stone-900 dark:text-stone-100">
-        Something went wrong
-      </h1>
-      <p className="mt-3 text-stone-500 dark:text-stone-400">
+      <p className="font-display text-7xl font-semibold text-primary/25" aria-hidden="true">
+        500
+      </p>
+      <h1 className="mt-4 font-display text-3xl font-semibold text-ink">Something went wrong</h1>
+      <p className="mt-3 text-ink-muted">
         An unexpected error occurred. Please try again — if it keeps happening, we&apos;d love to
         hear from you.
       </p>
-      {error.digest && (
-        <p className="mt-2 text-xs text-stone-400 dark:text-stone-500">Reference: {error.digest}</p>
-      )}
+      {error.digest && <p className="mt-2 text-xs text-ink-subtle">Reference: {error.digest}</p>}
       <div className="mt-8 flex justify-center gap-3">
         <Button onClick={reset}>Try again</Button>
         <Button href="/" variant="outline">

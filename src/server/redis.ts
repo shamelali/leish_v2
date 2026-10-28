@@ -1,13 +1,15 @@
 /**
  * Upstash Redis client — singleton, lazy-initialized.
  *
- * Returns null when UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN are
- * not set, so callers can fall back to direct DB reads without any special
- * checks.  All helpers below short-circuit to `undefined` / no-ops when the
- * client is unavailable.
+ * Credentials are read via `resolveUpstashCredentials()`, which accepts both
+ * UPSTASH_REDIS_REST_* (native) and UPSTASH_REST_* (short) env-var pairs.
+ * Returns null when neither is set, so callers can fall back to direct DB
+ * reads without any special checks.  All helpers below short-circuit to
+ * `undefined` / no-ops when the client is unavailable.
  */
 
 import { Redis } from "@upstash/redis";
+import { resolveUpstashCredentials } from "./upstash";
 
 let _redis: Redis | null = null;
 let _tried = false;
@@ -15,11 +17,10 @@ let _tried = false;
 function getClient(): Redis | null {
   if (_tried) return _redis;
   _tried = true;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
+  const credentials = resolveUpstashCredentials();
+  if (!credentials) return null;
   try {
-    _redis = new Redis({ url, token });
+    _redis = new Redis(credentials);
   } catch {
     _redis = null;
   }

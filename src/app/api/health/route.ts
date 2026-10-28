@@ -31,7 +31,7 @@ export async function GET() {
   return NextResponse.json({
     status: dbStatus === "ok" ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
-    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
+    commit: process.env.DEPLOY_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
     checks: {
       session_secret: Boolean(process.env.SESSION_SECRET),
       database_url: Boolean(process.env.DATABASE_URL),

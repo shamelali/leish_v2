@@ -7,13 +7,12 @@ type Size = "sm" | "md" | "lg";
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-rose-600 text-white shadow-sm shadow-rose-600/20 hover:bg-rose-500 focus-visible:outline-rose-600 dark:hover:bg-rose-500",
-  secondary:
-    "bg-stone-900 text-white hover:bg-stone-700 focus-visible:outline-stone-900 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-200",
+    "bg-primary text-primary-fg shadow-[0_1px_2px_rgb(0_0_0/0.08)] hover:bg-primary-hover focus-visible:outline-primary active:scale-[0.98]",
+  secondary: "bg-ink text-background hover:bg-ink/85 focus-visible:outline-ink active:scale-[0.98]",
   outline:
-    "border border-stone-300 bg-white text-stone-800 hover:border-stone-400 hover:bg-stone-50 focus-visible:outline-stone-400 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:border-stone-600 dark:hover:bg-stone-800",
+    "border border-line-strong bg-surface text-ink hover:border-primary hover:text-link focus-visible:outline-primary active:scale-[0.98]",
   ghost:
-    "text-stone-700 hover:bg-stone-200/60 focus-visible:outline-stone-400 dark:text-stone-300 dark:hover:bg-stone-800",
+    "text-ink-muted hover:bg-primary-soft hover:text-primary-soft-fg focus-visible:outline-primary",
 };
 
 const sizes: Record<Size, string> = {
@@ -44,7 +43,7 @@ export function Button({
   disabled,
 }: ButtonProps) {
   const classes = cn(
-    "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50",
+    "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-[var(--dur-fast)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50",
     variants[variant],
     sizes[size],
     className,
