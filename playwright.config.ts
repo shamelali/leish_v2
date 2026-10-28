@@ -32,6 +32,11 @@ export default defineConfig({
       SESSION_SECRET: "e2e-test-secret",
       CRON_SECRET: "e2e-cron-secret",
       NEXT_PUBLIC_SITE_URL: "http://localhost:3100",
+      // The suite runs the production build but deliberately NOT the production
+      // env contract (no real DATABASE_URL/Billplz/email here). Without this the
+      // boot depends on a developer's untracked .env.local happening to set it,
+      // which is also why ci.yml sets it at job level.
+      SKIP_ENV_VALIDATION: "1",
       PAYMENTS_ALLOW_DEV: "1",
       // Production requires a real email provider; e2e deliberately keeps the
       // dev outbox so no mail can leave the machine.
