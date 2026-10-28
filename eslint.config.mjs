@@ -28,8 +28,8 @@ const eslintConfig = defineConfig([
     "my-first-worker/**",
     ".agents/**",
     ".claude/**",
-    // Vendored third-party repository (Upstash redis-js reference copy):
-    "redis-js-main/**",
+    // Nested git worktree: a separate checkout with its own configs.
+    ".qoder-pr/**",
   ]),
 ]);
 
