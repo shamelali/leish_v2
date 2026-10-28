@@ -163,6 +163,53 @@ END
 $fix$;
 `;
 
+/**
+ * Reconcile the payouts table for the one-payout-per-booking invariant.
+ *
+ * Replayed payment webhooks used to be able to insert a second payout for the
+ * same booking. Collapse the `pending` duplicates (keeping the earliest row) so
+ * the unique index can be created; settled/failed rows are financial records
+ * and are left for an operator to reconcile — this script reports them instead
+ * of deleting them.
+ */
+async function fixPayoutsUniqueness(pool: Pool): Promise<void> {
+  const dedupe = await pool.query(`
+    DELETE FROM payouts AS p
+    USING (
+      SELECT ctid, row_number() OVER (PARTITION BY booking_id ORDER BY created_at, id) AS rn
+      FROM payouts
+      WHERE status = 'pending'
+    ) AS d
+    WHERE p.ctid = d.ctid AND d.rn > 1
+  `);
+  if (dedupe.rowCount) {
+    console.warn(`[migrate] removed ${dedupe.rowCount} duplicate pending payout row(s)`);
+  }
+
+  const { rows } = await pool.query(
+    `SELECT booking_id, COUNT(*) AS n FROM payouts GROUP BY booking_id HAVING COUNT(*) > 1`,
+  );
+  if (rows.length > 0) {
+    console.error(
+      `[migrate] WARNING: ${rows.length} booking(s) still have multiple payouts ` +
+        "(settled/failed rows were not deleted) — reconcile manually; " +
+        "uq_payouts_booking cannot be created until they are resolved.",
+    );
+  }
+
+  try {
+    await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_payouts_booking ON payouts(booking_id)");
+  } catch (err) {
+    // Non-fatal: the webhook is still idempotent (the status guard in
+    // markBillPaid is the primary boundary) but the database no longer backs
+    // that guarantee, so make it loud in the deploy log.
+    console.error(
+      "[migrate] could not create uq_payouts_booking:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
 async function columnExists(pool: Pool, table: string, column: string): Promise<boolean> {
   const { rows } = await pool.query(
     `SELECT 1 FROM information_schema.columns
@@ -206,6 +253,7 @@ async function main(): Promise<void> {
     await pool.query(PG_SCHEMA);
     await pool.query(FIX_ROLE_CHECK);
     await fixPaymentsUniqueness(pool);
+    await fixPayoutsUniqueness(pool);
 
     // Backfill columns on databases created before they were added.
     for (const [table, columns] of Object.entries(ADDITIVE_COLUMNS)) {

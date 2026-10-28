@@ -1,8 +1,13 @@
 import { test, expect } from "@playwright/test";
+import { readFixtureState, type CatalogFixtureState } from "./support/catalog";
 
-// Distinct artist per spec: booking-fee-flow claims aisha-azman first,
-// and catalog profiles can only be claimed by one user.
-const ARTIST_ID = "sofia-rahim";
+// Distinct artist per spec: booking-fee-flow claims e2e-artist-a first, and
+// catalog profiles can only be claimed by one user.
+let catalogArtist: CatalogFixtureState["artists"][string];
+
+test.beforeAll(() => {
+  catalogArtist = readFixtureState().artists["e2e-artist-b"];
+});
 
 interface BookingView {
   id: string;
@@ -51,6 +56,27 @@ function uniqueSlot(daysFromNow: number): { dateISO: string; time: string } {
 }
 
 /**
+ * A catalog profile can be claimed by exactly one user, so every test reuses a
+ * single claiming artist account. Registering a fresh artist per test would
+ * return 409 on the claim and then 403 on accept (not the owner).
+ */
+let artistUser: Promise<RegisterResult> | null = null;
+
+function ensureArtistUser(
+  request: import("@playwright/test").APIRequestContext,
+): Promise<RegisterResult> {
+  artistUser ??= (async () => {
+    const artist = await registerVerifiedUser(request, { name: "E2E MUA", role: "artist" });
+    const claim = await request.post("/api/artist-profiles", {
+      data: { artistId: catalogArtist.id },
+    });
+    expect([200, 201]).toContain(claim.status());
+    return artist;
+  })();
+  return artistUser;
+}
+
+/**
  * Shared setup: verified client + verified/claiming artist, accepted booking
  * with a quotation, and the deposit paid (dev provider settles instantly, so
  * the booking ends up confirmed). Leaves NO particular user logged in.
@@ -69,7 +95,7 @@ async function setupConfirmedBooking(
     ({ dateISO, time } = uniqueSlot(opts.daysFromNow));
     const res = await request.post("/api/bookings", {
       data: {
-        artistId: ARTIST_ID,
+        artistId: catalogArtist.id,
         service: "Reception Makeup",
         date: dateISO,
         time,
@@ -82,9 +108,8 @@ async function setupConfirmedBooking(
   }
   expect(bookingId).toBeDefined();
 
-  const artist = await registerVerifiedUser(request, { name: "E2E MUA", role: "artist" });
-  const claim = await request.post("/api/artist-profiles", { data: { artistId: ARTIST_ID } });
-  expect([200, 201, 409]).toContain(claim.status()); // 409 = already claimed
+  const artist = await ensureArtistUser(request);
+  await login(request, artist.email);
 
   expect(
     (await request.patch(`/api/bookings/${bookingId}`, { data: { action: "accept" } })).status(),

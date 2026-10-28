@@ -10,7 +10,7 @@ import {
   getClaimedStudioProfile,
   unclaimStudioProfile,
 } from "./studio-profiles";
-import { getStudioById } from "./catalog";
+import { TEST_STUDIO_A, insertStudioFixture } from "@/test/catalog-fixtures";
 
 async function createTestUser(role = "studio") {
   const userId = randomUUID();
@@ -32,24 +32,24 @@ async function createTestUser(role = "studio") {
 beforeEach(async () => {
   await getDb().prepare("DELETE FROM studio_profiles").run();
   await getDb().prepare("DELETE FROM users").run();
-  // Use confirmed existing studio ID from catalog
-  await getStudioById("bangsar-beauty-bar");
+  // The catalog ships empty — insert the studio these tests claim.
+  await insertStudioFixture();
 });
 
 describe("studio-profiles", () => {
   describe("claimStudioProfile", () => {
     it("claims a studio profile for a user", async () => {
       const userId = await createTestUser();
-      const profile = await claimStudioProfile(userId, "bangsar-beauty-bar");
+      const profile = await claimStudioProfile(userId, TEST_STUDIO_A);
 
       expect(profile.user_id).toBe(userId);
-      expect(profile.studio_id).toBe("bangsar-beauty-bar");
+      expect(profile.studio_id).toBe(TEST_STUDIO_A);
       expect(profile.claimed_at).toBeDefined();
 
       const row = await getDb()
         .prepare("SELECT * FROM studio_profiles WHERE user_id = ?")
         .get(userId);
-      expect(row).toMatchObject({ user_id: userId, studio_id: "bangsar-beauty-bar" });
+      expect(row).toMatchObject({ user_id: userId, studio_id: TEST_STUDIO_A });
     });
 
     it("throws STUDIO_NOT_FOUND for non-existent studio", async () => {
@@ -61,19 +61,15 @@ describe("studio-profiles", () => {
 
     it("throws ALREADY_CLAIMED when user already claimed a studio", async () => {
       const userId = await createTestUser();
-      await claimStudioProfile(userId, "bangsar-beauty-bar");
-      await expect(claimStudioProfile(userId, "bangsar-beauty-bar")).rejects.toThrow(
-        "ALREADY_CLAIMED",
-      );
+      await claimStudioProfile(userId, TEST_STUDIO_A);
+      await expect(claimStudioProfile(userId, TEST_STUDIO_A)).rejects.toThrow("ALREADY_CLAIMED");
     });
 
     it("throws ALREADY_CLAIMED when studio already claimed by another user", async () => {
       const user1 = await createTestUser();
       const user2 = await createTestUser();
-      await claimStudioProfile(user1, "bangsar-beauty-bar");
-      await expect(claimStudioProfile(user2, "bangsar-beauty-bar")).rejects.toThrow(
-        "ALREADY_CLAIMED",
-      );
+      await claimStudioProfile(user1, TEST_STUDIO_A);
+      await expect(claimStudioProfile(user2, TEST_STUDIO_A)).rejects.toThrow("ALREADY_CLAIMED");
     });
   });
 
@@ -86,9 +82,9 @@ describe("studio-profiles", () => {
 
     it("returns claimed studio ids", async () => {
       const userId = await createTestUser();
-      await claimStudioProfile(userId, "bangsar-beauty-bar");
+      await claimStudioProfile(userId, TEST_STUDIO_A);
       const ids = await getClaimedStudioIds(userId);
-      expect(ids).toContain("bangsar-beauty-bar");
+      expect(ids).toContain(TEST_STUDIO_A);
     });
   });
 
@@ -101,9 +97,9 @@ describe("studio-profiles", () => {
 
     it("returns profile when claimed", async () => {
       const userId = await createTestUser();
-      await claimStudioProfile(userId, "bangsar-beauty-bar");
+      await claimStudioProfile(userId, TEST_STUDIO_A);
       const profile = await getClaimedStudioProfile(userId);
-      expect(profile).toMatchObject({ user_id: userId, studio_id: "bangsar-beauty-bar" });
+      expect(profile).toMatchObject({ user_id: userId, studio_id: TEST_STUDIO_A });
     });
   });
 
@@ -116,7 +112,7 @@ describe("studio-profiles", () => {
 
     it("removes claim and returns true", async () => {
       const userId = await createTestUser();
-      await claimStudioProfile(userId, "bangsar-beauty-bar");
+      await claimStudioProfile(userId, TEST_STUDIO_A);
       const result = await unclaimStudioProfile(userId);
       expect(result).toBe(true);
 

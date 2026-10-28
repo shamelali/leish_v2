@@ -1,6 +1,11 @@
 import { test, expect } from "@playwright/test";
+import { readFixtureState, type CatalogFixtureState } from "./support/catalog";
 
-const ARTIST_ID = "aisha-azman";
+let artist: CatalogFixtureState["artists"][string];
+
+test.beforeAll(() => {
+  artist = readFixtureState().artists["e2e-artist-a"];
+});
 
 interface BookingSummary {
   id: string;
@@ -57,7 +62,7 @@ test("fee flow: register → verify → booking → accept → quotation → dep
     time = `${String(9 + (n % 12)).padStart(2, "0")}:${String((n * 7) % 60).padStart(2, "0")}`;
     const res = await request.post("/api/bookings", {
       data: {
-        artistId: ARTIST_ID,
+        artistId: artist.id,
         service: "Reception Makeup",
         date: dateISO,
         time,
@@ -73,7 +78,7 @@ test("fee flow: register → verify → booking → accept → quotation → dep
   // 3. Artist registers, verifies, claims the profile.
   await registerVerifiedUser(request, { name: "E2E MUA", role: "artist" });
   const claim = await request.post("/api/artist-profiles", {
-    data: { artistId: ARTIST_ID },
+    data: { artistId: artist.id },
   });
   expect([200, 201, 409]).toContain(claim.status()); // 409 = already claimed
 

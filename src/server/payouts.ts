@@ -67,8 +67,12 @@ async function artistUserIdForBooking(
 }
 
 /**
- * Create the payout for a fully-paid booking. Idempotent: returns the
- * existing payout if one is already recorded for the booking.
+ * Create the payout for a fully-paid booking. Idempotent: returns the existing
+ * payout if one is already recorded for the booking.
+ *
+ * The read below is only a fast path. Correctness under concurrency comes from
+ * `payouts(booking_id)` being UNIQUE (see db.ts) plus `ON CONFLICT DO NOTHING`
+ * — two webhook deliveries racing past the read cannot both insert.
  */
 export async function createPayoutForBooking(
   bookingId: string,
@@ -118,9 +122,23 @@ export async function createPayoutForBooking(
   await db
     .prepare(
       `INSERT INTO payouts (id, artist_user_id, booking_id, gross_sen, commission_sen, net_sen, status, settleable_at, settled_at, notes, created_at)
-       VALUES (@id, @artist_user_id, @booking_id, @gross_sen, @commission_sen, @net_sen, @status, @settleable_at, @settled_at, @notes, @created_at)`,
+       VALUES (@id, @artist_user_id, @booking_id, @gross_sen, @commission_sen, @net_sen, @status, @settleable_at, @settled_at, @notes, @created_at)
+       ON CONFLICT(booking_id) DO NOTHING`,
     )
     .run(bind(row));
+
+  // Report whatever actually landed. When a concurrent settlement won the
+  // insert, `ON CONFLICT` is a no-op and the winner's row is returned — the
+  // caller must not treat this as a second payout.
+  const stored = (await db.prepare("SELECT * FROM payouts WHERE booking_id = ?").get(bookingId)) as
+    PayoutRow | undefined;
+  if (!stored || stored.id !== row.id) {
+    logger.info(
+      { bookingId, payoutId: stored?.id ?? null },
+      "payout already recorded by a concurrent settlement",
+    );
+    return stored ?? null;
+  }
 
   logger.info(
     {

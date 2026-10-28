@@ -33,6 +33,7 @@ vi.mock("next/server", () => {
 });
 
 import { CONTENT_SECURITY_POLICY_HEADER, CSP_NONCE_HEADER } from "@/lib/csp";
+import { PATHNAME_HEADER } from "@/lib/request-headers";
 
 import { config, proxy } from "./proxy";
 
@@ -49,6 +50,8 @@ function runProxy(
   const request = {
     headers: new Headers(init?.headers),
     url,
+    // NextRequest always carries a parsed nextUrl; the proxy reads its pathname.
+    nextUrl: new URL(url),
     method: init?.method ?? "GET",
   } as unknown as NextRequest;
 
@@ -94,6 +97,21 @@ describe("proxy", () => {
 
     expect(first).toBeTruthy();
     expect(first).not.toBe(second);
+  });
+
+  it("forwards the pathname for server-side login redirects", () => {
+    const response = runProxy("https://leish.my/dashboard/payouts");
+
+    expect(response.forwardedRequestHeaders?.get(PATHNAME_HEADER)).toBe("/dashboard/payouts");
+  });
+
+  it("overwrites a client-supplied pathname header", () => {
+    // Otherwise a crafted header could drive the post-login redirect off-site.
+    const response = runProxy("https://leish.my/dashboard", {
+      headers: { [PATHNAME_HEADER]: "//evil.example" },
+    });
+
+    expect(response.forwardedRequestHeaders?.get(PATHNAME_HEADER)).toBe("/dashboard");
   });
 
   it("attaches CORS headers on /api/* for leish.my and www.leish.my", () => {

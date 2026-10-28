@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, Suspense, useEffect } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AREAS_BY_STATE, BRIDAL_EVENTS, NON_BRIDAL_EVENTS, MALAYSIA_STATES } from "@/lib/data";
 import {
+  CATEGORY_TO_FILTER,
   DEFAULT_ARTIST_FILTERS,
   filterArtists,
   hasActiveArtistFilters,
@@ -13,13 +15,6 @@ import type { Artist } from "@/lib/types";
 import { ArtistCard } from "@/components/ArtistCard";
 import { cn, pluralize } from "@/lib/utils";
 import { trackSearch } from "@/lib/agnost-client";
-
-const CATEGORY_TO_FILTER: Record<string, Partial<ArtistFilters>> = {
-  bridal: { bridal: "full-package" },
-  engagement: { bridal: "engagement" },
-  graduation: { nonBridal: "graduation" },
-  corporate: { nonBridal: "corporate" },
-};
 
 function ArtistsBrowser({ artists }: { artists: Artist[] }) {
   const searchParams = useSearchParams();
@@ -280,6 +275,23 @@ function ArtistsBrowser({ artists }: { artists: Artist[] }) {
           {results.map((artist) => (
             <ArtistCard key={artist.id} artist={artist} />
           ))}
+        </div>
+      ) : artists.length === 0 ? (
+        // Nothing has been onboarded yet — a distinct state from "filters too
+        // narrow", since a fresh deployment starts here.
+        <div className="mt-4 rounded-2xl border border-dashed border-stone-300 bg-white p-16 text-center dark:border-stone-700 dark:bg-stone-900">
+          <p className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            No artists listed yet
+          </p>
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+            The catalog is still being onboarded. Check back soon, or list your own services.
+          </p>
+          <Link
+            href="/onboarding"
+            className="mt-5 inline-block text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-500 dark:hover:text-rose-400"
+          >
+            Join as an artist →
+          </Link>
         </div>
       ) : (
         <div className="mt-4 rounded-2xl border border-dashed border-line-strong bg-surface p-16 text-center">

@@ -255,14 +255,14 @@ _Each feature lists its SRS requirements. Full functional decomposition with acc
 
 #### 5.2 SRS-F-02 — Catalog
 
-| ID          | Requirement                                                                                                                                                                         | Verification                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| SRS-F-02-01 | Store artists/studios in DB tables `artists`/`studios` (seeded from `src/lib/data.ts` via `src/server/catalog-seed.ts` idempotently; slugs == legacy ids).                          | `ensureCatalogSeeded()`; `npm run db:seed-catalog` |
-| SRS-F-02-02 | Provide repository `listArtists(filters)`: SQL pre-filter `state/area/budget` (indexed), then `filterArtists()` for `query`/tags/date; `listAllArtists({limit,offset})` capped 500. | `src/server/catalog.ts`                            |
-| SRS-F-02-03 | Provide `getArtistById`, `getArtistBySlug`, `resolveArtist(idOrSlug)` (slug-first), same for studios.                                                                               | Catalog tests                                      |
-| SRS-F-02-04 | Validate discovery query via `artistsQuerySchema` (`MALAYSIA_STATES`, `BRIDAL_EVENTS`, `NON_BRIDAL_EVENTS`); support `state → area` cascading ( `AREAS_BY_STATE`).                  | `src/server/validation.ts`                         |
-| SRS-F-02-05 | Allow admin direct column edits and artist self-service `PATCH /api/artist-profiles` (whitelisted fields only).                                                                     | `updateArtist`/`updateStudio` field maps           |
-| SRS-F-02-06 | Public catalog routes set `s-maxage=300`; catalog pages are `force-dynamic` so edits surface without redeploy.                                                                      | `src/app/artists/page.tsx` dynamic flag            |
+| ID          | Requirement                                                                                                                                                                          | Verification                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| SRS-F-02-01 | Store artists/studios in DB tables `artists`/`studios` as the only source of truth — no demo seed and no lazy auto-population; rows come from admin onboarding or `/api/onboarding`. | `listArtists()` on an empty DB returns `[]`; `npm run db:clear-catalog` |
+| SRS-F-02-02 | Provide repository `listArtists(filters)`: SQL pre-filter `state/area/budget` (indexed), then `filterArtists()` for `query`/tags/date; `listAllArtists({limit,offset})` capped 500.  | `src/server/catalog.ts`                                                 |
+| SRS-F-02-03 | Provide `getArtistById`, `getArtistBySlug`, `resolveArtist(idOrSlug)` (slug-first), same for studios.                                                                                | Catalog tests                                                           |
+| SRS-F-02-04 | Validate discovery query via `artistsQuerySchema` (`MALAYSIA_STATES`, `BRIDAL_EVENTS`, `NON_BRIDAL_EVENTS`); support `state → area` cascading ( `AREAS_BY_STATE`).                   | `src/server/validation.ts`                                              |
+| SRS-F-02-05 | Allow admin direct column edits and artist self-service `PATCH /api/artist-profiles` (whitelisted fields only).                                                                      | `updateArtist`/`updateStudio` field maps                                |
+| SRS-F-02-06 | Public catalog routes set `s-maxage=300`; catalog pages are `force-dynamic` so edits surface without redeploy.                                                                       | `src/app/artists/page.tsx` dynamic flag                                 |
 
 #### 5.3 SRS-F-03 — Booking Management
 

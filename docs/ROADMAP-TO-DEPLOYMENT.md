@@ -35,8 +35,9 @@ dashboard URL is login-gated; verify its state from the Vercel console).
 
 5. Create the fresh **Supabase** project (do not reuse v1 Neon/old Supabase).
    Set `DATABASE_URL` (pooler, `sslmode=require`) in Vercel **Production**.
-6. `pnpm run db:migrate` against prod `DATABASE_URL`, then `pnpm run db:seed-catalog`
-   and seed the first admin (`scripts/seed-admin.ts`).
+6. `pnpm run db:migrate` against prod `DATABASE_URL`, then seed the first admin
+   (`scripts/seed-admin.ts`). There is **no catalog seed** — production starts
+   with an empty catalog and entries are onboarded through the admin panel.
    **Revised 2026-09-04:** the `supabase link` + `supabase db push` step is dropped.
    There is no `supabase/` directory and no migration files — the schema lives in
    `PG_SCHEMA` in `src/server/db.ts` and `db:migrate` applies it idempotently.

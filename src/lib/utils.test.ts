@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { catalogImageSrc, catalogPath, cn, formatRM, pluralize } from "./utils";
+import { catalogImageSrc, catalogPath, cn, formatRM, pluralize, safeRedirectPath } from "./utils";
 
 describe("cn", () => {
   it("joins truthy classes and skips falsy values", () => {
@@ -54,5 +54,31 @@ describe("catalogImageSrc", () => {
     expect(catalogImageSrc("")).toBe("/images/hero.jpg");
     expect(catalogImageSrc(null)).toBe("/images/hero.jpg");
     expect(catalogImageSrc("/images/artist-1.jpg")).toBe("/images/artist-1.jpg");
+  });
+});
+
+describe("safeRedirectPath", () => {
+  it("keeps a same-origin path", () => {
+    expect(safeRedirectPath("/dashboard/payouts")).toBe("/dashboard/payouts");
+    expect(safeRedirectPath("/bookings/abc/chat?tab=1")).toBe("/bookings/abc/chat?tab=1");
+  });
+
+  it("falls back when no target was supplied", () => {
+    expect(safeRedirectPath(null)).toBe("/dashboard");
+    expect(safeRedirectPath("")).toBe("/dashboard");
+    expect(safeRedirectPath("   ")).toBe("/dashboard");
+    expect(safeRedirectPath(null, "/onboarding")).toBe("/onboarding");
+  });
+
+  it("refuses off-site targets", () => {
+    // Each of these leaves the site once passed to router.push().
+    expect(safeRedirectPath("https://evil.example")).toBe("/dashboard");
+    expect(safeRedirectPath("//evil.example")).toBe("/dashboard");
+    expect(safeRedirectPath("/\\evil.example")).toBe("/dashboard");
+    expect(safeRedirectPath("javascript:alert(1)")).toBe("/dashboard");
+  });
+
+  it("refuses control characters that could smuggle headers", () => {
+    expect(safeRedirectPath("/dashboard\r\nSet-Cookie: x=1")).toBe("/dashboard");
   });
 });

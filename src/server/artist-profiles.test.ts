@@ -10,7 +10,7 @@ import {
   getClaimedProfile,
   unclaimArtistProfile,
 } from "./artist-profiles";
-import { getArtistById } from "./catalog";
+import { TEST_ARTIST_A, TEST_ARTIST_B, insertCatalogFixtures } from "@/test/catalog-fixtures";
 
 async function createTestUser(role = "artist") {
   const userId = randomUUID();
@@ -33,23 +33,23 @@ describe("artist-profiles", () => {
   beforeEach(async () => {
     await getDb().prepare("DELETE FROM artist_profiles").run();
     await getDb().prepare("DELETE FROM users").run();
-    // Ensure catalog is seeded so getArtistById works
-    await getArtistById("aisha-azman");
+    // The catalog ships empty — insert the artists these tests claim.
+    await insertCatalogFixtures();
   });
 
   describe("claimArtistProfile", () => {
     it("claims an artist profile for a user", async () => {
       const userId = await createTestUser();
-      const profile = await claimArtistProfile(userId, "aisha-azman");
+      const profile = await claimArtistProfile(userId, TEST_ARTIST_A);
 
       expect(profile.user_id).toBe(userId);
-      expect(profile.artist_id).toBe("aisha-azman");
+      expect(profile.artist_id).toBe(TEST_ARTIST_A);
       expect(profile.claimed_at).toBeDefined();
 
       const row = await getDb()
         .prepare("SELECT * FROM artist_profiles WHERE user_id = ?")
         .get(userId);
-      expect(row).toMatchObject({ user_id: userId, artist_id: "aisha-azman" });
+      expect(row).toMatchObject({ user_id: userId, artist_id: TEST_ARTIST_A });
     });
 
     it("throws ARTIST_NOT_FOUND for non-existent artist", async () => {
@@ -59,15 +59,15 @@ describe("artist-profiles", () => {
 
     it("throws ALREADY_CLAIMED when user already claimed an artist", async () => {
       const userId = await createTestUser();
-      await claimArtistProfile(userId, "aisha-azman");
-      await expect(claimArtistProfile(userId, "maya-tan")).rejects.toThrow("ALREADY_CLAIMED");
+      await claimArtistProfile(userId, TEST_ARTIST_A);
+      await expect(claimArtistProfile(userId, TEST_ARTIST_B)).rejects.toThrow("ALREADY_CLAIMED");
     });
 
     it("throws ALREADY_CLAIMED when artist already claimed by another user", async () => {
       const user1 = await createTestUser();
       const user2 = await createTestUser();
-      await claimArtistProfile(user1, "aisha-azman");
-      await expect(claimArtistProfile(user2, "aisha-azman")).rejects.toThrow("ALREADY_CLAIMED");
+      await claimArtistProfile(user1, TEST_ARTIST_A);
+      await expect(claimArtistProfile(user2, TEST_ARTIST_A)).rejects.toThrow("ALREADY_CLAIMED");
     });
   });
 
@@ -80,9 +80,9 @@ describe("artist-profiles", () => {
 
     it("returns claimed artist ids", async () => {
       const userId = await createTestUser();
-      await claimArtistProfile(userId, "aisha-azman");
+      await claimArtistProfile(userId, TEST_ARTIST_A);
       const ids = await getClaimedArtistIds(userId);
-      expect(ids).toContain("aisha-azman");
+      expect(ids).toContain(TEST_ARTIST_A);
     });
   });
 
@@ -95,9 +95,9 @@ describe("artist-profiles", () => {
 
     it("returns profile when claimed", async () => {
       const userId = await createTestUser();
-      await claimArtistProfile(userId, "aisha-azman");
+      await claimArtistProfile(userId, TEST_ARTIST_A);
       const profile = await getClaimedProfile(userId);
-      expect(profile).toMatchObject({ user_id: userId, artist_id: "aisha-azman" });
+      expect(profile).toMatchObject({ user_id: userId, artist_id: TEST_ARTIST_A });
     });
   });
 
@@ -110,7 +110,7 @@ describe("artist-profiles", () => {
 
     it("removes claim and returns true", async () => {
       const userId = await createTestUser();
-      await claimArtistProfile(userId, "aisha-azman");
+      await claimArtistProfile(userId, TEST_ARTIST_A);
       const result = await unclaimArtistProfile(userId);
       expect(result).toBe(true);
 

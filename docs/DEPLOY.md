@@ -81,6 +81,10 @@ Transactional email is sent via `src/server/email.ts`. The default provider is
 production). For real delivery set `EMAIL_PROVIDER=resend` (+ `RESEND_API_KEY`) or
 `EMAIL_PROVIDER=postmark` (+ `POSTMARK_SERVER_TOKEN`), plus `EMAIL_FROM`.
 
+Production **fails to boot** when no provider and no provider credential is
+configured, so an outbox-only deployment is impossible by accident. To run
+without sending mail on purpose, set `EMAIL_ALLOW_DEV=1`.
+
 - [ ] Confirm the sender domain is verified (SPF/DKIM) so mail doesn't land in spam.
 - [ ] Trigger a verification email via registration and confirm delivery.
 - [ ] Check the provider's plan send cap against expected launch volume.

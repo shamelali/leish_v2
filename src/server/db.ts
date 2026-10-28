@@ -405,6 +405,8 @@ export const PG_SCHEMA = `
     body       TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
+  -- One payment per booking per type (deposit + balance), never two of the same.
+  -- Enforced by uq_payments_booking_type, created after the legacy-table rebuild.
   CREATE TABLE IF NOT EXISTS payments (
     id           TEXT PRIMARY KEY,
     booking_id   TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
@@ -419,7 +421,9 @@ export const PG_SCHEMA = `
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
   );
-  -- One payment per booking per type (deposit + balance), never two of the same.
+  -- One payout per booking. Enforced by uq_payouts_booking (created after the
+  -- duplicate sweep in migrateSqlite / the pg readiness step) — that index is
+  -- what makes replaying a payment webhook financially inert.
   CREATE TABLE IF NOT EXISTS payouts (
     id             TEXT PRIMARY KEY,
     artist_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -686,6 +690,8 @@ const SQLITE_SCHEMA = `
     body       TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
+  -- One payment per booking per type (deposit + balance), never two of the same.
+  -- Enforced by uq_payments_booking_type, created after the legacy-table rebuild.
   CREATE TABLE IF NOT EXISTS payments (
     id           TEXT PRIMARY KEY,
     booking_id   TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
@@ -700,7 +706,9 @@ const SQLITE_SCHEMA = `
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
   );
-  -- One payment per booking per type (deposit + balance), never two of the same.
+  -- One payout per booking. Enforced by uq_payouts_booking (created after the
+  -- duplicate sweep in migrateSqlite / the pg readiness step) — that index is
+  -- what makes replaying a payment webhook financially inert.
   CREATE TABLE IF NOT EXISTS payouts (
     id             TEXT PRIMARY KEY,
     artist_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -935,6 +943,24 @@ export function migrateSqlite(db: DatabaseSync) {
       db.exec(`ALTER TABLE ${table} ADD COLUMN referral_earnings INTEGER NOT NULL DEFAULT 0`);
     }
   }
+
+  // One payout per booking. Before the unique index can exist, collapse the
+  // duplicates left by replayed webhooks: keep the earliest row per booking and
+  // only delete `pending` ones — settled/failed rows are financial records and
+  // must be reconciled by an operator, not silently dropped.
+  db.exec(`
+    DELETE FROM payouts
+     WHERE status = 'pending'
+       AND rowid NOT IN (SELECT MIN(rowid) FROM payouts GROUP BY booking_id);
+  `);
+  try {
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_payouts_booking ON payouts(booking_id)");
+  } catch (err) {
+    console.error(
+      "[db] payouts unique index skipped (settled duplicates need reconciliation):",
+      err instanceof Error ? err.message : err,
+    );
+  }
 }
 
 // ── Singleton ────────────────────────────────────────────────────────────────
@@ -1010,6 +1036,32 @@ export function getDb(): DbFacade {
         );
       } catch {
         // Column may not exist yet on legacy databases — safe to skip.
+      }
+      // One payout per booking — the invariant that makes duplicate webhook
+      // deliveries inert. Sweep pending duplicates first (keeping the earliest
+      // row) or the index creation fails; settled rows are never deleted.
+      try {
+        await query(
+          `
+          DELETE FROM payouts AS p
+          USING (
+            SELECT ctid, row_number() OVER (PARTITION BY booking_id ORDER BY created_at, id) AS rn
+            FROM payouts
+            WHERE status = 'pending'
+          ) AS d
+          WHERE p.ctid = d.ctid AND d.rn > 1
+        `,
+          undefined,
+        );
+        await query(
+          "CREATE UNIQUE INDEX IF NOT EXISTS uq_payouts_booking ON payouts(booking_id)",
+          undefined,
+        );
+      } catch (err) {
+        console.error(
+          "[db] payouts unique index skipped:",
+          err instanceof Error ? err.message : err,
+        );
       }
     })().catch((err) => {
       console.error("[db] pg schema migration failed:", err instanceof Error ? err.message : err);

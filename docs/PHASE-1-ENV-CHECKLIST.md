@@ -44,8 +44,8 @@ two. Treat all three as blocking regardless.
 # 1. Create a fresh Supabase project (do NOT reuse the v1 Neon instance).
 # 2. Apply the schema:
 DATABASE_URL="postgresql://...pooler...?sslmode=require" pnpm run db:migrate
-# 3. Seed the artist/studio catalog:
-DATABASE_URL="..." pnpm run db:seed-catalog
+# 3. (No catalog seed step — production starts with an empty catalog.
+#     Artists/studios are created by admins or via /api/onboarding.)
 # 4. Create the first admin:
 DATABASE_URL="..." ADMIN_EMAIL="you@leish.my" ADMIN_PASSWORD="..." \
   node --experimental-strip-types scripts/seed-admin.ts
@@ -96,12 +96,13 @@ Register the callback URL in the Billplz dashboard too — the webhook is the
 
 ### Email
 
-| Variable                                   | Source                                     | Notes                                                                                                                       |
-| ------------------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `EMAIL_PROVIDER`                           | `brevo` \| `resend` \| `postmark` \| `dev` | Defaults to `dev` (writes to `email_outbox`, sends nothing). **Must be set** or no user ever receives a verification email. |
-| `BREVO_API_KEY`                            | Brevo → SMTP & API → API keys              | Recommended per `.env.example`.                                                                                             |
-| `RESEND_API_KEY` / `POSTMARK_SERVER_TOKEN` | provider dashboard                         | Alternatives.                                                                                                               |
-| `EMAIL_FROM`                               | `Leish! <no-reply@leish.my>`               | Sender must pass SPF/DKIM on the sending domain.                                                                            |
+| Variable                                   | Source                                     | Notes                                                                                                                                         |
+| ------------------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EMAIL_PROVIDER`                           | `brevo` \| `resend` \| `postmark` \| `dev` | **Required** in production: `validateEnv()` refuses to boot with no provider and no credential, unless `EMAIL_ALLOW_DEV=1` is set explicitly. |
+| `EMAIL_ALLOW_DEV`                          | `1`                                        | Explicit opt-out: run production with the dev outbox (nothing is sent).                                                                       |
+| `BREVO_API_KEY`                            | Brevo → SMTP & API → API keys              | Recommended per `.env.example`.                                                                                                               |
+| `RESEND_API_KEY` / `POSTMARK_SERVER_TOKEN` | provider dashboard                         | Alternatives.                                                                                                                                 |
+| `EMAIL_FROM`                               | `Leish! <no-reply@leish.my>`               | Sender must pass SPF/DKIM on the sending domain.                                                                                              |
 
 Auto-detection: if `EMAIL_PROVIDER` is unset, the first key found wins
 (`RESEND` → `POSTMARK` → `BREVO`). Set it explicitly. If a provider is named

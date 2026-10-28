@@ -254,11 +254,11 @@ _Measurement_: from Cloudflare/Vercel edge timing (`x-vercel-cache`, server-timi
 
 #### NFR-O-03 — Deployment
 
-| Requirement                                                                                                          | Fit-criterion                                                |
-| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `npm run build` succeeds with no errors (sets `NODE_ENV=production`)                                                 | Must — CI includes `ci.yml` build step                       |
-| `npm run env:check` (production mode) reports missing `SESSION_SECRET`, `DATABASE_URL`, `POSTGRES_URL`, Billplz keys | Must — pre-deploy checklist AGENTS.md §Production Deployment |
-| `npm run db:migrate` + `npm run db:seed-catalog` run successfully against target PG before first traffic             | Must                                                         |
+| Requirement                                                                                                                                        | Fit-criterion                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `npm run build` succeeds with no errors (sets `NODE_ENV=production`)                                                                               | Must — CI includes `ci.yml` build step                       |
+| `npm run env:check` (production mode) reports missing `SESSION_SECRET`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, Billplz keys and an email provider | Must — pre-deploy checklist AGENTS.md §Production Deployment |
+| `npm run db:migrate` succeeds against target PG before first traffic; catalog starts empty (no seed step)                                          | Must                                                         |
 
 ---
 

@@ -35,6 +35,14 @@ const nextConfig: NextConfig = {
   // step is incompatible with it (ENOENT .next/next-server.js.nft.json), so
   // only enable it when NOT building on Vercel.
   ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
+  // Next traces the CJS build of @swc/helpers but its server-side
+  // `require-hook` resolves the ESM build at runtime. Under pnpm the package
+  // only exists inside `.pnpm/`, so the traced copy is missing `esm/` and
+  // `node server.js` dies with MODULE_NOT_FOUND. Force those files into the
+  // trace so the standalone bundle (Docker + `pnpm run start`) actually boots.
+  outputFileTracingIncludes: {
+    "/**/*": ["./node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/esm/**/*"],
+  },
   async headers() {
     if (process.env.NODE_ENV === "development") return [];
     return [{ source: "/(.*)", headers: securityHeaders }];

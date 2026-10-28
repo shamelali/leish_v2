@@ -65,7 +65,11 @@ function lastReason(): string | undefined {
   return call?.[1]?.metadata?.reason;
 }
 
-async function seedBookingWithFeePayment(): Promise<{ bookingId: string; billId: string }> {
+async function seedBookingWithPayment(
+  type: "deposit" | "balance",
+  amountSen: number,
+  bookingStatus = "accepted",
+): Promise<{ bookingId: string; billId: string }> {
   const userId = randomUUID();
   await getDb()
     .prepare(
@@ -94,11 +98,11 @@ async function seedBookingWithFeePayment(): Promise<{ bookingId: string; billId:
       580,
       "2026-09-01",
       "10:00 AM",
-      "accepted",
+      bookingStatus,
       new Date().toISOString(),
     );
 
-  const payment = await createBookingPayment(bookingId, "deposit", DEFAULT_BOOKING_FEE_SEN);
+  const payment = await createBookingPayment(bookingId, type, amountSen);
   const row = (await getDb()
     .prepare("SELECT provider_ref FROM payments WHERE id = ?")
     .get(payment.id)) as { provider_ref: string | null } | undefined;
@@ -106,9 +110,14 @@ async function seedBookingWithFeePayment(): Promise<{ bookingId: string; billId:
   return { bookingId, billId: row?.provider_ref ?? payment.id };
 }
 
+function seedBookingWithFeePayment(): Promise<{ bookingId: string; billId: string }> {
+  return seedBookingWithPayment("deposit", DEFAULT_BOOKING_FEE_SEN);
+}
+
 beforeEach(async () => {
   reportError.mockClear();
   process.env.BILLPLZ_API_KEY = API_KEY;
+  await getDb().prepare("DELETE FROM payouts").run();
   await getDb().prepare("DELETE FROM payments").run();
   await getDb().prepare("DELETE FROM bookings").run();
   await getDb().prepare("DELETE FROM users").run();
@@ -235,5 +244,84 @@ describe("POST /api/payments/webhook — happy path", () => {
       .prepare("SELECT status FROM payments WHERE provider_ref = ?")
       .get(billId)) as { status: string } | undefined;
     expect(row?.status).toBe("paid");
+  });
+});
+
+describe("POST /api/payments/webhook — replayed balance settlement", () => {
+  it("settles a balance exactly once across repeated deliveries", async () => {
+    const { bookingId, billId } = await seedBookingWithPayment("balance", 30_000, "confirmed");
+    const body = JSON.stringify({ id: billId, paid: true, state: "paid", paid_amount: 30_000 });
+
+    expect((await POST(webhookRequest(body))).status).toBe(200);
+    expect((await POST(webhookRequest(body))).status).toBe(200);
+
+    const payouts = await getDb()
+      .prepare("SELECT id FROM payouts WHERE booking_id = ?")
+      .all<{ id: string }>(bookingId);
+    // A booking has exactly one artist payout. A retried callback that re-runs
+    // settlement is how an artist gets paid twice for one booking.
+    expect(payouts).toHaveLength(1);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/payments/webhook — amount does not match our record", () => {
+  it("alerts and leaves the payment unsettled when paid_amount differs", async () => {
+    const { bookingId, billId } = await seedBookingWithPayment("balance", 30_000, "confirmed");
+    const body = JSON.stringify({ id: billId, paid: true, state: "paid", paid_amount: "100" });
+
+    const res = await POST(webhookRequest(body));
+
+    // Acked so Billplz stops retrying — a mismatch needs a human, not a retry.
+    expect(res.status).toBe(200);
+    expect(lastReason()).toBe("amount_mismatch");
+
+    const row = (await getDb()
+      .prepare("SELECT status FROM payments WHERE provider_ref = ?")
+      .get(billId)) as { status: string } | undefined;
+    expect(row?.status).toBe("required");
+
+    const payouts = await getDb()
+      .prepare("SELECT id FROM payouts WHERE booking_id = ?")
+      .all<{ id: string }>(bookingId);
+    expect(payouts).toHaveLength(0);
+  });
+
+  it("accepts a matching string amount (Billplz sends amounts as strings)", async () => {
+    const { billId } = await seedBookingWithPayment("deposit", DEFAULT_BOOKING_FEE_SEN);
+    const body = JSON.stringify({
+      id: billId,
+      paid: true,
+      state: "paid",
+      paid_amount: String(DEFAULT_BOOKING_FEE_SEN),
+    });
+
+    expect((await POST(webhookRequest(body))).status).toBe(200);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/payments/webhook — paid callback for a refunded bill", () => {
+  it("does not resurrect the payment, alerts, and creates no payout", async () => {
+    const { bookingId, billId } = await seedBookingWithPayment("balance", 30_000, "confirmed");
+    await getDb()
+      .prepare("UPDATE payments SET status = 'refunded' WHERE provider_ref = ?")
+      .run(billId);
+
+    const body = JSON.stringify({ id: billId, paid: true, state: "paid", paid_amount: 30_000 });
+    const res = await POST(webhookRequest(body));
+
+    expect(res.status).toBe(200);
+    expect(lastReason()).toBe("callback_after_refund");
+
+    const row = (await getDb()
+      .prepare("SELECT status FROM payments WHERE provider_ref = ?")
+      .get(billId)) as { status: string } | undefined;
+    expect(row?.status).toBe("refunded");
+
+    const payouts = await getDb()
+      .prepare("SELECT id FROM payouts WHERE booking_id = ?")
+      .all<{ id: string }>(bookingId);
+    expect(payouts).toHaveLength(0);
   });
 });

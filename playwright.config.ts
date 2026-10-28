@@ -19,18 +19,33 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "npm run build && npm run start",
+    // The catalog has no demo seed, so one step writes the fixture artists and
+    // studios into a throwaway SQLite file (plus a state file the specs read)
+    // before the server boots. Both run in this command so the env below applies.
+    command:
+      "node --experimental-strip-types e2e/support/seed-fixtures.ts && npm run build && npm run start",
     env: {
-      // `next start` runs with NODE_ENV=production, where src/env.ts requires
-      // SESSION_SECRET (build is exempt). CI does not set it, so provide a
-      // throwaway value here — it never leaves the test machine.
+      // The server runs with NODE_ENV=production, where src/env.ts enforces the
+      // production contract (and src/server/db.ts refuses SQLite). Provide
+      // throwaway values + explicit local opt-outs here; nothing leaves the
+      // test machine.
       SESSION_SECRET: "e2e-test-secret",
+      CRON_SECRET: "e2e-cron-secret",
+      NEXT_PUBLIC_SITE_URL: "http://localhost:3100",
+      PAYMENTS_ALLOW_DEV: "1",
+      // Production requires a real email provider; e2e deliberately keeps the
+      // dev outbox so no mail can leave the machine.
+      EMAIL_PROVIDER: "dev",
+      EMAIL_ALLOW_DEV: "1",
       PORT: "3100",
-      // Hard isolation: force the local in-memory SQLite backend so tests can
-      // NEVER touch a real database via an inherited DATABASE_URL (.env.local).
-      // Empty string is falsy, so src/server/db.ts falls back to SQLite.
+      // Hard isolation: force the local SQLite backend so tests can NEVER touch
+      // a real database via an inherited DATABASE_URL (.env.local). Empty
+      // string is falsy, so src/server/db.ts falls back to SQLite — with
+      // SKIP_DB_GUARD allowing that fallback outside development. A file (not
+      // :memory:) is required because the fixture step is a separate process.
       DATABASE_URL: "",
-      LEISH_DB_PATH: ":memory:",
+      SKIP_DB_GUARD: "1",
+      LEISH_DB_PATH: "./data/e2e.db",
       // Lets the register route return devVerifyUrl so e2e specs can verify
       // their accounts (booking creation requires a verified email), and
       // raises auth rate limits so multi-registration flows don't 429.
@@ -39,6 +54,8 @@ export default defineConfig({
     },
     url: "http://localhost:3100",
     reuseExistingServer: false,
-    timeout: 120_000,
+    // The command builds the app before starting it, so allow well over a
+    // bare boot: a cold `next build` alone can take a couple of minutes.
+    timeout: 300_000,
   },
 });
