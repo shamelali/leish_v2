@@ -24,7 +24,14 @@ import {
   updateArtist,
   updateStudio,
 } from "./catalog";
-import { seedCatalog } from "./catalog-seed";
+import {
+  TEST_ARTIST_A,
+  TEST_ARTIST_B,
+  TEST_STUDIO_A,
+  insertArtistFixture,
+  insertCatalogFixtures,
+  insertStudioFixture,
+} from "@/test/catalog-fixtures";
 
 async function createUser(role = "customer") {
   const id = randomUUID();
@@ -54,7 +61,7 @@ async function createBooking(userId: string, artistId: string, status: string) {
       id,
       userId,
       artistId,
-      "Aisha Azman",
+      "Fixture Artist A",
       "Engagement Makeup",
       480,
       "2026-01-01",
@@ -65,53 +72,42 @@ async function createBooking(userId: string, artistId: string, status: string) {
   return id;
 }
 
+async function resetCatalog() {
+  const db = getDb();
+  for (const table of ["reviews", "bookings", "artist_profiles", "studio_profiles", "referrals"]) {
+    await db.prepare(`DELETE FROM ${table}`).run();
+  }
+  await db.prepare("DELETE FROM artists").run();
+  await db.prepare("DELETE FROM studios").run();
+  await db.prepare("DELETE FROM users").run();
+}
+
 describe("catalog repository", () => {
-  beforeEach(async () => {
-    // Fresh slate per test; ensureCatalogSeeded lazily re-seeds on read.
-    const db = getDb();
-    for (const table of ["reviews", "bookings", "users", "catalog_overrides"]) {
-      await db.prepare(`DELETE FROM ${table}`).run();
-    }
-  });
+  beforeEach(resetCatalog);
 
-  it("lazily seeds the full catalog on first read", async () => {
-    const artists = await listAllArtists();
-    expect(artists.length).toBeGreaterThanOrEqual(7);
-    expect(artists.some((a) => a.id === "aisha-azman")).toBe(true);
-
-    const studios = await listAllStudios();
-    expect(studios.length).toBeGreaterThanOrEqual(4);
-    expect(studios.some((s) => s.id === "glow-room-cyberjaya")).toBe(true);
-  });
-
-  it("seeding is idempotent", async () => {
-    await seedCatalog();
-    const before = (await listEntityReviews("artist", "aisha-azman")).length;
-    await seedCatalog();
-    await seedCatalog();
-    const after = (await listEntityReviews("artist", "aisha-azman")).length;
-    expect(after).toBe(before);
-
-    const artists = await listAllArtists();
-    expect(artists.filter((a) => a.id === "aisha-azman")).toHaveLength(1);
+  it("returns an empty catalog when nothing has been onboarded", async () => {
+    // No demo seed exists — a fresh database is an empty marketplace.
+    expect(await listAllArtists()).toEqual([]);
+    expect(await listAllStudios()).toEqual([]);
+    expect(await getArtistById(TEST_ARTIST_A)).toBeNull();
   });
 
   it("looks up artists by id and slug", async () => {
-    const byId = await getArtistById("maya-tan");
-    expect(byId?.name).toBe("Maya Tan");
+    await insertCatalogFixtures();
+    const byId = await getArtistById(TEST_ARTIST_A);
+    expect(byId?.name).toBe("Fixture Artist A");
     expect(byId?.services.length).toBeGreaterThan(0);
 
-    const bySlug = await getArtistBySlug("maya-tan");
-    expect(bySlug?.id).toBe("maya-tan");
-    expect(bySlug?.slug).toBe("maya-tan");
+    const bySlug = await getArtistBySlug(TEST_ARTIST_A);
+    expect(bySlug?.id).toBe(TEST_ARTIST_A);
+    expect(bySlug?.slug).toBe(TEST_ARTIST_A);
 
     expect(await getArtistById("nope")).toBeNull();
-    expect((await getStudioById("bangsar-beauty-bar"))?.name).toBe("Bangsar Beauty Bar");
-    expect((await getStudioBySlug("bangsar-beauty-bar"))?.id).toBe("bangsar-beauty-bar");
+    expect((await getStudioById(TEST_STUDIO_A))?.name).toBe("Fixture Studio A");
+    expect((await getStudioBySlug(TEST_STUDIO_A))?.id).toBe(TEST_STUDIO_A);
   });
 
   it("creates admin-onboarded artists with a UUID id and a separate slug", async () => {
-    await listAllArtists();
     const suffix = randomUUID().slice(0, 8);
     const created = await createArtist({
       name: `Zara Onboarded ${suffix}`,
@@ -131,7 +127,6 @@ describe("catalog repository", () => {
   });
 
   it("creates admin-onboarded studios with a UUID id and a separate slug", async () => {
-    await listAllStudios();
     const suffix = randomUUID().slice(0, 8);
     const created = await createStudio({
       name: `Glam Studio ${suffix}`,
@@ -152,7 +147,6 @@ describe("catalog repository", () => {
   });
 
   it("createArtist persists yearsExperience and portfolio at insert time", async () => {
-    await listAllArtists();
     const created = await createArtist({
       name: `Portfolio Artist ${randomUUID().slice(0, 8)}`,
       state: "Selangor",
@@ -170,7 +164,6 @@ describe("catalog repository", () => {
   });
 
   it("deleteArtist removes the row by id and by slug lookups", async () => {
-    await listAllArtists();
     const created = await createArtist({ name: `Doomed Artist ${randomUUID().slice(0, 8)}` });
     expect(await deleteArtist(created!.id)).toBe(true);
     expect(await getArtistById(created!.id)).toBeNull();
@@ -181,7 +174,6 @@ describe("catalog repository", () => {
   });
 
   it("deleteStudio removes the row by id and by slug lookups", async () => {
-    await listAllStudios();
     const created = await createStudio({ name: `Doomed Studio ${randomUUID().slice(0, 8)}` });
     expect(await deleteStudio(created!.id)).toBe(true);
     expect(await getStudioById(created!.id)).toBeNull();
@@ -189,24 +181,28 @@ describe("catalog repository", () => {
     expect(await deleteStudio(created!.id)).toBe(false);
   });
 
-  it("filters artists by state, budget and query", async () => {
+  it("filters artists by state, budget, query and bridal tags", async () => {
+    await insertCatalogFixtures();
+
     const johor = await listArtists({ state: "Johor" });
-    expect(johor.map((a) => a.id)).toContain("sofia-rahim");
+    expect(johor.map((a) => a.id)).toEqual([TEST_ARTIST_B]);
     expect(johor.every((a) => a.state === "Johor")).toBe(true);
 
     const budget = await listArtists({ budget: 300 });
+    expect(budget.map((a) => a.id)).toEqual([TEST_ARTIST_B]);
     expect(budget.every((a) => a.priceFrom <= 300)).toBe(true);
 
     const query = await listArtists({ query: "airbrush" });
-    expect(query.map((a) => a.id)).toContain("sofia-rahim");
+    expect(query.map((a) => a.id)).toEqual([TEST_ARTIST_B]);
 
     const bridal = await listArtists({ bridal: "full-package" });
+    expect(bridal.map((a) => a.id)).toEqual([TEST_ARTIST_A]);
     expect(bridal.every((a) => a.bridal.includes("full-package"))).toBe(true);
   });
 
   it("updates whitelisted artist fields with JSON serialization", async () => {
-    await listAllArtists();
-    const updated = await updateArtist("nur-fatin", {
+    await insertArtistFixture();
+    const updated = await updateArtist(TEST_ARTIST_A, {
       tagline: "New tagline",
       priceFrom: 400,
       verified: true,
@@ -218,13 +214,13 @@ describe("catalog repository", () => {
     expect(updated?.specialties).toEqual(["Natural", "Dewy Skin"]);
 
     // Non-whitelisted fields are ignored entirely.
-    const untouched = await updateArtist("nur-fatin", { rating: 1.0 } as never);
+    const untouched = await updateArtist(TEST_ARTIST_A, { rating: 1.0 } as never);
     expect(untouched).toBeNull();
   });
 
   it("updates whitelisted studio fields with JSON serialization", async () => {
-    await listAllStudios();
-    const updated = await updateStudio("bangsar-beauty-bar", {
+    await insertStudioFixture();
+    const updated = await updateStudio(TEST_STUDIO_A, {
       tagline: "Updated tagline",
       priceFrom: 600,
       services: ["Makeup", "Hair"],
@@ -238,57 +234,32 @@ describe("catalog repository", () => {
     expect(updated?.phone).toBe("+60198765432");
 
     // Non-whitelisted fields are ignored entirely.
-    const untouched = await updateStudio("bangsar-beauty-bar", { rating: 1.0 } as never);
+    const untouched = await updateStudio(TEST_STUDIO_A, { rating: 1.0 } as never);
     expect(untouched).toBeNull();
   });
 
-  it("folds legacy catalog_overrides into columns on re-seed", async () => {
-    await listAllArtists();
-    await getDb()
-      .prepare(
-        `INSERT INTO catalog_overrides (id, entity_type, entity_id, field, value, created_at, updated_at)
-         VALUES (?, 'artist', 'hana-mustafa', 'tagline', '"Overridden tagline"', ?, ?)`,
-      )
-      .run(randomUUID(), new Date().toISOString(), new Date().toISOString());
-
-    await seedCatalog();
-
-    const artist = await getArtistById("hana-mustafa");
-    expect(artist?.tagline).toBe("Overridden tagline");
-
-    const remaining = (await getDb()
-      .prepare("SELECT COUNT(*) AS c FROM catalog_overrides")
-      .get()) as { c: number };
-    expect(remaining.c).toBe(0);
-  });
-
   it("listAllArtists supports pagination", async () => {
-    await listAllArtists(); // ensure seeded
-    const page1 = await listAllArtists({ limit: 3, offset: 0 });
-    const page2 = await listAllArtists({ limit: 3, offset: 3 });
-    expect(page1.length).toBeLessThanOrEqual(3);
-    expect(page2.length).toBeLessThanOrEqual(3);
-    // No overlap between pages
-    const page1Ids = new Set(page1.map((a) => a.id));
-    const page2Ids = new Set(page2.map((a) => a.id));
-    expect(page1Ids.size).toBe(page1.length);
-    for (const id of page2Ids) {
-      expect(page1Ids.has(id)).toBe(false);
-    }
+    await insertCatalogFixtures();
+    const page1 = await listAllArtists({ limit: 1, offset: 0 });
+    const page2 = await listAllArtists({ limit: 1, offset: 1 });
+    expect(page1).toHaveLength(1);
+    expect(page2).toHaveLength(1);
+    expect(page1[0].id).not.toBe(page2[0].id);
   });
 
   it("listAllStudios supports pagination", async () => {
-    await listAllStudios(); // ensure seeded
-    const page1 = await listAllStudios({ limit: 2, offset: 0 });
-    const page2 = await listAllStudios({ limit: 2, offset: 2 });
-    expect(page1.length).toBeLessThanOrEqual(2);
-    expect(page2.length).toBeLessThanOrEqual(2);
-    const page1Ids = new Set(page1.map((s) => s.id));
-    const page2Ids = new Set(page2.map((s) => s.id));
-    expect(page1Ids.size).toBe(page1.length);
-    for (const id of page2Ids) {
-      expect(page1Ids.has(id)).toBe(false);
-    }
+    await insertStudioFixture();
+    await insertStudioFixture({
+      id: "fixture-studio-b",
+      name: "Fixture Studio B",
+      state: "Penang",
+      area: "George Town",
+    });
+    const page1 = await listAllStudios({ limit: 1, offset: 0 });
+    const page2 = await listAllStudios({ limit: 1, offset: 1 });
+    expect(page1).toHaveLength(1);
+    expect(page2).toHaveLength(1);
+    expect(page1[0].id).not.toBe(page2[0].id);
   });
 
   it("listAllArtists caps unpaginated results at 500", async () => {
@@ -303,23 +274,16 @@ describe("catalog repository", () => {
 });
 
 describe("catalog reviews", () => {
-  beforeEach(async () => {
-    const db = getDb();
-    for (const table of ["reviews", "bookings", "users"]) {
-      await db.prepare(`DELETE FROM ${table}`).run();
-    }
-    await listAllArtists();
-    // Clear seeded reviews so tests start with a clean slate
-    await db.prepare("DELETE FROM reviews").run();
-  });
+  beforeEach(resetCatalog);
 
-  it("blends a live review into the seeded aggregate", async () => {
-    const before = await getArtistById("devi-ramasamy");
+  it("blends a live review into the entity aggregate", async () => {
+    await insertArtistFixture();
+    const before = await getArtistById(TEST_ARTIST_A);
     expect(before).not.toBeNull();
 
     const review = await addEntityReview({
       entityType: "artist",
-      entityId: "devi-ramasamy",
+      entityId: TEST_ARTIST_A,
       authorName: "Test Client",
       rating: 1,
       event: "Reception",
@@ -327,20 +291,21 @@ describe("catalog reviews", () => {
     });
     expect(review.rating).toBe(1);
 
-    const after = await getArtistById("devi-ramasamy");
+    const after = await getArtistById(TEST_ARTIST_A);
     expect(after?.reviewCount).toBe((before?.reviewCount ?? 0) + 1);
-    // rating moved down toward 1 but stays above it given the seeded 4.8.
+    // rating moved down toward 1 but stays above it given the 4.9 fixture.
     expect(after!.rating).toBeLessThan(before!.rating);
     expect(after!.rating).toBeGreaterThan(1);
   });
 
   it("rejects a second review for the same booking", async () => {
+    await insertArtistFixture();
     const userId = await createUser();
-    const bookingId = await createBooking(userId, "aisha-azman", "completed");
+    const bookingId = await createBooking(userId, TEST_ARTIST_A, "completed");
 
     await addEntityReview({
       entityType: "artist",
-      entityId: "aisha-azman",
+      entityId: TEST_ARTIST_A,
       bookingId,
       authorName: "X",
       rating: 5,
@@ -349,7 +314,7 @@ describe("catalog reviews", () => {
     await expect(
       addEntityReview({
         entityType: "artist",
-        entityId: "aisha-azman",
+        entityId: TEST_ARTIST_A,
         bookingId,
         authorName: "Y",
         rating: 4,
@@ -359,43 +324,44 @@ describe("catalog reviews", () => {
   });
 
   it("gates reviewable bookings on completed + unreviewed", async () => {
+    await insertArtistFixture();
     const userId = await createUser();
 
     // No booking at all.
-    expect(await findReviewableBooking(userId, "artist", "aisha-azman")).toBeNull();
+    expect(await findReviewableBooking(userId, "artist", TEST_ARTIST_A)).toBeNull();
 
     // Requested booking doesn't qualify.
-    await createBooking(userId, "aisha-azman", "requested");
-    expect(await findReviewableBooking(userId, "artist", "aisha-azman")).toBeNull();
+    await createBooking(userId, TEST_ARTIST_A, "requested");
+    expect(await findReviewableBooking(userId, "artist", TEST_ARTIST_A)).toBeNull();
 
     // Completed booking qualifies.
-    const completedId = await createBooking(userId, "aisha-azman", "completed");
-    const found = await findReviewableBooking(userId, "artist", "aisha-azman");
+    const completedId = await createBooking(userId, TEST_ARTIST_A, "completed");
+    const found = await findReviewableBooking(userId, "artist", TEST_ARTIST_A);
     expect(found?.id).toBe(completedId);
 
     // …until reviewed.
     await addEntityReview({
       entityType: "artist",
-      entityId: "aisha-azman",
+      entityId: TEST_ARTIST_A,
       bookingId: completedId,
       userId,
       authorName: "Test User",
       rating: 5,
       text: "Wonderful experience overall.",
     });
-    expect(await findReviewableBooking(userId, "artist", "aisha-azman")).toBeNull();
+    expect(await findReviewableBooking(userId, "artist", TEST_ARTIST_A)).toBeNull();
   });
 
   it("findReviewableBooking returns null for studio type (out of scope)", async () => {
     const userId = await createUser();
-    expect(await findReviewableBooking(userId, "studio", "bangsar-beauty-bar")).toBeNull();
+    expect(await findReviewableBooking(userId, "studio", TEST_STUDIO_A)).toBeNull();
   });
 
   it("lists entity reviews for artists", async () => {
-    await listAllArtists();
+    await insertArtistFixture();
     await addEntityReview({
       entityType: "artist",
-      entityId: "aisha-azman",
+      entityId: TEST_ARTIST_A,
       authorName: "Reviewer 1",
       rating: 5,
       text: "Excellent!",
@@ -404,13 +370,13 @@ describe("catalog reviews", () => {
     await new Promise((r) => setTimeout(r, 10));
     await addEntityReview({
       entityType: "artist",
-      entityId: "aisha-azman",
+      entityId: TEST_ARTIST_A,
       authorName: "Reviewer 2",
       rating: 4,
       text: "Good",
     });
 
-    const reviews = await listEntityReviews("artist", "aisha-azman");
+    const reviews = await listEntityReviews("artist", TEST_ARTIST_A);
     expect(reviews.length).toBe(2);
     expect(reviews[0].rating).toBe(4); // Reviewer 2 (newer) first
     expect(reviews[1].rating).toBe(5); // Reviewer 1 (older) second
@@ -419,16 +385,16 @@ describe("catalog reviews", () => {
   });
 
   it("lists entity reviews for studios", async () => {
-    await listAllStudios();
+    await insertStudioFixture();
     await addEntityReview({
       entityType: "studio",
-      entityId: "bangsar-beauty-bar",
+      entityId: TEST_STUDIO_A,
       authorName: "Studio Reviewer",
       rating: 5,
       text: "Great studio!",
     });
 
-    const reviews = await listEntityReviews("studio", "bangsar-beauty-bar");
+    const reviews = await listEntityReviews("studio", TEST_STUDIO_A);
     expect(reviews.length).toBe(1);
     expect(reviews[0].rating).toBe(5);
     expect(reviews[0].author).toBe("Studio Reviewer");

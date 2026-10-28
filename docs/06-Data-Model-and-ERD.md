@@ -371,12 +371,12 @@ function computeCommission(totalSen, rateBps, waiverSen) {
 
 ### 6. Seeding & Migration
 
-#### 6.1 Catalog Seeding (Idempotent)
+#### 6.1 Catalog Population (No Demo Seed)
 
-- Source: `SEED_ARTISTS` (7 entries) + `SEED_STUDIOS` (4) `src/lib/data.ts`.
-- Runner: `ensureCatalogSeeded()` called lazily before first catalog read AND explicitly via `npm run db:seed-catalog` (`scripts/seed-catalog.ts`).
-- Logic: Inserts new `artists/studios` rows when missing; legacy `catalog_overrides` rows are **folded** into real columns and deleted (so old overrides don't drift).
-- Placeholders: Admin-created artists without image get `/images/hero.jpg` to satisfy `next/image` requirements.
+- The catalog has **no demo seed**: `src/lib/data.ts` holds reference constants only (states, areas, events, categories) and defines no artists/studios.
+- A fresh database is an empty catalog; entries are created by admins (`POST /api/admin/artists`, `/api/admin/studios`) or by role users through `POST /api/onboarding`.
+- Slugs are derived from the name (UUID `id` + separate `slug`); there is no legacy id for new rows, so `/artists/<slug>` links resolve through `getArtistBySlug`.
+- To strip demo rows from an existing database: `npm run db:clear-catalog` (dry run), `-- --force` to delete, `-- --force --cascade` to also delete bookings referencing them.
 
 #### 6.2 Admin Seeding
 

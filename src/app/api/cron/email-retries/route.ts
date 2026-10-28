@@ -1,24 +1,18 @@
 import { NextResponse } from "next/server";
 import { retryFailedEmails } from "@/server/email";
 import { logger } from "@/server/logger";
+import { authorizeCron } from "@/server/cron-auth";
 
 /**
  * GET /api/cron/email-retries
  * Cron job to retry failed emails.
- * Protected by CRON_SECRET or INTERNAL_API_SECRET.
+ *
+ * Uses the shared `authorizeCron` guard so every cron route answers the same
+ * way — including failing closed in production when no secret is configured.
  */
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  const internalSecret = process.env.INTERNAL_API_SECRET;
-
-  const isValid =
-    (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
-    (internalSecret && authHeader === `Bearer ${internalSecret}`);
-
-  if (!isValid) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const unauthorized = authorizeCron(request);
+  if (unauthorized) return unauthorized;
 
   try {
     const result = await retryFailedEmails();

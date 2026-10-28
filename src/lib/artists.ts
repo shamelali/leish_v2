@@ -32,9 +32,9 @@ export const DEFAULT_ARTIST_FILTERS: ArtistFilters = {
  * Pure, deterministic artist filtering used by the /artists page.
  * Kept free of React/hooks so it can be unit-tested in isolation.
  *
- * Demo note: date filtering is availability-based ("today"/"tomorrow"
- * match artists whose sample availability slots mention that day).
- * A real backend would check actual slot availability.
+ * Date filtering is availability-based ("today"/"tomorrow" match artists whose
+ * availability slots mention that day) because slot availability lives outside
+ * the catalog tables.
  */
 export function filterArtists(artists: Artist[], filters: ArtistFilters): Artist[] {
   const query = filters.query.trim().toLowerCase();
@@ -70,5 +70,29 @@ export function hasActiveArtistFilters(filters: ArtistFilters): boolean {
     filters.bridal !== "any" ||
     filters.nonBridal !== "any" ||
     filters.budget > 0,
+  );
+}
+
+/**
+ * Homepage category tiles → the filter preset behind `/artists?category=<slug>`.
+ * Shared so the tile counts always match what the listing shows.
+ */
+export const CATEGORY_TO_FILTER: Record<string, Partial<ArtistFilters>> = {
+  bridal: { bridal: "full-package" },
+  engagement: { bridal: "engagement" },
+  graduation: { nonBridal: "graduation" },
+  corporate: { nonBridal: "corporate" },
+};
+
+/**
+ * Real per-category artist counts for the homepage tiles. There is no seeded
+ * figure to fall back on: an empty catalog yields zeros.
+ */
+export function countArtistsByCategory(artists: Artist[]): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(CATEGORY_TO_FILTER).map(([slug, preset]) => [
+      slug,
+      filterArtists(artists, { ...DEFAULT_ARTIST_FILTERS, ...preset }).length,
+    ]),
   );
 }

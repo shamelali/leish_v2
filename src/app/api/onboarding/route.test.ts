@@ -6,6 +6,7 @@ import { getDb } from "@/server/db";
 import { hashPassword } from "@/server/password";
 import { createSessionToken } from "@/server/session";
 import { getArtistById, getStudioById } from "@/server/catalog";
+import { TEST_ARTIST_A, TEST_STUDIO_A, insertCatalogFixtures } from "@/test/catalog-fixtures";
 import { getClaimedProfile } from "@/server/artist-profiles";
 import { getClaimedStudioProfile } from "@/server/studio-profiles";
 
@@ -170,6 +171,8 @@ beforeEach(async () => {
   await getDb().prepare("DELETE FROM artists WHERE name IN (?, ?)").run(artistBody.name, "Tidy");
   await getDb().prepare("DELETE FROM studios WHERE name = ?").run(studioBody.name);
   await getDb().prepare("DELETE FROM users WHERE email LIKE '%@test.local'").run();
+  // The catalog ships empty — insert the rows the claim-race tests collide with.
+  await insertCatalogFixtures();
 });
 
 afterEach(() => {
@@ -372,12 +375,11 @@ describe("POST /api/onboarding — repeat submission", () => {
 
   it("an artist who already claimed a *catalog* artist gets 409 too", async () => {
     const id = await seedUser("artist");
-    await getArtistById("aisha-azman"); // ensure seeded
-    await actualArtistProfiles.claimArtistProfile(id, "aisha-azman");
+    await actualArtistProfiles.claimArtistProfile(id, TEST_ARTIST_A);
 
     const res = await post(artistBody, await cookieFor(id, "artist"));
     expect(res.status).toBe(409);
-    expect(((await res.json()) as { id?: string }).id).toBe("aisha-azman");
+    expect(((await res.json()) as { id?: string }).id).toBe(TEST_ARTIST_A);
     expect(await countRows("artists", artistBody.name)).toBe(0);
   });
 });
@@ -392,9 +394,8 @@ describe("POST /api/onboarding — claim race", () => {
     // Simulate a concurrent submission winning between the pre-check and the
     // claim: the first claim call inserts a claim for a *different* artist as
     // the same user, then reports ALREADY_CLAIMED for ours.
-    await getArtistById("aisha-azman");
     claimArtistSpy.mockImplementationOnce(async (userId: string) => {
-      await actualArtistProfiles.claimArtistProfile(userId, "aisha-azman");
+      await actualArtistProfiles.claimArtistProfile(userId, TEST_ARTIST_A);
       throw new Error("ALREADY_CLAIMED");
     });
 
@@ -402,7 +403,7 @@ describe("POST /api/onboarding — claim race", () => {
     expect(res.status).toBe(409);
     const body = (await res.json()) as { error: string; id?: string };
     expect(body.error).toMatch(/already claimed/i);
-    expect(body.id).toBe("aisha-azman");
+    expect(body.id).toBe(TEST_ARTIST_A);
 
     // The profile we created for this request must be gone.
     expect(await countRows("artists", artistBody.name)).toBe(0);
@@ -415,9 +416,9 @@ describe("POST /api/onboarding — claim race", () => {
     const id = await seedUser("studio");
     const cookie = await cookieFor(id, "studio");
 
-    await getStudioById("glow-room-cyberjaya");
+    await getStudioById(TEST_STUDIO_A);
     claimStudioSpy.mockImplementationOnce(async (userId: string) => {
-      await actualStudioProfiles.claimStudioProfile(userId, "glow-room-cyberjaya");
+      await actualStudioProfiles.claimStudioProfile(userId, TEST_STUDIO_A);
       throw new Error("ALREADY_CLAIMED");
     });
 
@@ -445,9 +446,8 @@ describe("POST /api/onboarding — claim race", () => {
     const id = await seedUser("artist");
     const catalog = await import("@/server/catalog");
     vi.spyOn(catalog, "deleteArtist").mockRejectedValueOnce(new Error("db gone"));
-    await getArtistById("aisha-azman");
     claimArtistSpy.mockImplementationOnce(async (userId: string) => {
-      await actualArtistProfiles.claimArtistProfile(userId, "aisha-azman");
+      await actualArtistProfiles.claimArtistProfile(userId, TEST_ARTIST_A);
       throw new Error("ALREADY_CLAIMED");
     });
 

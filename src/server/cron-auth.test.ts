@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import { authorizeCron } from "./cron-auth";
 
 function makeRequest(headers: Record<string, string> = {}): Request {
@@ -70,5 +70,35 @@ describe("authorizeCron", () => {
     const res = authorizeCron(req);
     expect(res).not.toBeNull();
     expect(res!.status).toBe(401);
+  });
+});
+
+describe("authorizeCron — production fails closed", () => {
+  // `NODE_ENV` is typed read-only, so state is stubbed rather than assigned.
+  // `vi.unstubAllEnvs()` restores every key, including the secrets.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("refuses with 503 rather than exposing the endpoint when no secret is set", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CRON_SECRET", "");
+    vi.stubEnv("INTERNAL_API_SECRET", "");
+
+    // These endpoints send email and drive payouts; "unconfigured" must never
+    // mean "publicly triggerable".
+    const res = authorizeCron(makeRequest());
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(503);
+  });
+
+  it("accepts either CRON_SECRET or INTERNAL_API_SECRET", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CRON_SECRET", "cron-secret");
+    vi.stubEnv("INTERNAL_API_SECRET", "internal-secret");
+
+    expect(authorizeCron(makeRequest({ authorization: "Bearer cron-secret" }))).toBeNull();
+    expect(authorizeCron(makeRequest({ authorization: "Bearer internal-secret" }))).toBeNull();
+    expect(authorizeCron(makeRequest({ authorization: "Bearer nope" }))!.status).toBe(401);
   });
 });

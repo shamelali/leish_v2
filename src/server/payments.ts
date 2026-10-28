@@ -227,10 +227,22 @@ export async function getPaymentForBooking(
   };
 }
 
-/** Mark the payment for a Billplz bill id as paid (webhook-confirmed). */
+/**
+ * Mark the payment for a Billplz bill id as paid (webhook-confirmed).
+ *
+ * The status guard is the idempotency boundary for the whole settlement path:
+ * Billplz retries callbacks until it gets a 200, and a conditional UPDATE
+ * reports `changes === 0` for every delivery after the first, so the caller
+ * runs the settlement side effects exactly once.
+ *
+ * `refunded` is deliberately excluded — a late replay must never resurrect a
+ * payment that has already been refunded.
+ */
 export async function markBillPaid(billId: string): Promise<boolean> {
   const result = await getDb()
-    .prepare("UPDATE payments SET status = 'paid', updated_at = ? WHERE provider_ref = ?")
+    .prepare(
+      "UPDATE payments SET status = 'paid', updated_at = ? WHERE provider_ref = ? AND status IN ('required','failed')",
+    )
     .run(new Date().toISOString(), billId);
   return result.changes > 0;
 }

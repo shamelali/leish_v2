@@ -22,6 +22,7 @@ vi.mock("@/lib/storage", () => ({
   STORAGE_PREFIXES: {
     artistPortfolio: "artists/portfolio",
     studioPortfolio: "studios/portfolio",
+    userUpload: "uploads",
   },
 }));
 
@@ -132,10 +133,12 @@ describe("sanitizeFilename", () => {
 
 // ── uploadFileDirect ─────────────────────────────────────────────────────────
 
+const PNG = () => validImage("image/png").toString("base64");
+
 describe("uploadFileDirect", () => {
   it("rejects an unauthenticated request with 401", async () => {
     const res = await uploadFileDirect(
-      anonRequest({ key: "k.jpg", contentType: "image/jpeg", base64Data: "AAAA" }),
+      anonRequest({ filename: "k.jpg", contentType: "image/jpeg", base64Data: "AAAA" }),
     );
     expect(res.status).toBe(401);
     expect(uploadObject).not.toHaveBeenCalled();
@@ -143,7 +146,7 @@ describe("uploadFileDirect", () => {
 
   it("rejects a session whose user no longer exists with 401", async () => {
     const req = await authedRequest(randomUUID(), {
-      key: "k.jpg",
+      filename: "k.jpg",
       contentType: "image/jpeg",
       base64Data: validImage("image/jpeg").toString("base64"),
     });
@@ -155,7 +158,7 @@ describe("uploadFileDirect", () => {
   it("rejects a disallowed content type with 400", async () => {
     const userId = await createTestUser();
     const req = await authedRequest(userId, {
-      key: "evil.svg",
+      filename: "evil.svg",
       contentType: "image/svg+xml",
       base64Data: Buffer.from("<svg/>").toString("base64"),
     });
@@ -164,10 +167,9 @@ describe("uploadFileDirect", () => {
     expect(uploadObject).not.toHaveBeenCalled();
   });
 
-  it("rejects a missing key with 400", async () => {
+  it("rejects a missing filename with 400", async () => {
     const userId = await createTestUser();
     const req = await authedRequest(userId, {
-      key: "",
       contentType: "image/jpeg",
       base64Data: validImage("image/jpeg").toString("base64"),
     });
@@ -178,7 +180,7 @@ describe("uploadFileDirect", () => {
     const userId = await createTestUser();
     // PNG magic bytes declared as JPEG — the classic polyglot upload.
     const req = await authedRequest(userId, {
-      key: "spoof.jpg",
+      filename: "spoof.jpg",
       contentType: "image/jpeg",
       base64Data: validImage("image/png").toString("base64"),
     });
@@ -197,7 +199,7 @@ describe("uploadFileDirect", () => {
       Buffer.alloc(MAX_FILE_SIZE + 1),
     ]);
     const req = await authedRequest(userId, {
-      key: "big.jpg",
+      filename: "big.jpg",
       contentType: "image/jpeg",
       base64Data: tooBig.toString("base64"),
     });
@@ -207,18 +209,17 @@ describe("uploadFileDirect", () => {
     expect(uploadObject).not.toHaveBeenCalled();
   });
 
-  it("stores a valid image and returns its key", async () => {
+  it("stores a valid image under the caller's namespace", async () => {
     const userId = await createTestUser();
-    const bytes = validImage("image/png");
     const req = await authedRequest(userId, {
-      key: "artists/portfolio/ok.png",
+      filename: "ok.png",
       contentType: "image/png",
-      base64Data: bytes.toString("base64"),
+      base64Data: PNG(),
     });
 
     const res = await uploadFileDirect(req);
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ key: "artists/portfolio/ok.png" });
+    await expect(res.json()).resolves.toEqual({ key: `uploads/${userId}/ok.png` });
 
     expect(uploadObject).toHaveBeenCalledTimes(1);
     const [key, buffer, contentType] = uploadObject.mock.calls[0] as unknown as [
@@ -226,18 +227,35 @@ describe("uploadFileDirect", () => {
       Buffer,
       string,
     ];
-    expect(key).toBe("artists/portfolio/ok.png");
+    expect(key).toBe(`uploads/${userId}/ok.png`);
     expect(contentType).toBe("image/png");
     expect(Buffer.from(buffer).subarray(0, 4)).toEqual(Buffer.from(MAGIC["image/png"]!));
+  });
+
+  it("ignores a client-supplied key — the server always scopes the object", async () => {
+    const userId = await createTestUser();
+    const req = await authedRequest(userId, {
+      // Aimed at another artist's portfolio object.
+      key: "artists/portfolio/victim.png",
+      filename: "mine.png",
+      contentType: "image/png",
+      base64Data: PNG(),
+    });
+
+    const res = await uploadFileDirect(req);
+    expect(res.status).toBe(200);
+    const [key] = uploadObject.mock.calls[0] as unknown as [string];
+    expect(key).toBe(`uploads/${userId}/mine.png`);
+    expect(key).not.toContain("victim");
   });
 
   it("returns 500 when the storage backend throws", async () => {
     const userId = await createTestUser();
     uploadObject.mockRejectedValueOnce(new Error("blob unreachable"));
     const req = await authedRequest(userId, {
-      key: "ok.png",
+      filename: "ok.png",
       contentType: "image/png",
-      base64Data: validImage("image/png").toString("base64"),
+      base64Data: PNG(),
     });
     const res = await uploadFileDirect(req);
     expect(res.status).toBe(500);
@@ -249,7 +267,7 @@ describe("uploadFileDirect", () => {
 
 describe("deleteFile", () => {
   it("rejects an unauthenticated request with 401", async () => {
-    const res = await deleteFile(anonRequest({ key: "k.jpg" }));
+    const res = await deleteFile(anonRequest({ key: "uploads/x/y.jpg" }));
     expect(res.status).toBe(401);
     expect(deleteObject).not.toHaveBeenCalled();
   });
@@ -261,26 +279,52 @@ describe("deleteFile", () => {
     expect(deleteObject).not.toHaveBeenCalled();
   });
 
+  it("refuses to delete a key outside the caller's namespace", async () => {
+    const userId = await createTestUser();
+    const res = await deleteFile(
+      await authedRequest(userId, { key: "artists/portfolio/someone-else.png" }),
+    );
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "You can only delete files you uploaded",
+    });
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+
+  it("refuses a traversal attempt that escapes the namespace", async () => {
+    const userId = await createTestUser();
+    const res = await deleteFile(
+      await authedRequest(userId, { key: `uploads/${userId}/../other/secret.png` }),
+    );
+    expect(res.status).toBe(403);
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+
   it("returns 404 when the object is absent", async () => {
     const userId = await createTestUser();
     objectExists.mockResolvedValueOnce(false);
-    const res = await deleteFile(await authedRequest(userId, { key: "gone.jpg" }));
+    const res = await deleteFile(
+      await authedRequest(userId, { key: `uploads/${userId}/gone.jpg` }),
+    );
     expect(res.status).toBe(404);
     expect(deleteObject).not.toHaveBeenCalled();
   });
 
-  it("deletes an existing object", async () => {
+  it("deletes an object inside the caller's namespace", async () => {
     const userId = await createTestUser();
-    const res = await deleteFile(await authedRequest(userId, { key: "there.jpg" }));
+    const key = `uploads/${userId}/there.jpg`;
+    const res = await deleteFile(await authedRequest(userId, { key }));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ ok: true });
-    expect(deleteObject).toHaveBeenCalledWith("there.jpg");
+    expect(deleteObject).toHaveBeenCalledWith(key);
   });
 
   it("returns 500 when the storage backend throws", async () => {
     const userId = await createTestUser();
     deleteObject.mockRejectedValueOnce(new Error("blob unreachable"));
-    const res = await deleteFile(await authedRequest(userId, { key: "there.jpg" }));
+    const res = await deleteFile(
+      await authedRequest(userId, { key: `uploads/${userId}/there.jpg` }),
+    );
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toMatchObject({ error: "Delete failed" });
   });

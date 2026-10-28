@@ -23,23 +23,27 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 ### 1. Data Layer — Catalog (`src/lib/data.ts` + `src/server/catalog.ts`)
 
-- `src/lib/data.ts` is **seed data + constants only** (`SEED_ARTISTS`,
-  `SEED_STUDIOS`, `MALAYSIA_STATES`, `AREAS_BY_STATE`, event lists) — never
-  import runtime catalog entities from it
-- **Runtime source of truth = DB tables** `artists` / `studios` / `reviews`
+- `src/lib/data.ts` is **reference constants only** (`MALAYSIA_STATES`,
+  `AREAS_BY_STATE`, `BRIDAL_EVENTS`, `NON_BRIDAL_EVENTS`, `CATEGORIES`) — it
+  contains no artists or studios
+- **Source of truth = DB tables** `artists` / `studios` / `reviews`
+- **There is no demo seed.** A fresh database is an empty catalog; entities are
+  created by admins (`/api/admin/artists`, `/api/admin/studios`) or by role
+  users through `/api/onboarding`
 - Repository: `src/server/catalog.ts` — `listArtists(filters)` (SQL pre-filter
   on state/area/budget + pure `filterArtists()` for tags/query),
   `getArtistById()`, `getArtistBySlug()`, studio equivalents,
-  `updateArtist()/updateStudio()` (whitelisted fields), review helpers
-  (`addEntityReview`, `findReviewableBooking`, `listEntityReviews`)
-- Seeding: `src/server/catalog-seed.ts` — idempotent; runs lazily before the
-  first catalog read AND explicitly via `npm run db:seed-catalog`; folds
-  legacy `catalog_overrides` rows into real columns and deletes them
-- Slugs equal the original static ids (e.g. `aisha-azman`) so existing links
-  and bookings keep working
+  `createArtist()/createStudio()`, `updateArtist()/updateStudio()` (whitelisted
+  fields), review helpers (`addEntityReview`, `findReviewableBooking`,
+  `listEntityReviews`)
+- Purge: `npm run db:clear-catalog` (dry run) / `-- --force` to delete catalog
+  rows before a production launch; `-- --force --cascade` also deletes bookings
+  that point at them
+- Admin-onboarded slugs are derived from the name (UUID id + separate slug), so
+  profile URLs are `/artists/<slug>` while bookings store the UUID
 - Live reviews are gated on a COMPLETED, not-yet-reviewed booking
   (`reviews.booking_id` UNIQUE); new ratings blend incrementally into the
-  seeded aggregate (`rating`/`review_count` columns)
+  aggregate (`rating`/`review_count` columns)
 - Artist self-service profile edits: `PATCH /api/artist-profiles` scoped to
   claimed profiles (`artist_profiles` table)
 
@@ -157,20 +161,21 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 ## Development Workflow
 
-| Command                   | Purpose                                   |
-| ------------------------- | ----------------------------------------- |
-| `npm run dev`             | Next.js dev mode (`NODE_ENV=development`) |
-| `npm run build`           | `next build` (sets `NODE_ENV=production`) |
-| `npm run start`           | `next start` (production server)          |
-| `npm run lint`            | ESLint (`eslint-config-next`)             |
-| `npm run typecheck`       | `tsc --noEmit`                            |
-| `npm test`                | Vitest suite (`jsdom` environment)        |
-| `npm run test:coverage`   | Vitest + HTML coverage report             |
-| `npm run env:check`       | Validate required env vars                |
-| `npm run db:migrate`      | Apply/verify PostgreSQL schema            |
-| `npm run db:seed-catalog` | Seed artists/studios/reviews tables       |
-| `npm run format`          | Prettier auto-fix                         |
-| `npm run format:check`    | Prettier check                            |
+| Command                    | Purpose                                                                                  |
+| -------------------------- | ---------------------------------------------------------------------------------------- |
+| `npm run dev`              | Next.js dev mode (`NODE_ENV=development`)                                                |
+| `npm run build`            | `next build` (sets `NODE_ENV=production`)                                                |
+| `npm run start`            | Production server from `.next/standalone` (copies static assets, then boots `server.js`) |
+| `npm run start:next`       | Bare `next start` — only for builds without standalone output (e.g. `VERCEL=1`)          |
+| `npm run lint`             | ESLint (`eslint-config-next`)                                                            |
+| `npm run typecheck`        | `tsc --noEmit`                                                                           |
+| `npm test`                 | Vitest suite (`jsdom` environment)                                                       |
+| `npm run test:coverage`    | Vitest + HTML coverage report                                                            |
+| `npm run env:check`        | Validate required env vars                                                               |
+| `npm run db:migrate`       | Apply/verify PostgreSQL schema                                                           |
+| `npm run db:clear-catalog` | Purge catalog rows (dry run; `-- --force` deletes)                                       |
+| `npm run format`           | Prettier auto-fix                                                                        |
+| `npm run format:check`     | Prettier check                                                                           |
 
 **Git branching:** `main` only. PRs require passing:
 
@@ -226,8 +231,11 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - Run `npm run db:migrate` (scripts/migrate.ts) to apply/verify the PostgreSQL
   schema against `DATABASE_URL` (idempotent; also backfills additive columns
   such as `payments.type`)
-- Run `npm run db:seed-catalog` to populate `artists` / `studios` / `reviews`
-  and fold legacy overrides (also happens lazily on first catalog read)
+- The catalog is **not seeded**. `npm run db:seed-catalog` no longer exists; a
+  fresh PostgreSQL database starts with zero artists/studios, and the first
+  entries are created by admins (or `/api/onboarding`)
+- Purge demo rows before a launch: `npm run db:clear-catalog` (dry run) then
+  `npm run db:clear-catalog -- --force`
 - SQLite applies the schema automatically on first `getDb()` call
 - CI: `database.yml` runs `npm run db:migrate` when `db.ts`/`migrate.ts` change
 - Schema is defined in `src/server/db.ts` (`PG_SCHEMA` / `SQLITE_SCHEMA`) — keep
@@ -432,12 +440,19 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
 
 ## Common Patterns & Gotchas
 
-### 1. `src/env.ts` Build Quirk
+### 1. `src/env.ts` Production Contract
 
-- `validateEnv()` **only** checks `SESSION_SECRET` when `NODE_ENV === "production"` AND not a build phase
-- There is no `checkPostgresUrl()`. `validateEnv()` only _warns_ when
-  `DATABASE_URL` or `NEXT_PUBLIC_SITE_URL` are unset — a missing
-  `DATABASE_URL` silently falls back to SQLite rather than failing
+- `validateEnv()` runs at startup (`instrumentation.ts`) and via `npm run env:check`,
+  but only in a **production runtime** — it is skipped during `next build`, when
+  `VERCEL_ENV` is set to anything but `production` (previews), and when
+  `SKIP_ENV_VALIDATION` is set
+- **It throws, it does not warn**, for: `SESSION_SECRET`, `DATABASE_URL`,
+  `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET`, half-configured Billplz, no payment
+  provider, and no email provider. A missing `DATABASE_URL` can therefore never
+  silently fall back to SQLite in production
+- Explicit opt-outs follow one pattern: `PAYMENTS_ALLOW_DEV=1`,
+  `EMAIL_ALLOW_DEV=1`; `SKIP_DB_GUARD=1` is the db-facade's SQLite escape hatch
+- Only `EMAIL_FROM`, `PEPPER_SECRET`, `SENTRY_DSN` and `ERROR_WEBHOOK_URL` warn
 - **Do not** set `SESSION_SECRET` during `next build` — it will fail
 - Set all vars in `.env.local` or Vercel dashboard
 
@@ -535,7 +550,7 @@ src/
   lib/
     actions/    → Server actions
     auth.tsx    → AuthProvider + ROLE_LABELS
-    data.ts     → Seed data + constants (states, events) — seed-only
+    data.ts     → Reference constants only (states, areas, events, categories)
     email/      → Brevo send + templates
     payments/   → Billplz API + types
     supabase/   → Supabase client helpers
@@ -544,7 +559,6 @@ src/
     utils.ts    → cn(), formatRM(), pluralize()
   server/
     catalog.ts  → DB-backed artists/studios/reviews repository
-    catalog-seed.ts → idempotent seeding + override folding
     db.ts       → DbFacade + PG_SCHEMA + SQLite schema
     errors.ts   → reportError + Sentry integration
     logger.ts   → pino logger + forwarding sink

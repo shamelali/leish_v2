@@ -454,7 +454,7 @@ Post-launch (v2.1+): studio-native bookings, balance dunning cron, WhatsApp, pro
 - `AGENTS.md` — project overview, architecture patterns, security considerations.
 - `docs/ARCHITECTURE.md` — single-backend data flow, money logic ownership.
 - `docs/CODEBASE-AUDIT-FINAL.md` — enterprise-readiness gaps closed.
-- `src/lib/data.ts` — constants (`MALAYSIA_STATES`, `BRIDAL_EVENTS`, `NON_BRIDAL_EVENTS`, `SEED_ARTISTS/STUDIOS`).
+- `src/lib/data.ts` — reference constants only (`MALAYSIA_STATES`, `AREAS_BY_STATE`, `BRIDAL_EVENTS`, `NON_BRIDAL_EVENTS`, `CATEGORIES`); no catalog entities.
 - `src/server/db.ts` — `PG_SCHEMA` / `SQLITE_SCHEMA`, `DbFacade`, migration logic.
 
 #### 15.2 Glossary (Short)

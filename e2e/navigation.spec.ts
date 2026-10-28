@@ -1,8 +1,15 @@
 import { test, expect } from "@playwright/test";
+import { readFixtureState, type CatalogFixtureState } from "./support/catalog";
 
 /**
  * Navigation smoke test — verify header links work across the app.
  */
+
+let artist: CatalogFixtureState["artists"][string];
+
+test.beforeAll(() => {
+  artist = readFixtureState().artists["e2e-artist-a"];
+});
 
 test("homepage has working navigation links", async ({ page }) => {
   await page.goto("/");
@@ -17,11 +24,11 @@ test("homepage has working navigation links", async ({ page }) => {
 
 test("artists listing links to artist profiles", async ({ page }) => {
   await page.goto("/artists");
-  const artistLink = page.getByRole("link", { name: /Aisha Azman/i }).first();
+  const artistLink = page.getByRole("link", { name: artist.name }).first();
   await expect(artistLink).toBeVisible();
   await artistLink.click();
-  await expect(page).toHaveURL(/\/artists\/aisha-azman/);
-  await expect(page.getByRole("heading", { name: "Aisha Azman" })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/artists/${artist.slug}`));
+  await expect(page.getByRole("heading", { name: artist.name })).toBeVisible();
 });
 
 test("login page renders with form elements", async ({ page }) => {
@@ -41,10 +48,13 @@ test("register page renders with role selection", async ({ page }) => {
   await expect(page.getByLabel(/email/i).first()).toBeVisible();
 });
 
-test("unauthenticated dashboard shows the sign-in prompt", async ({ page }) => {
-  // The dashboard is a client component — it renders its own login prompt
-  // (no server-side redirect).
+test("unauthenticated dashboard redirects to login with a return path", async ({ page }) => {
+  // The dashboard layout is a server guard, so an anonymous visitor is
+  // redirected before any authenticated shell is streamed — and the exact
+  // path they asked for comes back as the `redirect` parameter.
   await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/dashboard/);
-  await expect(page.getByRole("main").getByRole("link", { name: /log in/i })).toBeVisible();
+  await expect(page).toHaveURL(/\/login\?redirect=%2Fdashboard$/);
+  await expect(
+    page.getByRole("heading", { name: /Welcome back|Sign in|Log in/i }).first(),
+  ).toBeVisible();
 });

@@ -6,6 +6,7 @@ import {
   buildContentSecurityPolicy,
   generateNonce,
 } from "@/lib/csp";
+import { PATHNAME_HEADER } from "@/lib/request-headers";
 
 /**
  * Per-request Content-Security-Policy (Next.js 16 "proxy" convention,
@@ -19,6 +20,8 @@ import {
  * - The nonce is forwarded to the root layout via the `x-nonce` request
  *   header, which applies it to inline <script> tags (e.g. the theme
  *   bootstrap script) so script-src can omit 'unsafe-inline'.
+ * - The pathname is forwarded as `x-leish-pathname` so guarded layouts can
+ *   redirect to /login with an exact return path.
  * - Next.js picks the nonce out of the CSP request header and applies it to
  *   its own hydration/bootstrap scripts automatically.
  * - API routes and static assets are excluded from the matcher: they don't
@@ -36,6 +39,10 @@ export function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(CSP_NONCE_HEADER, nonce);
   requestHeaders.set(CONTENT_SECURITY_POLICY_HEADER, csp);
+  // Stamped for server-component guards (`requirePageUser`), which need the
+  // exact path to build a `?redirect=` target. `set()` overwrites any value a
+  // client sent, so the header cannot be spoofed into an off-site redirect.
+  requestHeaders.set(PATHNAME_HEADER, request.nextUrl.pathname);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
 

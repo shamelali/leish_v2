@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { safeRedirectPath } from "@/lib/utils";
 import { Button } from "@/components/Button";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") ?? "/dashboard";
+  const redirect = safeRedirectPath(searchParams.get("redirect"));
   const { login } = useAuth();
 
   const [email, setEmail] = useState("");

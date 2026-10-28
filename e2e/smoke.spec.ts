@@ -1,13 +1,18 @@
 import { test, expect } from "@playwright/test";
+import { readFixtureState, type CatalogFixtureState } from "./support/catalog";
 
 /**
  * Launch smoke tests for the core loop:
  * browse → request → (verification gate) → accept → quotation → fee → webhook.
- * The webServer in playwright.config.ts builds and starts the app on :3100
- * with the SQLite fallback (no external services needed).
+ * The webServer in playwright.config.ts writes E2E catalog fixtures to a
+ * throwaway SQLite file, then builds and starts the app on :3100.
  */
 
-const ARTIST_ID = "aisha-azman";
+let artist: CatalogFixtureState["artists"][string];
+
+test.beforeAll(() => {
+  artist = readFixtureState().artists["e2e-artist-a"];
+});
 
 function futureDateISO(): string {
   const d = new Date(Date.now() + 14 * 86_400_000);
@@ -25,12 +30,12 @@ test("homepage loads with hero and CTAs", async ({ page }) => {
 
 test("artists listing shows the catalog", async ({ page }) => {
   await page.goto("/artists");
-  await expect(page.getByRole("link", { name: /Aisha Azman/i }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: artist.name }).first()).toBeVisible();
 });
 
 test("artist profile renders services and the booking form", async ({ page }) => {
-  await page.goto(`/artists/${ARTIST_ID}`);
-  await expect(page.getByRole("heading", { name: "Aisha Azman" })).toBeVisible();
+  await page.goto(`/artists/${artist.slug}`);
+  await expect(page.getByRole("heading", { name: artist.name })).toBeVisible();
   await expect(page.getByText("Reception Makeup").first()).toBeVisible();
   await expect(page.getByRole("button", { name: /Send Booking Request/i })).toBeVisible();
 });
@@ -50,7 +55,7 @@ test("unverified users can book but cannot pay", async ({ request }) => {
   // Booking requests are allowed pre-verification (keeps the flow fast);
   const book = await request.post("/api/bookings", {
     data: {
-      artistId: ARTIST_ID,
+      artistId: artist.id,
       service: "Reception Makeup",
       date: futureDateISO(),
       time: "10:00",
@@ -75,7 +80,7 @@ test("unverified artists cannot claim catalog profiles", async ({ request }) => 
   expect([200, 201]).toContain(reg.status());
 
   const claim = await request.post("/api/artist-profiles", {
-    data: { artistId: ARTIST_ID },
+    data: { artistId: artist.id },
   });
   expect(claim.status()).toBe(403);
   const body = await claim.json();

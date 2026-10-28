@@ -1,10 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/data";
+import { countArtistsByCategory } from "@/lib/artists";
 import { listAllArtists } from "@/server/catalog";
 import { Button } from "@/components/Button";
 import { ArtistCard } from "@/components/ArtistCard";
-import { catalogImageSrc } from "@/lib/utils";
+import { catalogImageSrc, pluralize } from "@/lib/utils";
 
 // Catalog is DB-backed — render per-request so edits show up immediately.
 export const dynamic = "force-dynamic";
@@ -12,6 +13,18 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const artists = await listAllArtists();
   const featured = [...artists].sort((a, b) => b.rating - a.rating).slice(0, 3);
+
+  // Every figure below is derived from the live catalog. A fresh production
+  // database therefore shows zeros and hides the proof bars, instead of the
+  // placeholder ratings/counts a seeded demo used to ship.
+  const categoryCounts = countArtistsByCategory(artists);
+  const totalReviews = artists.reduce((sum, a) => sum + a.reviewCount, 0);
+  const rated = artists.filter((a) => a.reviewCount > 0);
+  const averageRating = rated.length
+    ? (rated.reduce((sum, a) => sum + a.rating, 0) / rated.length).toFixed(1)
+    : null;
+  const topRated = featured.find((a) => a.reviewCount > 0);
+  const nextAvailable = artists.flatMap((a) => a.availability).find((slot) => slot);
 
   return (
     <div>
@@ -33,25 +46,32 @@ export default async function HomePage() {
               Discover top-rated makeup artists and studios, check real-time availability, and book
               in minutes.
             </p>
-            <div className="mt-8 flex items-center gap-3">
-              <div className="flex -space-x-2">
-                {artists.slice(0, 4).map((a) => (
-                  <Image
-                    key={a.id}
-                    src={catalogImageSrc(a.image)}
-                    alt={a.name}
-                    width={36}
-                    height={36}
-                    className="h-9 w-9 rounded-full border-2 border-white object-cover dark:border-stone-950"
-                  />
-                ))}
+            {totalReviews > 0 && (
+              <div className="mt-8 flex items-center gap-3">
+                <div className="flex -space-x-2">
+                  {artists.slice(0, 4).map((a) => (
+                    <Image
+                      key={a.id}
+                      src={catalogImageSrc(a.image)}
+                      alt={a.name}
+                      width={36}
+                      height={36}
+                      className="h-9 w-9 rounded-full border-2 border-white object-cover dark:border-stone-950"
+                    />
+                  ))}
+                </div>
+                <p className="text-sm text-stone-600 dark:text-stone-400">
+                  <span className="font-semibold text-stone-900 dark:text-stone-100">
+                    {averageRating}
+                  </span>{" "}
+                  from{" "}
+                  <span className="font-semibold text-stone-900 dark:text-stone-100">
+                    {totalReviews}
+                  </span>{" "}
+                  {pluralize(totalReviews, "review")}
+                </p>
               </div>
-              <p className="text-sm text-stone-600 dark:text-stone-400">
-                <span className="font-semibold text-stone-900 dark:text-stone-100">4.9</span> from{" "}
-                <span className="font-semibold text-stone-900 dark:text-stone-100">500+</span>{" "}
-                reviews
-              </p>
-            </div>
+            )}
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button href="/artists" size="lg">
                 Find &amp; Book Artists
@@ -60,13 +80,15 @@ export default async function HomePage() {
                 Explore Studios
               </Button>
             </div>
-            <div className="mt-8 inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600 shadow-sm dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-              </span>
-              Next available: Tomorrow, 10:00 AM
-            </div>
+            {nextAvailable && (
+              <div className="mt-8 inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600 shadow-sm dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                Next available: {nextAvailable}
+              </div>
+            )}
           </div>
 
           <div className="relative">
@@ -80,18 +102,27 @@ export default async function HomePage() {
                 className="object-cover"
               />
             </div>
-            <div className="absolute -left-4 bottom-10 hidden rounded-2xl border border-stone-100 bg-white p-4 shadow-xl sm:block dark:border-stone-800 dark:bg-stone-900">
-              <p className="text-xs text-stone-500 dark:text-stone-400">Bridal Makeup</p>
-              <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">
-                Booked in 3 minutes
-              </p>
-              <div className="mt-2 flex items-center gap-1 text-xs text-stone-500 dark:text-stone-400">
-                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-amber-400">
-                  <path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9l-5.2 2.7 1-5.8L1.5 7.7l5.9-.9L10 1.5z" />
-                </svg>
-                5.0 · 182 reviews
+            {topRated && (
+              <div className="absolute -left-4 bottom-10 hidden rounded-2xl border border-stone-100 bg-white p-4 shadow-xl sm:block dark:border-stone-800 dark:bg-stone-900">
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  {topRated.specialties[0] ?? "Top rated"}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">
+                  {topRated.name}
+                </p>
+                <div className="mt-2 flex items-center gap-1 text-xs text-stone-500 dark:text-stone-400">
+                  <svg
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="h-3.5 w-3.5 text-amber-400"
+                  >
+                    <path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9l-5.2 2.7 1-5.8L1.5 7.7l5.9-.9L10 1.5z" />
+                  </svg>
+                  {topRated.rating.toFixed(1)} · {topRated.reviewCount}{" "}
+                  {pluralize(topRated.reviewCount, "review")}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </section>
@@ -129,7 +160,10 @@ export default async function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 p-4">
                 <h3 className="text-lg font-semibold text-white">{cat.name}</h3>
-                <p className="mt-0.5 text-xs text-white/80">{cat.count} artists</p>
+                <p className="mt-0.5 text-xs text-white/80">
+                  {categoryCounts[cat.slug] ?? 0}{" "}
+                  {pluralize(categoryCounts[cat.slug] ?? 0, "artist")}
+                </p>
               </div>
             </Link>
           ))}
@@ -141,9 +175,9 @@ export default async function HomePage() {
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-4 py-10 sm:px-6 md:grid-cols-4">
           {[
             { value: String(artists.length), label: "Artists Onboarding" },
-            { value: String(CATEGORIES.length * 3), label: "Beauty Categories" },
+            { value: String(CATEGORIES.length), label: "Beauty Categories" },
             { value: "KL & Selangor", label: "Service Area" },
-            { value: "4.9★", label: "Average Rating" },
+            { value: String(totalReviews), label: "Client Reviews" },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <p className="font-display text-3xl font-semibold text-stone-900 dark:text-stone-100">
@@ -156,27 +190,29 @@ export default async function HomePage() {
       </section>
 
       {/* ── Featured artists ─────────────────────────────── */}
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-sm font-medium text-rose-600 dark:text-rose-500">Top Rated</p>
-            <h2 className="mt-1 font-display text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
-              Featured Artists
-            </h2>
+      {featured.length > 0 && (
+        <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-sm font-medium text-rose-600 dark:text-rose-500">Top Rated</p>
+              <h2 className="mt-1 font-display text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
+                Featured Artists
+              </h2>
+            </div>
+            <Link
+              href="/artists"
+              className="hidden text-sm font-medium text-rose-600 hover:text-rose-700 sm:block dark:text-rose-500 dark:hover:text-rose-400"
+            >
+              View All →
+            </Link>
           </div>
-          <Link
-            href="/artists"
-            className="hidden text-sm font-medium text-rose-600 hover:text-rose-700 sm:block dark:text-rose-500 dark:hover:text-rose-400"
-          >
-            View All →
-          </Link>
-        </div>
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {featured.map((artist) => (
-            <ArtistCard key={artist.id} artist={artist} />
-          ))}
-        </div>
-      </section>
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {featured.map((artist) => (
+              <ArtistCard key={artist.id} artist={artist} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── How it works ─────────────────────────────────── */}
       <section id="how-it-works" className="bg-stone-900 py-16 text-white dark:bg-black">

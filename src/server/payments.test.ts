@@ -204,6 +204,31 @@ describe("markBillPaid", () => {
   it("returns false for an unknown bill id", async () => {
     expect(await markBillPaid("nonexistent")).toBe(false);
   });
+
+  it("is idempotent — a replayed callback reports no change", async () => {
+    const bookingId = await createTestUserAndBooking();
+    const payment = await createBookingPayment(bookingId, "deposit", FEE);
+
+    expect(await markBillPaid(payment.provider_ref!)).toBe(true);
+    // Billplz retries until it gets a 200, so the same bill id arrives again.
+    // Reporting `true` a second time would re-run the settlement side effects
+    // (payout creation, notifications) for money that was only collected once.
+    expect(await markBillPaid(payment.provider_ref!)).toBe(false);
+
+    const updated = await getPaymentForBooking(bookingId);
+    expect(updated?.status).toBe("paid");
+  });
+
+  it("never resurrects a refunded payment", async () => {
+    const bookingId = await createTestUserAndBooking();
+    const payment = await createBookingPayment(bookingId, "deposit", FEE);
+    await getDb().prepare("UPDATE payments SET status = 'refunded' WHERE id = ?").run(payment.id);
+
+    expect(await markBillPaid(payment.provider_ref!)).toBe(false);
+
+    const updated = await getPaymentForBooking(bookingId);
+    expect(updated?.status).toBe("refunded");
+  });
 });
 
 describe("refundBalance (dev provider)", () => {

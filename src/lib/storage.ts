@@ -83,4 +83,6 @@ export const STORAGE_PREFIXES = {
   studioAvatar: "studios/avatars",
   invoice: "invoices",
   bookingImage: "bookings/images",
+  /** Owner-namespaced direct uploads: `uploads/<userId>/<name>` (see upload.ts). */
+  userUpload: "uploads",
 } as const;
