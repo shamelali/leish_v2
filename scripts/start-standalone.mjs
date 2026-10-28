@@ -52,9 +52,13 @@ const child = spawn(
       NODE_ENV: "production",
       PORT: process.env.PORT ?? "3000",
       // Same reason: a relative SQLite path would land inside .next/standalone
-      // and be wiped by the next build. Pin it to the repo so `next dev`,
-      // `next start` and this script share one database.
-      LEISH_DB_PATH: process.env.LEISH_DB_PATH ?? path.join(root, "data", "leish.db"),
+      // (the server `chdir`s there) and be wiped by the next build. Pin it to
+      // the repo so `next dev`, `next start`, this script and the e2e fixture
+      // seeder all share one file — including when the caller supplies a
+      // relative path such as playwright's ./data/e2e.db.
+      LEISH_DB_PATH: process.env.LEISH_DB_PATH
+        ? path.resolve(root, process.env.LEISH_DB_PATH)
+        : path.join(root, "data", "leish.db"),
       // The standalone server binds to HOSTNAME, and an interactive shell
       // already exports the machine name — which would make http://localhost
       // unreachable (and fail Playwright's `webServer` health check).

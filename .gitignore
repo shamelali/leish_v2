@@ -54,6 +54,13 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 
+# Nested git worktrees. A second checkout of this repo (e.g. `git worktree add
+# .qoder-pr <branch>`) carries its own node_modules and .next — 40k+ files. If
+# this is not ignored, `git add -A` swallows the entire tree and every
+# lint/format tool walks into it.
+/.qoder-pr/
+/.worktrees/
+
 # Prevent git bundles from being committed
 *.bundle
 leish-v2.bundle
