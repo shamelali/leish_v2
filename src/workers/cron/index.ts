@@ -7,9 +7,10 @@
  * schedules by wall-clock time.
  *
  * All jobs are idempotent timestamp-gated sweeps (safe if a tick fires twice):
- * email-retries every 15 min, quotation-expiry + booking-transitions hourly,
- * retention 02:00, payout-automation 03:00, and the balance-reminders /
- * review-requests / quotation-recovery morning sweeps at 09:00 UTC.
+ * email-retries every 5 min, quotation-expiry + booking-transitions hourly,
+ * retention 02:00, payout-automation 03:00, and the three morning sweeps at
+ * 09:00, 10:00 and 11:00 UTC. These mirror vercel.json one-for-one;
+ * schedule.test.ts fails if the two definitions drift.
  *
  * Secrets: CRON_SECRET (wrangler secret put --config <this file>)
  */
@@ -20,22 +21,21 @@ interface Env {
 }
 
 const HOURLY = ["/api/cron/quotation-expiry", "/api/cron/booking-transitions"];
-const MORNING = [
-  "/api/cron/balance-reminders",
-  "/api/cron/review-requests",
-  "/api/cron/quotation-recovery",
-];
+const DAILY: Record<number, string[]> = {
+  2: ["/api/cron/retention"],
+  3: ["/api/cron/payout-automation"],
+  9: ["/api/cron/balance-reminders"],
+  10: ["/api/cron/review-requests"],
+  11: ["/api/cron/quotation-recovery"],
+};
 
 /** Route paths due at this UTC wall-clock time. */
-function duePaths(now: Date): string[] {
+export function duePaths(now: Date): string[] {
   const paths: string[] = [];
-  if (now.getUTCMinutes() % 15 === 0) paths.push("/api/cron/email-retries");
+  if (now.getUTCMinutes() % 5 === 0) paths.push("/api/cron/email-retries");
   if (now.getUTCMinutes() === 0) {
     paths.push(...HOURLY);
-    const h = now.getUTCHours();
-    if (h === 2) paths.push("/api/cron/retention");
-    if (h === 3) paths.push("/api/cron/payout-automation");
-    if (h === 9) paths.push(...MORNING);
+    paths.push(...(DAILY[now.getUTCHours()] ?? []));
   }
   return paths;
 }
