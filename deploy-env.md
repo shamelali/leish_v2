@@ -41,26 +41,40 @@
 
 ## Required (production will crash without these)
 
-| Variable               | Value                                                           | Notes                                                 |
-| ---------------------- | --------------------------------------------------------------- | ----------------------------------------------------- |
-| `SESSION_SECRET`       | _(ROTATED — generate a new one: `openssl rand -base64 32`)_     | 32-byte base64, signs JWTs                            |
-| `DATABASE_URL`         | _(ROTATED — take the pooler URI from the new Supabase project)_ | Neon PostgreSQL                                       |
-| `NEXT_PUBLIC_SITE_URL` | `https://leish.my`                                              | Used for metadata, sitemap, emails, Billplz callbacks |
+| Variable               | Value                                                       | Notes                                                                     |
+| ---------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `SESSION_SECRET`       | _(ROTATED — generate a new one: `openssl rand -base64 32`)_ | 32-byte base64, signs JWTs                                                |
+| `DATABASE_URL`         | _(ROTATED — pooler URI from the new Supabase project)_      | Supabase PostgreSQL (pooler, `sslmode=require`); old Neon project retired |
+| `NEXT_PUBLIC_SITE_URL` | `https://leish.my`                                          | Used for metadata, sitemap, emails, Billplz callbacks                     |
+| `CRON_SECRET`          | _(ROTATED — `openssl rand -base64 32`)_                     | Protects /api/cron/* endpoints                                            |
+
+## Verified production cascade (2026-10-29)
+
+With the four core vars present (`SESSION_SECRET`, `DATABASE_URL`,
+`NEXT_PUBLIC_SITE_URL`, `CRON_SECRET`), `validateEnv()` fails in this order:
+
+1. Core required vars (all missing ones are listed together).
+2. Billplz — `BILLPLZ_API_KEY` and `BILLPLZ_COLLECTION_ID` must be set together.
+3. Email — `EMAIL_PROVIDER` plus its key, or an explicit `EMAIL_ALLOW_DEV=1`.
+
+Supplying the core four + the Billplz pair + `EMAIL_PROVIDER=brevo` +
+`BREVO_API_KEY` + `EMAIL_FROM` therefore boots with **no throw**. The only output
+is the recommended-variable warning for `PEPPER_SECRET`, `SENTRY_DSN` and
+`ERROR_WEBHOOK_URL`. Reproduced against `src/env.ts` on 2026-10-29.
 
 ## Recommended (warns but doesn't crash)
 
-| Variable          | Value                                   | Notes                                      |
-| ----------------- | --------------------------------------- | ------------------------------------------ |
-| `NEXT_PUBLIC_URL` | `https://leish.my`                      | May be redundant with NEXT_PUBLIC_SITE_URL |
-| `CRON_SECRET`     | _(ROTATED — `openssl rand -base64 32`)_ | Protects /api/cron/* endpoints             |
+| Variable          | Value              | Notes                                      |
+| ----------------- | ------------------ | ------------------------------------------ |
+| `NEXT_PUBLIC_URL` | `https://leish.my` | May be redundant with NEXT_PUBLIC_SITE_URL |
 
 ## Email — Brevo (current config)
 
-| Variable         | Value                                                              | Notes                                                                                                                 |
-| ---------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `EMAIL_PROVIDER` | `brevo`                                                            | Note: codebase supports dev/resend/postmark; brevo is in type union but not in `getActiveEmailProvider()` auto-detect |
-| `BREVO_API_KEY`  | `xkeysib-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` | Brevo (ex-Sendinblue) API key                                                                                         |
-| `EMAIL_FROM`     | `Leish! <no-reply@leish.my>`                                       | Default sender (used if not set)                                                                                      |
+| Variable         | Value                                                              | Notes                                                            |
+| ---------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `EMAIL_PROVIDER` | `brevo`                                                            | Natively supported by `getActiveEmailProvider()` + `brevoSend()` |
+| `BREVO_API_KEY`  | `xkeysib-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` | Brevo (ex-Sendinblue) API key — provide in Vercel Production     |
+| `EMAIL_FROM`     | `Leish! <no-reply@leish.my>`                                       | Set explicitly in Vercel Production                              |
 
 ### Previous email configs (from .bak files)
 
@@ -120,13 +134,16 @@
 
 ## Summary of missing/placeholder values
 
-| Variable                  | Status         | Action needed                              |
-| ------------------------- | -------------- | ------------------------------------------ |
-| `BILLPLZ_API_KEY`         | ✅ Found       | Set in .env.local                          |
-| `BILLPLZ_COLLECTION_ID`   | ✅ Found       | Set in .env.local                          |
-| `BILLPLZ_X_SIGNATURE_KEY` | ✅ Not needed  | v2 uses BILLPLZ_API_KEY for HMAC           |
-| `TURNSTILE_SECRET_KEY`    | ✅ Retrieved   | Set in .env.local via wrangler             |
-| `R2_ACCOUNT_ID`           | ✅ Known       | _(Cloudflare dashboard → account ID)_      |
-| `BLOB_READ_WRITE_TOKEN`   | ✅ Auto-set    | Created via CLI, linked to leishv2 project |
-| `NEON_AUTH_BASE_URL`      | ⚠️ Placeholder | Configure or remove                        |
-| `NEON_AUTH_COOKIE_SECRET` | ⚠️ Placeholder | Configure or remove                        |
+| Variable                  | Status         | Action needed                                              |
+| ------------------------- | -------------- | ---------------------------------------------------------- |
+| `DATABASE_URL`            | ✅ Supplied    | New Supabase project pooler URI — set in Vercel Production |
+| `BILLPLZ_API_KEY`         | ✅ Supplied    | Set in Vercel Production (not `.env.local`)                |
+| `BILLPLZ_COLLECTION_ID`   | ✅ Supplied    | Set in Vercel Production (not `.env.local`)                |
+| `BREVO_API_KEY`           | ✅ Supplied    | Set in Vercel Production with `EMAIL_PROVIDER=brevo`       |
+| `EMAIL_FROM`              | ✅ Supplied    | Set in Vercel Production                                   |
+| `BILLPLZ_X_SIGNATURE_KEY` | ✅ Not needed  | v2 uses BILLPLZ_API_KEY for HMAC                           |
+| `TURNSTILE_SECRET_KEY`    | ✅ Retrieved   | Set in .env.local via wrangler                             |
+| `R2_ACCOUNT_ID`           | ✅ Known       | _(Cloudflare dashboard → account ID)_                      |
+| `BLOB_READ_WRITE_TOKEN`   | ✅ Auto-set    | Created via CLI, linked to leishv2 project                 |
+| `NEON_AUTH_BASE_URL`      | ⚠️ Placeholder | Configure or remove                                        |
+| `NEON_AUTH_COOKIE_SECRET` | ⚠️ Placeholder | Configure or remove                                        |

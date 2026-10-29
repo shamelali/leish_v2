@@ -301,13 +301,13 @@ highest-priority action in this entire document.
 
 ### 7.1 Rotation status — updated 2026-09-04
 
-| Secret                 | Status                        | Note                                                                                                                                                                                    |
-| ---------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BILLPLZ_API_KEY`      | ✅ Rotated at Billplz         | Live key on production, **sandbox key on preview** with `BILLPLZ_BASE_URL` pointed at sandbox. Correct split — keep it.                                                                 |
-| `SESSION_SECRET`       | ✅ Rotated                    | Self-generated is correct here. Invalidates all existing sessions on deploy.                                                                                                            |
-| `CRON_SECRET`          | ✅ Rotated                    | Self-generated is correct here.                                                                                                                                                         |
-| `TURNSTILE_SECRET_KEY` | ⚠️ Needs a **Cloudflare** key | Was set to a self-generated value, which is never valid. Re-issue in the Cloudflare dashboard, or unset it to disable Turnstile.                                                        |
-| `DATABASE_URL`         | 🔴 **Still outstanding**      | Being marked "sensitive" in Vercel does not help: the password is in `deploy-env.md`'s git history. Rotate the Neon password and update `DATABASE_URL` **and** `DATABASE_URL_UNPOOLED`. |
+| Secret                 | Status                             | Note                                                                                                                                                                                                                                                |
+| ---------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BILLPLZ_API_KEY`      | ✅ Rotated at Billplz              | Live key on production, **sandbox key on preview** with `BILLPLZ_BASE_URL` pointed at sandbox. Correct split — keep it.                                                                                                                             |
+| `SESSION_SECRET`       | ✅ Rotated                         | Self-generated is correct here. Invalidates all existing sessions on deploy.                                                                                                                                                                        |
+| `CRON_SECRET`          | ✅ Rotated                         | Self-generated is correct here.                                                                                                                                                                                                                     |
+| `TURNSTILE_SECRET_KEY` | ⚠️ Needs a **Cloudflare** key      | Was set to a self-generated value, which is never valid. Re-issue in the Cloudflare dashboard, or unset it to disable Turnstile.                                                                                                                    |
+| `DATABASE_URL`         | ✅ Replaced — new Supabase project | The old Neon URI and password remain in `deploy-env.md`'s git history, so the old project is retired rather than reused. Set the new Supabase pooler URI (`sslmode=require`) in Vercel Production; there is no `DATABASE_URL_UNPOOLED` in this app. |
 
 Steps 2 and 3 above (untracking the file, history rewrite) remain open and are
 owner decisions.
@@ -322,6 +322,12 @@ After setting everything in **Vercel → Production**:
 # Locally, against the production DATABASE_URL (read-only sanity check):
 pnpm run env:check
 ```
+
+`validateEnv()` fails in a fixed order: core required vars (all missing ones
+listed together) → Billplz pair → email provider → recommended warnings. With the core four set, plus `BILLPLZ_API_KEY` +
+`BILLPLZ_COLLECTION_ID`, `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY` and
+`EMAIL_FROM`, it does not throw; the only output is the warning for
+`PEPPER_SECRET`, `SENTRY_DSN` and `ERROR_WEBHOOK_URL` (verified 2026-10-29).
 
 Then, on the deployed instance:
 
@@ -373,10 +379,10 @@ curl -X POST https://<prod-host>/api/payments/webhook \
 ## Quick reference
 
 ```
-Tier 1 (blocking)   SESSION_SECRET  DATABASE_URL  NEXT_PUBLIC_SITE_URL
+Tier 1 (blocking)   SESSION_SECRET  DATABASE_URL  NEXT_PUBLIC_SITE_URL  CRON_SECRET
 Tier 2 (launch)     BILLPLZ_API_KEY  BILLPLZ_COLLECTION_ID  BILLPLZ_BASE_URL
                     EMAIL_PROVIDER  <provider key>  EMAIL_FROM
-                    CRON_SECRET  [BLOB_READ_WRITE_TOKEN if uploads ship]
+                    [BLOB_READ_WRITE_TOKEN if uploads ship]
                     NEXT_PUBLIC_SUPABASE_URL  NEXT_PUBLIC_SUPABASE_ANON_KEY
                     SUPABASE_SERVICE_ROLE_KEY
 Tier 3 (advised)    SENTRY_DSN  PEPPER_SECRET  TURNSTILE_*  AGNOST_*

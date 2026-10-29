@@ -96,8 +96,9 @@ the bill; the callback defaults to `{NEXT_PUBLIC_SITE_URL}/api/payments/webhook`
 
 Transactional email is sent via `src/server/email.ts`. The default provider is
 `dev` (writes to the `email_outbox` table, viewable at `/dev/emails` outside
-production). For real delivery set `EMAIL_PROVIDER=resend` (+ `RESEND_API_KEY`) or
-`EMAIL_PROVIDER=postmark` (+ `POSTMARK_SERVER_TOKEN`), plus `EMAIL_FROM`.
+production). For real delivery set `EMAIL_PROVIDER=brevo` (+ `BREVO_API_KEY`),
+`EMAIL_PROVIDER=resend` (+ `RESEND_API_KEY`) or `EMAIL_PROVIDER=postmark`
+(+ `POSTMARK_SERVER_TOKEN`), plus `EMAIL_FROM`.
 
 Production **fails to boot** when no provider and no provider credential is
 configured, so an outbox-only deployment is impossible by accident. To run

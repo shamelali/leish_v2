@@ -507,9 +507,12 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
   but only in a **production runtime** — it is skipped during `next build`, when
   `VERCEL_ENV` is set to anything but `production` (previews), and when
   `SKIP_ENV_VALIDATION` is set
-- **It throws, it does not warn**, for: `SESSION_SECRET`, `DATABASE_URL`,
-  `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET`, half-configured Billplz, no payment
-  provider, and no email provider
+- **It throws, it does not warn**, grouped in this order: core required vars
+  (`SESSION_SECRET`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET`;
+  missing ones are listed together) → half-configured Billplz / no payment
+  provider → no email provider. Supplying the core four plus the Billplz pair +
+  `EMAIL_PROVIDER=brevo` + `BREVO_API_KEY` + `EMAIL_FROM` yields no throw, only
+  the recommended warnings (verified 2026-10-29)
 - **Those throws are disabled on this machine, and `.env.local` is why.** Measured
   2026-10-29: `.env.local` sets `PAYMENTS_ALLOW_DEV` (line 12), `SKIP_DB_GUARD`
   (13) and `SKIP_ENV_VALIDATION` (17), and defines no `DATABASE_URL`, no
