@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SEED_ARTISTS } from "../data";
+import type { Artist } from "@/lib/types";
 import {
   parseBudget,
   parseEventTypes,
@@ -8,6 +8,35 @@ import {
   rankArtists,
 } from "./filters";
 import { EMPTY_CONTEXT } from "./types";
+
+/**
+ * The catalog has no demo seed, so the ranker takes its catalog as an argument
+ * and these tests build their own rows instead of borrowing seeded ones.
+ */
+function makeArtist(overrides: Partial<Artist> = {}): Artist {
+  return {
+    id: "test-artist",
+    name: "Test Artist",
+    tagline: "Soft glam specialist",
+    bio: "Natural soft glam looks for weddings",
+    image: "",
+    rating: 4.5,
+    reviewCount: 12,
+    state: "Selangor",
+    area: "Petaling",
+    priceFrom: 500,
+    specialties: ["Bridal"],
+    services: [{ name: "Bridal Look", price: 500, duration: "2h" }],
+    bridal: [],
+    nonBridal: [],
+    availability: [],
+    portfolio: [],
+    verified: true,
+    yearsExperience: 5,
+    reviews: [],
+    ...overrides,
+  };
+}
 
 describe("parseBudget", () => {
   it.each([
@@ -71,63 +100,46 @@ describe("parseEventTypes and parseLocation", () => {
 
 describe("rankArtists", () => {
   it("ranks artists against conversation context", () => {
-    const recs = rankArtists({
-      ...EMPTY_CONTEXT,
-      eventTypes: ["Bridal"],
-      location: "Selangor, Petaling",
-      budget: { min: 300, max: 800 },
-      styleNotes: ["natural soft glam"],
-    });
+    const recs = rankArtists(
+      {
+        ...EMPTY_CONTEXT,
+        eventTypes: ["Bridal"],
+        location: "Selangor, Petaling",
+        budget: { min: 300, max: 800 },
+        styleNotes: ["natural soft glam"],
+      },
+      [makeArtist()],
+    );
     expect(recs.length).toBeGreaterThan(0);
     expect(recs[0].score).toBeGreaterThanOrEqual(15);
   });
 
   it("handles mid-tier ratings, review counts, experience bands, and budget thresholds", () => {
-    const customCatalog = [
-      {
-        ...SEED_ARTISTS[0],
+    const customCatalog: Artist[] = [
+      makeArtist({
         id: "mid-1",
         name: "Mid Artist",
         bio: "Specializes in editorial looks",
         state: "Kuala Lumpur",
         area: "Bangsar",
-        specialties: ["Photoshoot" as const],
+        specialties: ["Photoshoot"],
         rating: 4.75,
         reviewCount: 25,
         yearsExperience: 5,
-        services: [
-          {
-            id: "s1",
-            name: "Editorial Look",
-            description: "Desc",
-            price: 100,
-            duration: "1h",
-            category: "Editorial" as const,
-          },
-        ],
-      },
-      {
-        ...SEED_ARTISTS[0],
+        services: [{ name: "Editorial Look", price: 100, duration: "1h" }],
+      }),
+      makeArtist({
         id: "low-1",
         name: "Junior Artist",
         bio: "New artist",
         state: "Johor",
         area: "Johor Bahru",
-        specialties: ["Personal" as const],
+        specialties: ["Personal"],
         rating: 4.5,
         reviewCount: 5,
         yearsExperience: 2,
-        services: [
-          {
-            id: "s2",
-            name: "Personal Look",
-            description: "Desc",
-            price: 900,
-            duration: "1h",
-            category: "Personal" as const,
-          },
-        ],
-      },
+        services: [{ name: "Personal Look", price: 900, duration: "1h" }],
+      }),
     ];
 
     const recs = rankArtists(
@@ -142,6 +154,7 @@ describe("rankArtists", () => {
     );
     expect(recs).toHaveLength(1);
     expect(recs[0].artist.id).toBe("mid-1");
-    expect(rankArtists(EMPTY_CONTEXT).length).toBeGreaterThan(0);
+    // A 4.9★ row clears MIN_SCORE on the rating signal alone.
+    expect(rankArtists(EMPTY_CONTEXT, [makeArtist({ rating: 4.9 })]).length).toBeGreaterThan(0);
   });
 });

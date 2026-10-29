@@ -1,4 +1,3 @@
-import { SEED_ARTISTS } from "@/lib/data";
 import type { Artist } from "@/lib/types";
 import type { ConciergeCategory, ConversationContext, MatchSignal, Recommendation } from "./types";
 
@@ -246,10 +245,12 @@ const MIN_SCORE = 15;
 /** Maximum recommendations to return */
 const MAX_RESULTS = 3;
 
-export function rankArtists(
-  context: ConversationContext,
-  catalog: Artist[] = SEED_ARTISTS,
-): Recommendation[] {
+/**
+ * Rank a candidate catalog against the conversation context. The catalog is a
+ * required argument — there is no demo seed to fall back on, so callers pass
+ * live rows (e.g. `listArtists()`).
+ */
+export function rankArtists(context: ConversationContext, catalog: Artist[]): Recommendation[] {
   const results = catalog.map((artist) => {
     const signals: MatchSignal[] = [];
 

@@ -8,6 +8,10 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
+    // Server tests hit a real database and pass in ~1.4s idle, but the 5s
+    // default flakes when the suite shares CPU with typecheck/build. Low
+    // enough to still surface a genuine hang.
+    testTimeout: 20000,
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     coverage: {

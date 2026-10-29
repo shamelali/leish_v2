@@ -71,8 +71,8 @@ export default function AdminReferralsPage() {
           Referrals
         </h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Artist/studio referral chain ({total} total). Status filters mirror
-          GET /api/admin/referrals.
+          Artist/studio referral chain ({total} total). Status filters mirror GET
+          /api/admin/referrals.
         </p>
       </div>
 

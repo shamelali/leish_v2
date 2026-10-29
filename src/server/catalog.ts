@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { getDb, bind } from "./db";
-import { ensureCatalogSeeded } from "./catalog-seed";
 import { filterArtists, type ArtistFilters } from "@/lib/artists";
 import type { Artist, Review, Service, Studio } from "@/lib/types";
 import { cacheGet, cacheSet, cacheDel, cacheDelPrefix } from "./redis";
@@ -13,11 +12,10 @@ const CACHE_PREFIX_STUDIO = "cat:s:";
 const CACHE_PREFIX_LIST = "cat:list:";
 
 /**
- * DB-backed catalog repository — the single source of truth for artists,
- * studios and reviews at runtime. src/lib/data.ts is seed data only.
- *
- * All read helpers lazily seed the catalog on first call (see
- * catalog-seed.ts) so dev/test environments work with zero setup.
+ * DB-backed catalog repository — the only source of truth for artists,
+ * studios and reviews. There is no demo seed: an empty database means an
+ * empty catalog until an admin onboards an artist (see /api/admin/artists)
+ * or a user completes /api/onboarding.
  */
 
 // ── Row shapes ───────────────────────────────────────────────────────────────
@@ -184,15 +182,6 @@ export async function listAllArtists(opts?: {
   limit?: number;
   offset?: number;
 }): Promise<Artist[]> {
-  try {
-    await ensureCatalogSeeded();
-  } catch (err) {
-    console.error(
-      "[catalog] failed to seed, returning empty list:",
-      err instanceof Error ? err.message : err,
-    );
-    return [];
-  }
   const cacheKey = `${CACHE_PREFIX_LIST}artists:${opts?.limit ?? "all"}:${opts?.offset ?? 0}`;
   const cached = await cacheGet<Artist[]>(cacheKey);
   if (cached) return cached;
@@ -227,7 +216,6 @@ export async function listAllArtists(opts?: {
  */
 export async function countArtists(): Promise<number> {
   try {
-    await ensureCatalogSeeded();
     const row = (await getDb().prepare("SELECT COUNT(*) AS c FROM artists").get()) as
       { c: number } | undefined;
     return Number(row?.c ?? 0);
@@ -243,15 +231,6 @@ export async function countArtists(): Promise<number> {
  * query and event-tag matching over the reduced set.
  */
 export async function listArtists(filters?: Partial<ArtistFilters>): Promise<Artist[]> {
-  try {
-    await ensureCatalogSeeded();
-  } catch (err) {
-    console.error(
-      "[catalog] failed to seed, returning empty list:",
-      err instanceof Error ? err.message : err,
-    );
-    return [];
-  }
   const where: string[] = [];
   const params: (string | number)[] = [];
 
@@ -300,12 +279,6 @@ export async function listArtists(filters?: Partial<ArtistFilters>): Promise<Art
 }
 
 export async function getArtistById(id: string): Promise<Artist | null> {
-  try {
-    await ensureCatalogSeeded();
-  } catch (err) {
-    console.error("[catalog] failed to seed:", err instanceof Error ? err.message : err);
-    return null;
-  }
   const cacheKey = `${CACHE_PREFIX_ARTIST}id:${id}`;
   const cached = await cacheGet<Artist>(cacheKey);
   if (cached) return cached;
@@ -322,12 +295,6 @@ export async function getArtistById(id: string): Promise<Artist | null> {
 }
 
 export async function getArtistBySlug(slug: string): Promise<Artist | null> {
-  try {
-    await ensureCatalogSeeded();
-  } catch (err) {
-    console.error("[catalog] failed to seed:", err instanceof Error ? err.message : err);
-    return null;
-  }
   const cacheKey = `${CACHE_PREFIX_ARTIST}slug:${slug}`;
   const cached = await cacheGet<Artist>(cacheKey);
   if (cached) return cached;
@@ -360,15 +327,6 @@ export async function listAllStudios(opts?: {
   limit?: number;
   offset?: number;
 }): Promise<Studio[]> {
-  try {
-    await ensureCatalogSeeded();
-  } catch (err) {
-    console.error(
-      "[catalog] failed to seed, returning empty list:",
-      err instanceof Error ? err.message : err,
-    );
-    return [];
-  }
   const cacheKey = `${CACHE_PREFIX_LIST}studios:${opts?.limit ?? "all"}:${opts?.offset ?? 0}`;
   const cached = await cacheGet<Studio[]>(cacheKey);
   if (cached) return cached;
@@ -396,12 +354,6 @@ export async function listAllStudios(opts?: {
 }
 
 export async function getStudioById(id: string): Promise<Studio | null> {
-  try {
-    await ensureCatalogSeeded();
-  } catch (err) {
-    console.error("[catalog] failed to seed:", err instanceof Error ? err.message : err);
-    return null;
-  }
   const cacheKey = `${CACHE_PREFIX_STUDIO}id:${id}`;
   const cached = await cacheGet<Studio>(cacheKey);
   if (cached) return cached;
@@ -418,12 +370,6 @@ export async function getStudioById(id: string): Promise<Studio | null> {
 }
 
 export async function getStudioBySlug(slug: string): Promise<Studio | null> {
-  try {
-    await ensureCatalogSeeded();
-  } catch (err) {
-    console.error("[catalog] failed to seed:", err instanceof Error ? err.message : err);
-    return null;
-  }
   const cacheKey = `${CACHE_PREFIX_STUDIO}slug:${slug}`;
   const cached = await cacheGet<Studio>(cacheKey);
   if (cached) return cached;
@@ -539,7 +485,6 @@ export async function createArtist(input: {
   portfolio?: string[];
   referralCode?: string;
 }): Promise<Artist | null> {
-  await ensureCatalogSeeded();
   const db = getDb();
 
   const base = slugifyName(input.slug || input.name);
@@ -698,7 +643,6 @@ export async function createStudio(input: {
   phone?: string;
   referralCode?: string;
 }): Promise<Studio | null> {
-  await ensureCatalogSeeded();
   const db = getDb();
 
   const base = slugifyName(input.slug || input.name);
@@ -786,7 +730,6 @@ export async function listEntityReviews(
   entityType: EntityType,
   entityId: string,
 ): Promise<Review[]> {
-  await ensureCatalogSeeded();
   const rows = (await getDb()
     .prepare(
       "SELECT * FROM reviews WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC",
@@ -825,7 +768,6 @@ async function blendAggregate(
 }
 
 export async function addEntityReview(input: NewReviewInput): Promise<Review> {
-  await ensureCatalogSeeded();
   const db = getDb();
   const id = crypto.randomUUID();
 

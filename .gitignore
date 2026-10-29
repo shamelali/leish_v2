@@ -54,6 +54,19 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 
+# Nested git worktrees. A second checkout of this repo (e.g. `git worktree add
+# .qoder-pr <branch>`) carries its own node_modules and .next — 40k+ files. If
+# this is not ignored, `git add -A` swallows the entire tree and every
+# lint/format tool walks into it.
+/.qoder-pr/
+/.worktrees/
+
+# Qoder CLI per-machine state. settings.local.json holds this developer's own
+# tool-approval allowlist (a one-off Bash entry today); checked in, it would
+# silently grant that allowance to every session on the repo. Deliberately
+# shared config belongs in a tracked .qoder/settings.json instead.
+/.qoder/settings.local.json
+
 # Prevent git bundles from being committed
 *.bundle
 leish-v2.bundle

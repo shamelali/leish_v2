@@ -13,3 +13,12 @@ allowBuilds:
   esbuild: set this to true or false
   unrs-resolver: set this to true or false
   workerd: set this to true or false
+
+# Security pins for transitive-only packages that no direct bump can reach.
+# Both targets stay inside their parent's declared range:
+#   @vercel/blob -> undici ^6.23.0   (6.28.0 -> 6.29.1)
+#   next -> postcss -> source-map-js (1.2.1 -> 1.2.2)
+# Re-check with `pnpm audit --prod` before removing either.
+overrides:
+  "undici@<6.29.1": "6.29.1"
+  "source-map-js@<1.2.2": "1.2.2"

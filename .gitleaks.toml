@@ -1,0 +1,30 @@
+# gitleaks configuration — scanned by .github/workflows/security.yml.
+#
+# Rationale: .env.local holds SESSION_SECRET, BILLPLZ_API_KEY, PEPPER_SECRET and
+# the Supabase service-role key on every developer machine. BILLPLZ_API_KEY is
+# also the webhook HMAC secret, so a leak is a payment-integrity incident.
+
+title = "leish-v2"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-secret fixtures: placeholders, test constants, local connection strings"
+
+# These paths contain only empty values or intentionally fake credentials.
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)playwright\.config\.ts$''',
+  '''(^|/)src/env\.test\.ts$''',
+  '''^src/test/''',
+  '''^src/server/__integration__/''',
+  '''^docs/''',
+  '''^e2e/''',
+]
+
+regexes = [
+  '''e2e-test-secret''',
+  '''e2e-cron-secret''',
+  '''postgres(ql)?://postgres:postgres@localhost''',
+]

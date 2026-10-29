@@ -15,10 +15,19 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 - Source: `src/` (app router, components, lib, server)
 - Config: `.env.local` (production), `.env.example` (template)
-- Deploy: Cloudflare Workers via vinext (`npm run deploy:vinext`), custom
-  domain `leish.my`; crons via the `leish-cron` worker
-  (`src/workers/cron/`); chat via the `leish-chat` worker
-  (`src/workers/chat/`)
+- Deploy: two live paths, and they disagree. Traffic for `leish.my` currently
+  terminates on a **Vercel origin behind the Cloudflare proxy** — responses
+  carry `x-vercel-id`. The Cloudflare Workers path (`npm run deploy:vinext` +
+  root `wrangler.jsonc`, route `leish.my/*`) is fully configured but has never
+  completed a deploy: `deploy.yml` has no `CLOUDFLARE_API_TOKEN` secret and
+  Actions is billing-locked. Chat is the `leish-chat` worker
+  (`src/workers/chat/`, `npm run chat:deploy`).
+- Crons: `kickCronScheduler` is commented out at `src/proxy.ts:41`, so the
+  traffic-driven scheduler never runs. The only two mechanisms that fire are the
+  eight entries in `vercel.json` (Vercel) and the `leish-cron` worker
+  (`src/workers/cron/`, `npm run cron:deploy` — not wired into `deploy.yml`).
+  They are not equivalent: the worker runs `email-retries` every 15 minutes and
+  collapses the three morning sweeps to 09:00 UTC.
 
 ---
 
@@ -180,10 +189,22 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 | `npm run format`           | Prettier auto-fix                                                                        |
 | `npm run format:check`     | Prettier check                                                                           |
 
-**Git branching:** `main` only. PRs require passing:
+`packageManager` is `pnpm@11.22.0` and CI installs with pnpm. The `npm run …`
+spellings above work, but always install with `pnpm` so `pnpm-lock.yaml` stays
+the only lockfile.
 
-- `quality-gate.yml` (lint, typecheck, test, coverage ≥ 80%, format)
-- `ci.yml` (test, lint, typecheck on PR)
+**Git branching:** `main` only. The gate is `ci.yml`, which runs three jobs on
+every push and PR: `verify` (install, format, lint, typecheck, `test:coverage`,
+build), `e2e` (Playwright + chromium) and `integration-pg` (a `postgres:16`
+service running `vitest.pg.config.mts`). `security.yml` runs secret and advisory
+scans separately so a security finding cannot mask a correctness gate, and
+`opencode.yml` responds to `/oc` comments. There is no `quality-gate.yml`,
+`database.yml` or `billplz-webhook.yml`.
+
+**Caveat: GitHub Actions is billing-locked on this account and has never
+executed a job in this repo.** Until that clears, `./scripts/ci-local.sh` is the
+source of truth — see `docs/CI-WITHOUT-ACTIONS.md`, and keep its gate list in
+sync with `ci.yml`.
 
 ---
 
@@ -245,7 +266,9 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - Purge demo rows before a launch: `npm run db:clear-catalog` (dry run) then
   `npm run db:clear-catalog -- --force`
 - SQLite applies the schema automatically on first `getDb()` call
-- CI: `database.yml` runs `npm run db:migrate` when `db.ts`/`migrate.ts` change
+- CI: the `integration-pg` job in `ci.yml` starts a `postgres:16` service and runs
+  `vitest.pg.config.mts`. It does not call `db:migrate` — `getDb()` applies
+  `PG_SCHEMA` lazily on first query, which is what the integration suite relies on
 - Schema is defined in `src/server/db.ts` (`PG_SCHEMA` / `SQLITE_SCHEMA`) — keep
   both backends in sync when adding columns
 
@@ -254,7 +277,9 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 - Build: `docker build -t leish-v2 .`
 - Run: `docker run -p 3000:3000 --env-file .env.local leish-v2`
 - Health check: `http://localhost:3000/api/health`
-- See `Dockerfile` for multi-stage builder (node:20-alpine)
+- See `Dockerfile` for the multi-stage builder (node:22-alpine, matching CI).
+  Its `CMD ["node", "server.js"]` boots the traced standalone output directly,
+  bypassing the `start` script
 
 ### 5. Verification Steps Before Go-Live
 
@@ -321,15 +346,20 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 ### 1. Unit Tests (`vitest`)
 
 - Location: `src/**/*.test.{ts,tsx}`
-- Coverage: `src/lib/` and `src/components/`, excluding `src/lib/data.ts`
-- Run: `npm test` or `npm run test:coverage`
-- CI threshold: ≥ 80% (quality-gate.yml)
+- Coverage measures `src/lib/**`, `src/server/**`, `src/app/api/cron/**/*.ts` and
+  `src/proxy.ts`. Client components are **not** in the denominator — see the
+  `include`/`exclude` lists in `vitest.config.mts`
+- Run: `pnpm test` or `pnpm run test:coverage`
+- Threshold: 80% each on statements, branches, functions and lines, enforced by
+  vitest (`test.coverage.thresholds`), not by a separate workflow
 
 ### 2. Test Categories
 
 - **Auth**: login/register/token verification
 - **Booking**: validation, quota, artist availability
-- **Payments**: Billplz signature verification (see `billplz-webhook.yml`)
+- **Payments**: Billplz signature verification and the deposit/balance dispatch
+  paths live in `src/server/payments.test.ts`. There is no `billplz-webhook.yml`
+  workflow; the live-credential check is the manual RM 1 run in `docs/DEPLOY.md` §3
 - **Email**: template rendering (no send in unit tests — use mock)
 - **Utils**: `formatRM()`, `cn()`, `pluralize()`
 - **Types**: inferred from Zod schemas

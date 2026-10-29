@@ -18,9 +18,8 @@ pnpm-lock.yaml
 # Data
 data
 
-# Vendored third-party sources — kept verbatim so they stay diffable against
-# upstream. These carry their own formatting configs.
-redis-js-main
+# Nested git worktree (separate checkout with its own node_modules and .next)
+.qoder-pr
 
 # Legacy monorepo snapshot — not part of the app build
 leish-monorepo

@@ -34,8 +34,7 @@ export async function requireAdmin(request: Request) {
   const payload = token ? await verifySessionToken(token) : null;
   let user = payload
     ? ((await getDb().prepare("SELECT * FROM users WHERE id = ?").get(payload.sub)) as
-        | UserRow
-        | undefined)
+        UserRow | undefined)
     : undefined;
 
   // Fallback to Supabase session (OAuth users) — mirrors src/app/admin/layout.tsx.
@@ -45,8 +44,7 @@ export async function requireAdmin(request: Request) {
       const sbUser = await getSupabaseUser();
       if (sbUser) {
         user = (await getDb().prepare("SELECT * FROM users WHERE id = ?").get(sbUser.id)) as
-          | UserRow
-          | undefined;
+          UserRow | undefined;
       }
     } catch {
       // Supabase env vars may not be set — fall through to 401.

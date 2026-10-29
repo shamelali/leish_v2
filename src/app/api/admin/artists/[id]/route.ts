@@ -95,21 +95,27 @@ export const DELETE = statefulRoute(
     // Hard deletes leave dangling bookings/reviews (no FK), so refuse when
     // the profile is referenced. Delete is for erroneous/duplicate listings.
     const db = getDb();
-    const bookingCount = (await db
-      .prepare("SELECT COUNT(*) AS n FROM bookings WHERE artist_id = ?")
-      .get<{ n: number }>(id))?.n;
+    const bookingCount = (
+      await db
+        .prepare("SELECT COUNT(*) AS n FROM bookings WHERE artist_id = ?")
+        .get<{ n: number }>(id)
+    )?.n;
     if (bookingCount) {
       return jsonError(`Cannot delete: artist has ${bookingCount} booking(s)`, 409);
     }
-    const claimCount = (await db
-      .prepare("SELECT COUNT(*) AS n FROM artist_profiles WHERE artist_id = ?")
-      .get<{ n: number }>(id))?.n;
+    const claimCount = (
+      await db
+        .prepare("SELECT COUNT(*) AS n FROM artist_profiles WHERE artist_id = ?")
+        .get<{ n: number }>(id)
+    )?.n;
     if (claimCount) {
       return jsonError("Cannot delete: artist profile is claimed by a user", 409);
     }
-    const reviewCount = (await db
-      .prepare("SELECT COUNT(*) AS n FROM reviews WHERE entity_type = 'artist' AND entity_id = ?")
-      .get<{ n: number }>(id))?.n;
+    const reviewCount = (
+      await db
+        .prepare("SELECT COUNT(*) AS n FROM reviews WHERE entity_type = 'artist' AND entity_id = ?")
+        .get<{ n: number }>(id)
+    )?.n;
     if (reviewCount) {
       return jsonError(`Cannot delete: artist has ${reviewCount} review(s)`, 409);
     }
@@ -117,7 +123,14 @@ export const DELETE = statefulRoute(
     const ok = await deleteArtist(id);
     if (!ok) return jsonError("Artist not found", 404);
 
-    await logAdminAction(user.id, "catalog_delete", "artists", id, { name: existing.name }, { requireAudit: true });
+    await logAdminAction(
+      user.id,
+      "catalog_delete",
+      "artists",
+      id,
+      { name: existing.name },
+      { requireAudit: true },
+    );
 
     return NextResponse.json({ ok: true });
   },

@@ -1041,6 +1041,9 @@ export function getDb(): DbFacade {
       // deliveries inert. Sweep pending duplicates first (keeping the earliest
       // row) or the index creation fails; settled rows are never deleted.
       try {
+        // `query()` routes to whichever backend is live (node pool or the
+        // Workers Neon driver); referencing a local `pool` would only work on
+        // one of them.
         await query(
           `
           DELETE FROM payouts AS p

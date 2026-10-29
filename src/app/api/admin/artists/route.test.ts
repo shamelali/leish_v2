@@ -5,10 +5,13 @@ import { randomUUID } from "node:crypto";
 import { GET } from "./route";
 import { createSessionToken } from "@/server/session";
 import { getDb } from "@/server/db";
+import { insertCatalogFixtures } from "@/test/catalog-fixtures";
 
 const ADMIN_ID = `admin-artists-${randomUUID()}`;
 
 beforeAll(async () => {
+  // No demo seed: page assertions need real catalog rows.
+  await insertCatalogFixtures();
   await getDb()
     .prepare(
       "INSERT INTO users (id, email, name, role, password, created_at) VALUES (?, ?, ?, 'admin', 'x:y', ?)",

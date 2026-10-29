@@ -1,8 +1,9 @@
 // @vitest-environment node
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { GET } from "./route";
 import { listAllArtists } from "@/server/catalog";
+import { insertCatalogFixtures } from "@/test/catalog-fixtures";
 
 /**
  * Public catalog route — the e2e suite asserts the no-params contract stays
@@ -10,12 +11,15 @@ import { listAllArtists } from "@/server/catalog";
  * `X-Total-Count`, and `pagination` metadata.
  */
 describe("GET /api/catalog/artists (paginated)", () => {
+  // No demo seed: the route reads the DB, so give it rows to page through.
+  beforeAll(insertCatalogFixtures);
+
   async function get(path = "/api/catalog/artists"): Promise<Response> {
     return GET(new Request(`http://localhost${path}`));
   }
 
   it("returns the first page plus total count by default", async () => {
-    const seeded = await listAllArtists(); // ensure the catalog is seeded
+    const seeded = await listAllArtists();
     const res = await get();
     expect(res.status).toBe(200);
 

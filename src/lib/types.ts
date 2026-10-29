@@ -23,7 +23,7 @@ export interface Review {
 
 export interface Artist {
   id: string;
-  /** URL key. Seeded artists keep slug === id; admin-created ones use a UUID id. */
+  /** URL key. Admin-onboarded artists get a UUID id plus a name-derived slug. */
   slug?: string;
   name: string;
   tagline: string;
@@ -50,7 +50,7 @@ export interface Artist {
 
 export interface Studio {
   id: string;
-  /** URL key. Seeded studios keep slug === id. */
+  /** URL key. Mirrors the artist convention: UUID id, name-derived slug. */
   slug?: string;
   name: string;
   tagline: string;
@@ -75,7 +75,6 @@ export interface Category {
   name: string;
   description: string;
   image: string;
-  count: number;
 }
 
 export interface User {

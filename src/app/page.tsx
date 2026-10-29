@@ -1,10 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/data";
+import { countArtistsByCategory } from "@/lib/artists";
 import { listAllArtists } from "@/server/catalog";
 import { Button } from "@/components/Button";
 import { ArtistCard } from "@/components/ArtistCard";
-import { catalogImageSrc } from "@/lib/utils";
+import { catalogImageSrc, pluralize } from "@/lib/utils";
 
 // Catalog is DB-backed — render per-request so edits show up immediately.
 export const dynamic = "force-dynamic";
@@ -101,6 +102,17 @@ export default async function HomePage() {
   const artists = await listAllArtists();
   const featured = [...artists].sort((a, b) => b.rating - a.rating).slice(0, 3);
 
+  // Every figure below is derived from the live catalog. A fresh production
+  // database therefore shows zeros and hides the proof bars, instead of the
+  // placeholder ratings/counts a seeded demo used to ship.
+  const categoryCounts = countArtistsByCategory(artists);
+  const totalReviews = artists.reduce((sum, a) => sum + a.reviewCount, 0);
+  const rated = artists.filter((a) => a.reviewCount > 0);
+  const averageRating = rated.length
+    ? (rated.reduce((sum, a) => sum + a.rating, 0) / rated.length).toFixed(1)
+    : null;
+  const topRated = featured.find((a) => a.reviewCount > 0);
+
   return (
     <div>
       {/* ── Hero ─────────────────────────────────────────── */}
@@ -127,25 +139,28 @@ export default async function HomePage() {
               in minutes.
             </p>
 
-            {/* Social proof */}
-            <div className="mt-8 flex items-center gap-3">
-              <div className="flex -space-x-2">
-                {artists.slice(0, 4).map((a) => (
-                  <Image
-                    key={a.id}
-                    src={catalogImageSrc(a.image)}
-                    alt={a.name}
-                    width={36}
-                    height={36}
-                    className="h-9 w-9 rounded-full border-2 border-surface object-cover"
-                  />
-                ))}
+            {/* Social proof — only when the catalog has actual reviews */}
+            {totalReviews > 0 && (
+              <div className="mt-8 flex items-center gap-3">
+                <div className="flex -space-x-2">
+                  {artists.slice(0, 4).map((a) => (
+                    <Image
+                      key={a.id}
+                      src={catalogImageSrc(a.image)}
+                      alt={a.name}
+                      width={36}
+                      height={36}
+                      className="h-9 w-9 rounded-full border-2 border-surface object-cover"
+                    />
+                  ))}
+                </div>
+                <p className="text-sm text-ink-muted">
+                  <span className="font-semibold text-ink">{averageRating}</span> from{" "}
+                  <span className="font-semibold text-ink">{totalReviews}</span>{" "}
+                  {pluralize(totalReviews, "review")}
+                </p>
               </div>
-              <p className="text-sm text-ink-muted">
-                <span className="font-semibold text-ink">4.9</span> from{" "}
-                <span className="font-semibold text-ink">500+</span> verified reviews
-              </p>
-            </div>
+            )}
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button href="/artists" size="lg">
@@ -168,16 +183,19 @@ export default async function HomePage() {
                 className="object-cover"
               />
             </div>
-            <div className="absolute -left-4 bottom-10 hidden rounded-2xl border border-line bg-surface p-4 shadow-[var(--elev-pop)] sm:block">
-              <p className="text-xs text-ink-muted">Bridal Makeup</p>
-              <p className="mt-1 text-sm font-semibold text-ink">Booked in 3 minutes</p>
-              <div className="mt-2 flex items-center gap-1 text-xs text-ink-muted">
-                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-star">
-                  <path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9l-5.2 2.7 1-5.8L1.5 7.7l5.9-.9L10 1.5z" />
-                </svg>
-                5.0 · 182 reviews
+            {topRated && (
+              <div className="absolute -left-4 bottom-10 hidden rounded-2xl border border-line bg-surface p-4 shadow-[var(--elev-pop)] sm:block">
+                <p className="text-xs text-ink-muted">{topRated.specialties[0] ?? "Top rated"}</p>
+                <p className="mt-1 text-sm font-semibold text-ink">{topRated.name}</p>
+                <div className="mt-2 flex items-center gap-1 text-xs text-ink-muted">
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-star">
+                    <path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9l-5.2 2.7 1-5.8L1.5 7.7l5.9-.9L10 1.5z" />
+                  </svg>
+                  {topRated.rating.toFixed(1)} · {topRated.reviewCount}{" "}
+                  {pluralize(topRated.reviewCount, "review")}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </section>
@@ -232,7 +250,10 @@ export default async function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 p-4">
                 <h3 className="text-lg font-semibold text-white">{cat.name}</h3>
-                <p className="mt-0.5 text-xs text-white/85">{cat.count} artists</p>
+                <p className="mt-0.5 text-xs text-white/85">
+                  {categoryCounts[cat.slug] ?? 0}{" "}
+                  {pluralize(categoryCounts[cat.slug] ?? 0, "artist")}
+                </p>
               </div>
             </Link>
           ))}
@@ -244,9 +265,9 @@ export default async function HomePage() {
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-4 py-10 sm:px-6 md:grid-cols-4">
           {[
             { value: String(artists.length), label: "Artists Onboarding" },
-            { value: String(CATEGORIES.length * 3), label: "Beauty Categories" },
+            { value: String(CATEGORIES.length), label: "Beauty Categories" },
             { value: "KL & Selangor", label: "Service Area" },
-            { value: "4.9★", label: "Average Rating" },
+            { value: String(totalReviews), label: "Client Reviews" },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <p className="font-display text-3xl font-semibold text-ink">{stat.value}</p>
@@ -256,28 +277,30 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Featured artists ─────────────────────────────── */}
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-link">Top Rated</p>
-            <h2 className="mt-1 font-display text-3xl font-semibold tracking-tight text-ink">
-              Featured Artists
-            </h2>
+      {/* ── Featured artists (hidden until the catalog has any) ── */}
+      {featured.length > 0 && (
+        <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wider text-link">Top Rated</p>
+              <h2 className="mt-1 font-display text-3xl font-semibold tracking-tight text-ink">
+                Featured Artists
+              </h2>
+            </div>
+            <Link
+              href="/artists"
+              className="hidden text-sm font-semibold text-link hover:underline sm:block"
+            >
+              View All →
+            </Link>
           </div>
-          <Link
-            href="/artists"
-            className="hidden text-sm font-semibold text-link hover:underline sm:block"
-          >
-            View All →
-          </Link>
-        </div>
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {featured.map((artist) => (
-            <ArtistCard key={artist.id} artist={artist} />
-          ))}
-        </div>
-      </section>
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {featured.map((artist) => (
+              <ArtistCard key={artist.id} artist={artist} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── How it works ─────────────────────────────────── */}
       <section id="how-it-works" className="bg-inverse py-16 text-inverse-fg">
