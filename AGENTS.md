@@ -15,19 +15,30 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 - Source: `src/` (app router, components, lib, server)
 - Config: `.env.local` (production), `.env.example` (template)
-- Deploy: two live paths, and they disagree. Traffic for `leish.my` currently
-  terminates on a **Vercel origin behind the Cloudflare proxy** — responses
-  carry `x-vercel-id`. The Cloudflare Workers path (`npm run deploy:vinext` +
-  root `wrangler.jsonc`, route `leish.my/*`) is fully configured but has never
-  completed a deploy: `deploy.yml` has no `CLOUDFLARE_API_TOKEN` secret and
-  Actions is billing-locked. Chat is the `leish-chat` worker
-  (`src/workers/chat/`, `npm run chat:deploy`).
+- Deploy: **`leish.my` is not running this app.** Verified 2026-10-29 against the
+  live origin: no `/_next/*` asset is referenced anywhere, `/artists` returns
+  `x-vercel-cache: HIT` although this repo marks it `force-dynamic`,
+  `/api/health` replies `{"ok":true,"at":…}` — a payload this repo's route has
+  never emitted (it returns `{status, timestamp, commit, checks{…}}`) — and
+  `/api/artists` returns Express's `Cannot GET`, not a Next.js 404. Responses do
+  carry `x-vercel-id`, so traffic terminates on a Vercel project behind the
+  Cloudflare proxy, but that project is a hand-written static prototype, not
+  `leish_v2`. Neither deploy path in this repo has ever served production, so a
+  first real deploy of `main` **replaces the live site** — set
+  `NEXT_PUBLIC_SITE_URL`, `DATABASE_URL` and a non-`dev` `EMAIL_PROVIDER` first.
+  The Cloudflare Workers path (`npm run deploy:vinext` + root `wrangler.jsonc`,
+  route `leish.my/*`) has never completed a deploy: `deploy.yml` has no
+  `CLOUDFLARE_API_TOKEN` secret and Actions is billing-locked. Chat is the
+  `leish-chat` worker (`src/workers/chat/`, `npm run chat:deploy`).
 - Crons: `kickCronScheduler` is commented out at `src/proxy.ts:41`, so the
-  traffic-driven scheduler never runs. The only two mechanisms that fire are the
-  eight entries in `vercel.json` (Vercel) and the `leish-cron` worker
-  (`src/workers/cron/`, `npm run cron:deploy` — not wired into `deploy.yml`).
-  They are not equivalent: the worker runs `email-retries` every 15 minutes and
-  collapses the three morning sweeps to 09:00 UTC.
+  traffic-driven scheduler never runs. Two mechanisms are _wired_: the eight
+  entries in `vercel.json` and the `leish-cron` worker (`src/workers/cron/`,
+  `npm run cron:deploy` — not wired into `deploy.yml`). Neither is confirmed
+  firing: `vercel.json` is only read by the project that owns it, and the
+  project behind `leish.my` is not this repo. Check `wrangler deployments list`
+  for `leish-cron` before assuming any sweep runs. They are not equivalent: the
+  worker runs `email-retries` every 15 minutes and collapses the three morning
+  sweeps to 09:00 UTC.
 
 ---
 
