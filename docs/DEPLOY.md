@@ -30,13 +30,16 @@ users, bookings, quotations, payments and **sessions** all live in this store.
 
 ### Setting `CRON_SECRET`
 
-```bash
-# Generate (equivalent to `openssl rand -hex 32`) and print it as a dry run:
-node scripts/setup-vercel-cron-secret.mjs
+The schedules themselves live in `vercel.json` (eight `crons` entries). Vercel
+reads cron definitions from that file and nowhere else — deleting it silently
+stops every job while the app keeps serving normally.
 
-# Write it to the project (Production + Preview) via the Vercel REST API:
-VERCEL_TOKEN=... node scripts/setup-vercel-cron-secret.mjs --apply \
-  --project leish-v2 --team shamelalis-projects
+```bash
+# Generate:
+openssl rand -hex 32
+
+# Write it to the project (Production + Preview):
+vercel env add CRON_SECRET production preview
 
 # Or paste it manually:
 # Vercel → Project Settings → Environment Variables → CRON_SECRET (sensitive),
@@ -48,6 +51,9 @@ curl -s -o /dev/null -w '%{http_code}\n' \
   -H "Authorization: Bearer $CRON_SECRET" \
   https://<domain>/api/cron/retention
 ```
+
+`email-retries` is scheduled `*/5 * * * *`, which exceeds the Hobby plan's
+once-daily cron cap — on Hobby the retry queue does not drain.
 
 ### Stale Vercel integrations
 

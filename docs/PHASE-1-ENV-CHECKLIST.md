@@ -127,13 +127,24 @@ schedules, or the retry queue will not drain.
 
 ### File uploads
 
-| Variable                | Source                                              | Notes                                                                              |
-| ----------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `BLOB_READ_WRITE_TOKEN` | Auto-injected by Vercel once a Blob store is linked | `src/lib/storage.ts` **throws** if missing. Only needed if uploads ship at launch. |
+Uploads go to **Cloudflare R2** through the S3-compatible API
+(`@aws-sdk/client-s3` in `src/lib/storage.ts`), which replaced the former Vercel
+Blob backend. All five are required — `src/lib/storage.ts` throws when any is
+missing, so uploads fail loudly rather than writing nowhere.
 
-`next.config.ts` restricts `images.remotePatterns` to `*.supabase.co` and
-`*.public.blob.vercel-storage.com`. Storage code uses **Vercel Blob**, so if you
-serve images from Supabase Storage instead, that code path does not exist yet.
+| Variable               | Source                                  | Notes                                           |
+| ---------------------- | --------------------------------------- | ----------------------------------------------- |
+| `R2_ENDPOINT`          | Bucket → Metrics & API → S3 endpoint    | `https://<account-id>.r2.cloudflarestorage.com` |
+| `R2_ACCESS_KEY_ID`     | API token with Object Read & Write      | server-only                                     |
+| `R2_SECRET_ACCESS_KEY` | API token with Object Read & Write      | server-only                                     |
+| `R2_BUCKET`            | Bucket name                             |                                                 |
+| `R2_PUBLIC_BASE_URL`   | Public bucket hostname or custom domain | prefix stored alongside the object key          |
+
+`next.config.ts` restricts `images.remotePatterns` to `*.supabase.co` plus the R2
+public host: `*.r2.dev` by default, overridden by `R2_PUBLIC_HOSTNAME`. That one
+is read only by `next.config.ts` at build time, never by the app — serve images
+from a custom R2 domain without setting it and `next/image` refuses to optimize
+them.
 
 ---
 
