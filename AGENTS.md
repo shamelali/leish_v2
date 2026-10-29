@@ -500,13 +500,27 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
   `SKIP_ENV_VALIDATION` is set
 - **It throws, it does not warn**, for: `SESSION_SECRET`, `DATABASE_URL`,
   `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET`, half-configured Billplz, no payment
-  provider, and no email provider. A missing `DATABASE_URL` can therefore never
-  silently fall back to SQLite in production
+  provider, and no email provider
+- **Those throws are disabled on this machine, and `.env.local` is why.** Measured
+  2026-10-29: `.env.local` sets `PAYMENTS_ALLOW_DEV` (line 12), `SKIP_DB_GUARD`
+  (13) and `SKIP_ENV_VALIDATION` (17), and defines no `DATABASE_URL`, no
+  `EMAIL_PROVIDER` and no Billplz values. `scripts/start-standalone.mjs` feeds
+  `.env.local` to the server with `NODE_ENV=production`, so the production boot
+  path here skips validation completely and comes up on ephemeral SQLite with the
+  dev outbox and payments that record without collecting money. The "a missing
+  `DATABASE_URL` can never silently fall back to SQLite" guarantee holds only for
+  an environment that does not carry these three flags.
+- **`npm run env:check` is not proof of anything.** With `SKIP_ENV_VALIDATION` set
+  it returns without printing. To measure the real gap list, unset it for that one
+  command and compare against the throw list above.
 - Explicit opt-outs follow one pattern: `PAYMENTS_ALLOW_DEV=1`,
   `EMAIL_ALLOW_DEV=1`; `SKIP_DB_GUARD=1` is the db-facade's SQLite escape hatch
 - Only `EMAIL_FROM`, `PEPPER_SECRET`, `SENTRY_DSN` and `ERROR_WEBHOOK_URL` warn
 - **Do not** set `SESSION_SECRET` during `next build` — it will fail
-- Set all vars in `.env.local` (local) or Cloudflare secrets (production)
+- `.env.local` is a **dev** file with the escape hatches on. A real deploy needs
+  the platform's own secret store (Vercel project env / `wrangler secret put`),
+  never this file — carrying these three flags into production disables every
+  guard in this section.
 
 ### 2. Database Backend Switching
 
@@ -569,7 +583,7 @@ All under `requireAdmin()`; mutations write to `admin_audit_log`
 - **Forgot `DATABASE_URL`** → pg pool fails; falls through to sqlite (different data)
 - **Billplz webhook without `BILLPLZ_API_KEY`** → `verifyBillplzSignature()` returns false and every callback is rejected; bookings never confirm
 - **`NEXT_PUBLIC_` prefix** — only expose non-secret vars to browser
-- Production runs with `NODE_ENV=production` — `validateEnv()` runs and throws only on a missing `SESSION_SECRET`; a missing `DATABASE_URL` merely warns and silently falls back to SQLite on ephemeral disk
+- Production runs with `NODE_ENV=production`, so `validateEnv()` throws on any of `SESSION_SECRET`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET`, half-configured Billplz, no payment provider or no email provider — unless `SKIP_ENV_VALIDATION` is set, which is exactly what `.env.local` does here
 
 ### 11. Catalog & 404 Gotchas
 
