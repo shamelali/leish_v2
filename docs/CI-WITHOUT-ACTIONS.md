@@ -56,6 +56,24 @@ output and exits non-zero.
 **If you edit `ci.yml`, edit this too.** The moment they drift, a local pass
 stops being evidence about CI.
 
+### `--e2e` can fail because Chromium is stale, not because the code broke
+
+`playwright install` caches the browser build **the Playwright version at the
+time asked for**. A dependency bump changes that requirement silently:
+Playwright 1.64.1 needs `chromium_headless_shell-1248`, while an install made
+under an earlier release left only `-1234`. Every test then fails before the
+first assertion with `Browser "chromium" is not installed`.
+
+After any `playwright`/`@playwright/test` bump:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+The download fails occasionally on a flaky connection — retry before
+redesigning anything. This is a false red: the suite is fine, the browser
+binary is not.
+
 ## Interim: pre-push hook
 
 Opt-in, one command per clone, no new dependency (uses git's native
