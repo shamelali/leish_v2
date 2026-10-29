@@ -1,12 +1,27 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { duePaths } from "./index";
 
 type CronEntry = { path: string; schedule: string };
 
-const declared: CronEntry[] = (
-  JSON.parse(readFileSync("vercel.json", "utf8")) as { crons: CronEntry[] }
-).crons;
+/**
+ * The sweep schedule, as designed. This is the spec `duePaths()` must satisfy.
+ *
+ * It used to be read from `vercel.json#crons`, which caught drift between the
+ * two schedulers. Vercel Hobby rejects any cron more frequent than daily, so
+ * `vercel.json` is gone and `leish-cron` is the only scheduler. Do not re-add
+ * `crons` to a Vercel deploy without disabling this worker — every sweep would
+ * fire twice.
+ */
+const declared: CronEntry[] = [
+  { path: "/api/cron/retention", schedule: "0 2 * * *" },
+  { path: "/api/cron/quotation-expiry", schedule: "0 * * * *" },
+  { path: "/api/cron/balance-reminders", schedule: "0 9 * * *" },
+  { path: "/api/cron/email-retries", schedule: "*/5 * * * *" },
+  { path: "/api/cron/booking-transitions", schedule: "0 * * * *" },
+  { path: "/api/cron/payout-automation", schedule: "0 3 * * *" },
+  { path: "/api/cron/review-requests", schedule: "0 10 * * *" },
+  { path: "/api/cron/quotation-recovery", schedule: "0 11 * * *" },
+];
 
 const at = (utcHour: number, utcMinute: number) =>
   new Date(Date.UTC(2026, 0, 15, utcHour, utcMinute, 0));
@@ -32,7 +47,7 @@ describe("leish-cron dispatch table", () => {
     expect(duePaths(at(11, 0))).not.toContain("/api/cron/balance-reminders");
   });
 
-  it("dispatches exactly the set of paths vercel.json declares", () => {
+  it("dispatches exactly the declared set of paths", () => {
     const fired = new Set<string>();
     for (let h = 0; h < 24; h += 1) {
       for (const m of [0, 5]) duePaths(at(h, m)).forEach((p) => fired.add(p));

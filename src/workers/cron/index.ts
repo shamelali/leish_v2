@@ -9,8 +9,9 @@
  * All jobs are idempotent timestamp-gated sweeps (safe if a tick fires twice):
  * email-retries every 5 min, quotation-expiry + booking-transitions hourly,
  * retention 02:00, payout-automation 03:00, and the three morning sweeps at
- * 09:00, 10:00 and 11:00 UTC. These mirror vercel.json one-for-one;
- * schedule.test.ts fails if the two definitions drift.
+ * 09:00, 10:00 and 11:00 UTC. This is the platform's only scheduler — the app
+ * runs on Vercel Hobby, which rejects any cron more frequent than daily, so no
+ * schedules live there. schedule.test.ts pins this table.
  *
  * Secrets: CRON_SECRET (wrangler secret put --config <this file>)
  */
