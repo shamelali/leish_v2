@@ -15,10 +15,19 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
 
 - Source: `src/` (app router, components, lib, server)
 - Config: `.env.local` (production), `.env.example` (template)
-- Deploy: Cloudflare Workers via vinext (`npm run deploy:vinext`), custom
-  domain `leish.my`; crons via the `leish-cron` worker
-  (`src/workers/cron/`); chat via the `leish-chat` worker
-  (`src/workers/chat/`)
+- Deploy: two live paths, and they disagree. Traffic for `leish.my` currently
+  terminates on a **Vercel origin behind the Cloudflare proxy** — responses
+  carry `x-vercel-id`. The Cloudflare Workers path (`npm run deploy:vinext` +
+  root `wrangler.jsonc`, route `leish.my/*`) is fully configured but has never
+  completed a deploy: `deploy.yml` has no `CLOUDFLARE_API_TOKEN` secret and
+  Actions is billing-locked. Chat is the `leish-chat` worker
+  (`src/workers/chat/`, `npm run chat:deploy`).
+- Crons: `kickCronScheduler` is commented out at `src/proxy.ts:41`, so the
+  traffic-driven scheduler never runs. The only two mechanisms that fire are the
+  eight entries in `vercel.json` (Vercel) and the `leish-cron` worker
+  (`src/workers/cron/`, `npm run cron:deploy` — not wired into `deploy.yml`).
+  They are not equivalent: the worker runs `email-retries` every 15 minutes and
+  collapses the three morning sweeps to 09:00 UTC.
 
 ---
 

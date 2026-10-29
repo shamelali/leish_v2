@@ -29,7 +29,8 @@
     "start:vinext": "wrangler dev --config dist/server/wrangler.json",
     "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json --experimental-warm-cdn-cache",
     "chat:dev": "wrangler dev --config src/workers/chat/wrangler.jsonc",
-    "chat:deploy": "wrangler deploy --config src/workers/chat/wrangler.jsonc"
+    "chat:deploy": "wrangler deploy --config src/workers/chat/wrangler.jsonc",
+    "cron:deploy": "wrangler deploy --config src/workers/cron/wrangler.jsonc"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.810.0",
