@@ -156,7 +156,7 @@ let neonPool: NeonPool | null = null;
 function getNeonPool(): NeonPool {
   if (!neonPool) {
     neonConfig.poolQueryViaFetch = true;
-    neonPool = new NeonPool({ connectionString: process.env.DATABASE_URL });
+    neonPool = new NeonPool({ connectionString: withOwnedSchema(process.env.DATABASE_URL) });
   }
   return neonPool;
 }
@@ -1019,6 +1019,70 @@ export function resolvePoolTls(rawConnectionString: string | undefined): {
   return { connectionString, ssl: { ca: pem, rejectUnauthorized: true } };
 }
 
+const RESERVED_SCHEMAS = /^(public|information_schema|pg_(catalog|toast).*)$/i;
+
+/**
+ * The schema the app owns, from `PG_SCHEMA_NAME`. Unset means the app keeps
+ * using whatever `search_path` the connection string already has.
+ */
+export function resolveSchemaName(): string | undefined {
+  const name = process.env.PG_SCHEMA_NAME?.trim();
+  if (!name) return undefined;
+  // The name is interpolated into DDL and into a server startup parameter, so
+  // it is whitelisted rather than quoted — and lowercase-only, because an
+  // unquoted identifier in a `search_path` list is folded by Postgres.
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(name)) {
+    throw new Error(
+      "PG_SCHEMA_NAME must be a lowercase Postgres identifier: letters, digits and " +
+        "underscores, starting with a letter or underscore.",
+    );
+  }
+  if (RESERVED_SCHEMAS.test(name)) {
+    throw new Error(
+      `PG_SCHEMA_NAME cannot be "${name}" — the app needs a schema it owns, not a shared one.`,
+    );
+  }
+  return name;
+}
+
+/**
+ * Point the connection at the owned schema through the startup packet rather
+ * than a `SET search_path` statement: a transaction-mode pooler (Supabase's
+ * 6543) hands each query to whichever server connection is free, so session
+ * settings do not survive, while `options=` is replayed on every one.
+ */
+function applySearchPath(connectionString: string, schema: string): string {
+  const directive = `-c search_path=${schema}`;
+  try {
+    const url = new URL(connectionString);
+    const existing = url.searchParams.get("options");
+    // An explicit search_path in the URI is the operator's call.
+    if (existing?.includes("search_path")) return connectionString;
+    url.searchParams.set("options", existing ? `${existing} ${directive}` : directive);
+    return url.toString();
+  } catch {
+    // Keyword/value DSN: an existing options token wins, as above.
+    if (/\soptions=/i.test(connectionString)) return connectionString;
+    return `${connectionString} options='${directive}'`;
+  }
+}
+
+/** DATABASE_URL with the owned schema applied, for callers that build their own pool. */
+export function withOwnedSchema(rawConnectionString: string | undefined): string | undefined {
+  const schema = resolveSchemaName();
+  if (!schema || !rawConnectionString) return rawConnectionString;
+  return applySearchPath(rawConnectionString, schema);
+}
+
+/** Pool connection options: the pinned CA plus the schema the app owns. */
+export function resolvePoolConfig(rawConnectionString: string | undefined): {
+  connectionString: string | undefined;
+  ssl?: { ca: string; rejectUnauthorized: boolean };
+} {
+  const resolved = resolvePoolTls(rawConnectionString);
+  return { ...resolved, connectionString: withOwnedSchema(resolved.connectionString) };
+}
+
 /** Synchronous accessor — initialization is sync; pg migration runs lazily. */
 export function getDb(): DbFacade {
   if (facade) return facade;
@@ -1036,7 +1100,7 @@ export function getDb(): DbFacade {
     // serverless driver (HTTPS) instead (see above).
     if (!isWorkersRuntime) {
       const pool = new Pool({
-        ...resolvePoolTls(process.env.DATABASE_URL),
+        ...resolvePoolConfig(process.env.DATABASE_URL),
         max: Number(process.env.PG_MAX ?? 10),
         connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS ?? 10_000),
         // Neon + serverless: short idle timeouts keep the pooler healthy.
@@ -1060,6 +1124,12 @@ export function getDb(): DbFacade {
     // Workers the multi-statement string is split into individual HTTPS
     // queries by runPgQuery.
     pgReady = (async () => {
+      // Own the schema before any table is created, otherwise PG_SCHEMA's
+      // `CREATE TABLE IF NOT EXISTS` finds a same-named table from an earlier
+      // schema in search_path, skips, and every later write fails on a column
+      // that was never created.
+      const schema = resolveSchemaName();
+      if (schema) await query(`CREATE SCHEMA IF NOT EXISTS ${schema}`, undefined);
       await query(PG_SCHEMA, undefined);
       // Applied separately so a missing payments.type on a legacy database
       // cannot roll back the rest of PG_SCHEMA. migrate.ts also creates this.

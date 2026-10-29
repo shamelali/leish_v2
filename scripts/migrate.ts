@@ -1,10 +1,13 @@
 import { Pool } from "pg";
-import { PG_SCHEMA } from "../src/server/db.ts";
+import { PG_SCHEMA, resolvePoolConfig, resolveSchemaName } from "../src/server/db.ts";
 
 /**
  * Explicitly provision the db-facade schema on PostgreSQL.
  *
  *   DATABASE_URL="postgresql://...sslmode=require" npm run db:migrate
+ *
+ * Against a provider with a private root CA (Supabase), add
+ * PG_SSL_ROOT_CERT_PEM=<root pem> and PG_SCHEMA_NAME=<owned schema>.
  *
  * Idempotent: CREATE TABLE IF NOT EXISTS + additive column checks + constraint
  * reconciliation, so it is safe to re-run against an existing database. The
@@ -230,12 +233,19 @@ async function main(): Promise<void> {
   }
 
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    ...resolvePoolConfig(process.env.DATABASE_URL),
     max: 1,
     connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS ?? 15_000),
   });
 
   try {
+    // Provision the owned schema first: every later statement — including the
+    // information_schema probes below — resolves through its search_path.
+    const schema = resolveSchemaName();
+    if (schema) {
+      await pool.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
+      console.log(`[migrate] schema ${schema} ready`);
+    }
     // Backfill payments.type BEFORE PG_SCHEMA: the schema creates a unique
     // index on (booking_id, type), which fails if the column doesn't exist
     // yet on databases created before the hybrid payment model.

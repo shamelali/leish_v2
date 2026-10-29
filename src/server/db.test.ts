@@ -6,6 +6,9 @@ import {
   resolveParams,
   isPostgres,
   resolvePoolTls,
+  resolvePoolConfig,
+  resolveSchemaName,
+  withOwnedSchema,
   getDb,
   closeDb,
   extractSchemaTables,
@@ -13,6 +16,7 @@ import {
   migrateSqlite,
 } from "./db";
 import { DatabaseSync } from "node:sqlite";
+import { createRequire } from "node:module";
 
 describe("placeholder translation (sqlite -> pg)", () => {
   it("translates positional ? to $n", () => {
@@ -407,5 +411,86 @@ describe("resolvePoolTls", () => {
     expect(() => resolvePoolTls("postgres://u:p@h/db")).toThrow(
       /contains no PEM certificate block/,
     );
+  });
+});
+
+describe("owned schema (PG_SCHEMA_NAME)", () => {
+  const URI =
+    "postgresql://postgres.ref:secret@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require";
+
+  afterEach(() => {
+    delete process.env.PG_SCHEMA_NAME;
+    delete process.env.PG_SSL_ROOT_CERT_PEM;
+  });
+
+  it("is inert when unset", () => {
+    expect(resolveSchemaName()).toBeUndefined();
+    expect(withOwnedSchema(URI)).toBe(URI);
+    expect(resolvePoolConfig(URI)).toEqual({ connectionString: URI });
+  });
+
+  it("injects search_path through the startup packet", () => {
+    process.env.PG_SCHEMA_NAME = "leish_v2";
+    const out = resolvePoolConfig(URI) as { connectionString: string; ssl?: unknown };
+    // TLS params are left alone: without a pin, sslmode is the operator's own.
+    expect(out.ssl).toBeUndefined();
+    expect(new URL(out.connectionString).searchParams.get("options")).toBe(
+      "-c search_path=leish_v2",
+    );
+  });
+
+  it("keeps any options already present", () => {
+    process.env.PG_SCHEMA_NAME = "leish_v2";
+    const withOpts = "postgres://u:p@h/db?options=-c%20statement_timeout%3D5000";
+    const out = resolvePoolConfig(withOpts) as { connectionString: string };
+    expect(new URL(out.connectionString).searchParams.get("options")).toBe(
+      "-c statement_timeout=5000 -c search_path=leish_v2",
+    );
+  });
+
+  it("does not overwrite a search_path the operator wrote into the URI", () => {
+    process.env.PG_SCHEMA_NAME = "leish_v2";
+    const explicit = "postgres://u:p@h/db?options=-c%20search_path%3Dother";
+    expect(resolvePoolConfig(explicit).connectionString).toBe(explicit);
+  });
+
+  it("appends an options token to a keyword/value DSN", () => {
+    process.env.PG_SCHEMA_NAME = "leish_v2";
+    expect(withOwnedSchema("host=db dbname=postgres user=pg")).toBe(
+      "host=db dbname=postgres user=pg options='-c search_path=leish_v2'",
+    );
+  });
+
+  it("hands pg a value its own parser decodes back to search_path", () => {
+    process.env.PG_SCHEMA_NAME = "leish_v2";
+    process.env.PG_SSL_ROOT_CERT_PEM =
+      "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+    const out = resolvePoolConfig(URI) as { connectionString: string; ssl: { ca: string } };
+    // The installed parser is the oracle for what the driver will actually send.
+    const parsed = createRequire(import.meta.url)("pg-connection-string").parse(
+      out.connectionString,
+    );
+    expect(parsed.options).toBe("-c search_path=leish_v2");
+    // The pin cannot be overridden from the URI: resolvePoolTls strips the TLS
+    // parameters, so the parser sees none and the Pool's `ssl` option governs.
+    expect(parsed.ssl).toBeUndefined();
+    expect(out.ssl).toEqual({
+      ca: process.env.PG_SSL_ROOT_CERT_PEM,
+      rejectUnauthorized: true,
+    });
+  });
+
+  it("rejects names that are not plain lowercase identifiers", () => {
+    for (const bad of [
+      "Leish",
+      "leish-v2",
+      'leish"; DROP TABLE users',
+      "9l",
+      "public",
+      "pg_catalog",
+    ]) {
+      process.env.PG_SCHEMA_NAME = bad;
+      expect(() => resolveSchemaName()).toThrow(/PG_SCHEMA_NAME/);
+    }
   });
 });
