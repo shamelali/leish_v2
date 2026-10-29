@@ -96,9 +96,9 @@ Leish v2 is a Next.js 16 (app router) marketplace for beauty artists/studios in 
 
 #### `vercel.json` — Crons
 
-- **Before:** 4 crons (`retention` 02:00, `quotation-expiry` hourly, `balance-reminders` 09:00, `email-retries` every 5m) with **no `functions` block** — default timeout 10s (Hobby) / 60s (Pro) could hard-terminate bulk jobs (e.g., hundreds of expiries).
-- **After:** Added `functions: { "src/app/api/cron/**/*.ts": { maxDuration: 60, memory: 1024 } }` (`vercel.json:21-26`). All cron routes remain protected by `CRON_SECRET` middleware (`src/server/cron-auth.ts`).
-- **Recommendation:** Add per-route `maxDuration` tuning if `retention` grows (e.g., 300s for initial backfill), and log cron duration to Agnost.
+- **Before:** 4 crons (`retention` 02:00, `quotation-expiry` hourly, `balance-reminders` 09:00, `email-retries` every 5m) with **no `maxDuration`** — default timeout 10s (Hobby) / 60s (Pro) could hard-terminate bulk jobs (e.g., hundreds of expiries).
+- **After:** `export const maxDuration = 60` in every cron route (`src/app/api/cron/*/route.ts`), asserted by `src/app/api/cron/cron-routes.test.ts`. A `functions: { "src/app/api/cron/**/*.ts": … }` block was added to `vercel.json` first, but it is **invalid for the App Router**: a real `vercel deploy` rejects it with `The pattern "src/app/api/cron/**/*.ts" defined in `functions`doesn't match any Serverless Functions inside the`api` directory`, so it was removed. Route segment config is the supported mechanism, and Vercel's default function memory is already 1024 MB. All cron routes remain protected by `CRON_SECRET` middleware (`src/server/cron-auth.ts`).
+- **Recommendation:** Add per-route `maxDuration` tuning if `retention` grows (e.g., 300s for initial backfill), and log cron duration to Agnost. Note that the Hobby plan rejects any cron schedule more frequent than daily — hourly and `*/5` entries fail the deploy outright.
 
 #### `wrangler.jsonc` — Vinext → Cloudflare Workers
 

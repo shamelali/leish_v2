@@ -32,11 +32,5 @@
       "path": "/api/cron/quotation-recovery",
       "schedule": "0 11 * * *"
     }
-  ],
-  "functions": {
-    "src/app/api/cron/**/*.ts": {
-      "maxDuration": 60,
-      "memory": 1024
-    }
-  }
+  ]
 }
