@@ -61,6 +61,12 @@ next-env.d.ts
 /.qoder-pr/
 /.worktrees/
 
+# Qoder CLI per-machine state. settings.local.json holds this developer's own
+# tool-approval allowlist (a one-off Bash entry today); checked in, it would
+# silently grant that allowance to every session on the repo. Deliberately
+# shared config belongs in a tracked .qoder/settings.json instead.
+/.qoder/settings.local.json
+
 # Prevent git bundles from being committed
 *.bundle
 leish-v2.bundle
