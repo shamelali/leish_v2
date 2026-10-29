@@ -973,6 +973,52 @@ export function isPostgres(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
+/**
+ * TLS configuration for the pg pool.
+ *
+ * `sslmode=require` verifies the server against the operating system's trust
+ * store, which cannot work against a provider whose chain terminates in a
+ * private root: Supabase's pooler presents `Supabase Root 2021 CA`, and the
+ * handshake aborts with SELF_SIGNED_CERT_IN_CHAIN. Setting
+ * `PG_SSL_ROOT_CERT_PEM` to that root PEM pins it instead. The value is inline
+ * rather than a file path because Next's standalone trace does not carry a
+ * `.pem` into a serverless bundle.
+ *
+ * pg lets a connection string's own TLS parameters override the `ssl` option,
+ * so they are stripped here — passing both would silently ignore the pin.
+ */
+export function resolvePoolTls(rawConnectionString: string | undefined): {
+  connectionString: string | undefined;
+  ssl?: { ca: string; rejectUnauthorized: boolean };
+} {
+  const pem = process.env.PG_SSL_ROOT_CERT_PEM;
+  if (!rawConnectionString || !pem) return { connectionString: rawConnectionString };
+
+  // Node does not reject an unparseable `ca` — it quietly falls back to the
+  // system trust store, which would leave a mistyped pin looking like a
+  // certificate problem rather than a configuration problem.
+  if (!pem.includes("-----BEGIN CERTIFICATE-----")) {
+    throw new Error(
+      "PG_SSL_ROOT_CERT_PEM is set but contains no PEM certificate block. " +
+        "Paste the full root certificate, including the -----BEGIN/END----- lines.",
+    );
+  }
+
+  let connectionString: string;
+  try {
+    const url = new URL(rawConnectionString);
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^(ssl|uselibpqcompat)/i.test(key)) url.searchParams.delete(key);
+    }
+    connectionString = url.toString();
+  } catch {
+    // Keyword/value DSN: same parameters appear as space-separated tokens.
+    connectionString = rawConnectionString.replace(/\s(?:ssl\w*|uselibpqcompat)=[^\s]+/gi, "");
+  }
+
+  return { connectionString, ssl: { ca: pem, rejectUnauthorized: true } };
+}
+
 /** Synchronous accessor — initialization is sync; pg migration runs lazily. */
 export function getDb(): DbFacade {
   if (facade) return facade;
@@ -990,7 +1036,7 @@ export function getDb(): DbFacade {
     // serverless driver (HTTPS) instead (see above).
     if (!isWorkersRuntime) {
       const pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
+        ...resolvePoolTls(process.env.DATABASE_URL),
         max: Number(process.env.PG_MAX ?? 10),
         connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS ?? 10_000),
         // Neon + serverless: short idle timeouts keep the pooler healthy.

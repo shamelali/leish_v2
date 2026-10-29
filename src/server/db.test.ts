@@ -5,6 +5,7 @@ import {
   compilePlaceholders,
   resolveParams,
   isPostgres,
+  resolvePoolTls,
   getDb,
   closeDb,
   extractSchemaTables,
@@ -348,5 +349,63 @@ describe("Sqlite facade operations", () => {
     `);
     const rows = await db.prepare("SELECT COUNT(*) as c FROM test_multi").get<{ c: number }>();
     expect(rows?.c).toBe(2);
+  });
+});
+
+describe("resolvePoolTls", () => {
+  const PEM = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+  const URI =
+    "postgresql://postgres.ref:abc%40%23def@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=10";
+
+  afterEach(() => {
+    delete process.env.PG_SSL_ROOT_CERT_PEM;
+  });
+
+  it("leaves the connection string alone when no root is pinned", () => {
+    expect(resolvePoolTls(URI)).toEqual({ connectionString: URI });
+  });
+
+  it("passes an undefined url through without inventing one", () => {
+    expect(resolvePoolTls(undefined)).toEqual({ connectionString: undefined });
+  });
+
+  it("pins the CA and drops the URI's own TLS parameters", () => {
+    process.env.PG_SSL_ROOT_CERT_PEM = PEM;
+    const out = resolvePoolTls(URI);
+    expect(out.connectionString).not.toContain("sslmode");
+    expect(out.connectionString).toContain("connect_timeout=10");
+    expect(out.ssl).toEqual({ ca: PEM, rejectUnauthorized: true });
+  });
+
+  it("preserves userinfo while stripping", () => {
+    process.env.PG_SSL_ROOT_CERT_PEM = PEM;
+    const out = resolvePoolTls(URI) as { connectionString: string };
+    const u = new URL(out.connectionString);
+    expect(u.username).toBe("postgres.ref");
+    expect(u.password).toBe("abc%40%23def");
+    expect(u.hostname).toBe("aws-0-ap-southeast-1.pooler.supabase.com");
+    expect(u.port).toBe("6543");
+    expect(u.pathname).toBe("/postgres");
+  });
+
+  it("strips ssl parameters from a keyword/value DSN too", () => {
+    process.env.PG_SSL_ROOT_CERT_PEM = PEM;
+    const out = resolvePoolTls("host=db.example.com dbname=postgres sslmode=require user=pg") as {
+      connectionString: string;
+    };
+    expect(out.connectionString).toBe("host=db.example.com dbname=postgres user=pg");
+  });
+
+  it("keeps verification on rather than falling back to an unverified pin", () => {
+    process.env.PG_SSL_ROOT_CERT_PEM = PEM;
+    const out = resolvePoolTls("postgres://u:p@h/db") as { ssl: { rejectUnauthorized: boolean } };
+    expect(out.ssl.rejectUnauthorized).toBe(true);
+  });
+
+  it("rejects a value with no PEM block instead of letting Node ignore it", () => {
+    process.env.PG_SSL_ROOT_CERT_PEM = "not-a-pem-at-all";
+    expect(() => resolvePoolTls("postgres://u:p@h/db")).toThrow(
+      /contains no PEM certificate block/,
+    );
   });
 });
