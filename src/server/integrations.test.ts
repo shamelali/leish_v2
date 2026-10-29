@@ -8,8 +8,6 @@ import {
   isTurnstileConfigured,
   isSentryConfigured,
   areWebhooksConfigured,
-  rateLimitMode,
-  chatMode,
 } from "./integrations";
 
 describe("integrations", () => {
@@ -202,13 +200,6 @@ describe("integrations", () => {
       clearAll();
       process.env.STRIPE_WEBHOOK_SECRET = "stripe-secret";
       expect(areWebhooksConfigured()).toBe(true);
-    });
-  });
-
-  describe("rateLimitMode and chatMode", () => {
-    it("are always memory", () => {
-      expect(rateLimitMode).toBe("memory");
-      expect(chatMode).toBe("memory");
     });
   });
 });

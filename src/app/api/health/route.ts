@@ -7,8 +7,15 @@ import {
   isSentryConfigured,
   areWebhooksConfigured,
 } from "@/server/integrations";
+import { isUpstashConfigured } from "@/server/upstash";
 
 export const dynamic = "force-dynamic";
+
+/** Vercel injects VERCEL_GIT_COMMIT_SHA; DEPLOY_GIT_COMMIT_SHA overrides it elsewhere. */
+function deployCommit(): string {
+  const sha = process.env.DEPLOY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA;
+  return sha ? sha.slice(0, 7) : "unknown";
+}
 
 /**
  * Liveness/readiness probe (used by the Docker HEALTHCHECK).
@@ -28,10 +35,14 @@ export async function GET() {
     dbError = (err instanceof Error ? err.message : String(err)).slice(0, 100);
   }
 
+  // The rate limiter and the chat bus both select Upstash from the same
+  // credentials, so one answer covers both fields.
+  const stateBackend = isUpstashConfigured() ? "upstash" : "memory";
+
   return NextResponse.json({
     status: dbStatus === "ok" ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
-    commit: process.env.DEPLOY_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
+    commit: deployCommit(),
     checks: {
       session_secret: Boolean(process.env.SESSION_SECRET),
       database_url: Boolean(process.env.DATABASE_URL),
@@ -43,8 +54,8 @@ export async function GET() {
       turnstile: isTurnstileConfigured(),
       sentry: isSentryConfigured(),
       webhooks: areWebhooksConfigured(),
-      rate_limit: "memory",
-      chat: "memory",
+      rate_limit: isUpstashConfigured() ? "upstash" : "memory",
+      chat: isUpstashConfigured() ? "upstash" : "memory",
     },
   });
 }

@@ -6,7 +6,6 @@
  *   When it is unset, an available credential auto-selects the provider
  *   (RESEND_API_KEY → resend, POSTMARK_SERVER_TOKEN → postmark) so production
  *   works without an explicit `EMAIL_PROVIDER`.
- * - Rate limiting & chat bus: ALWAYS use in-memory (never Upstash at runtime).
  * - Health endpoint reports only the integrations we actually use.
  */
 
@@ -49,7 +48,3 @@ export function isSentryConfigured(): boolean {
 export function areWebhooksConfigured(): boolean {
   return !!(process.env.WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET);
 }
-
-// Rate limit and chat are intentionally always in-memory in this deployment.
-export const rateLimitMode = "memory" as const;
-export const chatMode = "memory" as const;
