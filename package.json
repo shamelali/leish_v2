@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/start-standalone.mjs",
+    "start:next": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -20,6 +21,7 @@
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
+    "db:clear-catalog": "node --experimental-strip-types scripts/clear-catalog.ts",
     "chat:migrate": "node --experimental-strip-types scripts/migrate-chat.ts",
     "test:pg": "vitest run --config vitest.pg.config.mts",
     "dev:vinext": "vinext dev --port 3001",
