@@ -25,6 +25,11 @@ redis-js-main
 # Agent skill packs (vendored docs, synced from upstream)
 .agents/skills
 
+# A separate static site, not part of the Next.js app. Prettier reflows it into
+# a ~2,900-line structural rewrite (HTML/MD line wrapping, not just spacing),
+# which destroys the diff that makes recovered content reviewable.
+dutaintegra
+
 # Workflow files cannot be rewritten by the CI token (a GitHub App push
 # without the `workflows` permission is rejected), so they are left as-is.
 .github/workflows
