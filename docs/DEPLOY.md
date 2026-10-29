@@ -30,9 +30,21 @@ users, bookings, quotations, payments and **sessions** all live in this store.
 
 ### Setting `CRON_SECRET`
 
-The schedules themselves live in `vercel.json` (eight `crons` entries). Vercel
-reads cron definitions from that file and nowhere else — deleting it silently
-stops every job while the app keeps serving normally.
+The schedules live in the **`leish-cron` Cloudflare worker**
+(`src/workers/cron/`, `npm run cron:deploy`), not in Vercel. `vercel.json` was
+deleted on purpose: Vercel Hobby rejects any cron more frequent than daily, so
+its eight entries failed the deploy outright, and the five that Hobby accepts
+would have double-fired against the worker. `src/workers/cron/schedule.test.ts`
+is the canonical schedule table now.
+
+```bash
+# Deploy the scheduler (needs `wrangler login`; Actions has no CF token):
+npm run cron:deploy
+
+# Its configuration:
+npx wrangler secret put CRON_SECRET --config src/workers/cron/wrangler.jsonc
+#   + var APP_URL in that file, which must be the deployed app's origin
+```
 
 ```bash
 # Generate:

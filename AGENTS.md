@@ -30,15 +30,24 @@ Leish v2 is a Next.js 16 (app router) platform connecting clients with beauty ar
   route `leish.my/*`) has never completed a deploy: `deploy.yml` has no
   `CLOUDFLARE_API_TOKEN` secret and Actions is billing-locked. Chat is the
   `leish-chat` worker (`src/workers/chat/`, `npm run chat:deploy`).
-- Crons: `kickCronScheduler` is commented out at `src/proxy.ts:41`, so the
-  traffic-driven scheduler never runs. Two mechanisms are _wired_: the eight
-  entries in `vercel.json` and the `leish-cron` worker (`src/workers/cron/`,
-  `npm run cron:deploy` — not wired into `deploy.yml`). Neither is confirmed
-  firing: `vercel.json` is only read by the project that owns it, and the
-  project behind `leish.my` is not this repo. Check `wrangler deployments list`
-  for `leish-cron` before assuming any sweep runs. They are not equivalent: the
-  worker runs `email-retries` every 15 minutes and collapses the three morning
-  sweeps to 09:00 UTC.
+- Crons: the **`leish-cron` worker (`src/workers/cron/`, `npm run cron:deploy`)
+  is the only scheduler.** `kickCronScheduler` is commented out at
+  `src/proxy.ts:41`, so the traffic-driven path never runs, and `vercel.json`
+  was **deleted** (`0bcd579f`): Vercel Hobby rejects any cron more frequent than
+  daily at deploy time, so three of its eight entries (`email-retries` `*/5`,
+  `quotation-expiry` and `booking-transitions` hourly) failed the whole deploy —
+  and trimming to the five daily ones would have double-fired every sweep
+  against the worker. Do not re-add `crons` to a Vercel deploy without
+  disabling this worker. One `* * * * *` Cloudflare trigger dispatches by
+  wall-clock: `email-retries` every 5 minutes, the two hourly sweeps at minute 0,
+  then `retention` 02:00, `payout-automation` 03:00, `balance-reminders` 09:00,
+  `review-requests` 10:00, `quotation-recovery` 11:00 UTC — all staggered, none
+  collapsed. `src/workers/cron/schedule.test.ts` pins that table.
+  **The worker has never been deployed**: `wrangler` is unauthenticated on this
+  box, Actions is billing-locked, and `deploy.yml` has no `CLOUDFLARE_API_TOKEN`.
+  It needs var `APP_URL` (defaults to `https://leish.my` in
+  `src/workers/cron/wrangler.jsonc`) and secret `CRON_SECRET`. Until
+  `wrangler deployments list` shows `leish-cron`, no sweep runs anywhere.
 
 ---
 

@@ -113,17 +113,21 @@ silently no email. Verify with a real signup, not the log line.
 
 | Variable              | Source                    | Notes                                                                                                             |
 | --------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `CRON_SECRET`         | `openssl rand -base64 32` | Guards all **eight** cron routes. Vercel sends it as a Bearer token.                                              |
+| `CRON_SECRET`         | `openssl rand -base64 32` | Guards all **eight** cron routes. The `leish-cron` worker sends it as a Bearer token.                             |
 | `INTERNAL_API_SECRET` | `openssl rand -base64 32` | _Optional._ Accepted by `/api/cron/email-retries` as an alternative to `CRON_SECRET`. Absent from `.env.example`. |
 
-Eight crons are declared in `vercel.json`: `retention` (02:00),
-`quotation-expiry` (hourly), `balance-reminders` (09:00), `email-retries`
-(every 5 min), `booking-transitions` (hourly), `payout-automation` (03:00),
-`review-requests` (10:00), `quotation-recovery` (11:00).
+Eight sweeps exist, scheduled by the **`leish-cron` Cloudflare worker**, not by
+Vercel: `retention` (02:00), `quotation-expiry` (hourly), `balance-reminders`
+(09:00), `email-retries` (every 5 min), `booking-transitions` (hourly),
+`payout-automation` (03:00), `review-requests` (10:00), `quotation-recovery`
+(11:00).
 
-Note that Vercel's Hobby plan caps cron frequency at once per day, which the
-5-minute `email-retries` schedule exceeds — confirm the plan supports these
-schedules, or the retry queue will not drain.
+Vercel's Hobby plan caps cron frequency at once per day, which the 5-minute
+`email-retries` and both hourly schedules exceed — and it enforces that **at
+deploy time**, failing the whole release rather than skipping the row. That is
+why `vercel.json` no longer declares any crons: on Hobby the worker is the only
+scheduler, and adding `crons` back alongside it double-fires every sweep. Until
+`wrangler deployments list` shows `leish-cron`, nothing drains the retry queue.
 
 ### File uploads
 
