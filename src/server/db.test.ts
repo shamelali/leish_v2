@@ -11,10 +11,13 @@ import {
   withOwnedSchema,
   getDb,
   closeDb,
+  withTransaction,
+  inTransaction,
   extractSchemaTables,
   detectSchemaDrift,
   migrateSqlite,
 } from "./db";
+import type { DbFacade } from "./db";
 import { DatabaseSync } from "node:sqlite";
 import { createRequire } from "node:module";
 
@@ -492,5 +495,110 @@ describe("owned schema (PG_SCHEMA_NAME)", () => {
       process.env.PG_SCHEMA_NAME = bad;
       expect(() => resolveSchemaName()).toThrow(/PG_SCHEMA_NAME/);
     }
+  });
+});
+
+describe("withTransaction (SQLite backend)", () => {
+  beforeEach(async () => {
+    await closeDb();
+    process.env.LEISH_DB_PATH = ":memory:";
+  });
+
+  afterEach(async () => {
+    await closeDb();
+    delete process.env.LEISH_DB_PATH;
+  });
+
+  it("commits the writes the callback made", async () => {
+    const db = getDb();
+    await db.exec("CREATE TABLE txn_tbl (id TEXT PRIMARY KEY)");
+
+    await withTransaction(async (tx) => {
+      await tx.prepare("INSERT INTO txn_tbl (id) VALUES (?)").run("kept");
+    });
+
+    const rows = await db.prepare("SELECT id FROM txn_tbl").all<{ id: string }>();
+    expect(rows.map((r) => r.id)).toEqual(["kept"]);
+  });
+
+  it("rolls every write back when the callback throws", async () => {
+    const db = getDb();
+    await db.exec("CREATE TABLE txn_tbl (id TEXT PRIMARY KEY)");
+    await db.prepare("INSERT INTO txn_tbl (id) VALUES (?)").run("before");
+
+    await expect(
+      withTransaction(async (tx) => {
+        await tx.prepare("INSERT INTO txn_tbl (id) VALUES (?)").run("inside");
+        throw new Error("settlement blew up");
+      }),
+    ).rejects.toThrow("settlement blew up");
+
+    const rows = await db.prepare("SELECT id FROM txn_tbl ORDER BY id").all<{ id: string }>();
+    expect(rows.map((r) => r.id)).toEqual(["before"]);
+  });
+
+  it("yields the open transaction to getDb() callers that take no db argument", async () => {
+    const base = getDb();
+    let seen: DbFacade | null = null;
+
+    await withTransaction(async () => {
+      seen = getDb();
+      expect(inTransaction()).toBe(true);
+    });
+
+    expect(seen).not.toBeNull();
+    expect(seen).not.toBe(base);
+    expect(inTransaction()).toBe(false);
+    expect(getDb()).toBe(base);
+  });
+
+  it("joins an already-open transaction instead of starting a second one", async () => {
+    const db = getDb();
+    await db.exec("CREATE TABLE txn_tbl (id TEXT PRIMARY KEY)");
+
+    await expect(
+      withTransaction(async (outer) => {
+        await outer.prepare("INSERT INTO txn_tbl (id) VALUES (?)").run("outer");
+        // A nested helper gets the same facade, so it cannot commit on its own.
+        await withTransaction(async (inner) => {
+          expect(inner).toBe(outer);
+          await inner.prepare("INSERT INTO txn_tbl (id) VALUES (?)").run("inner");
+        });
+        throw new Error("outer fails");
+      }),
+    ).rejects.toThrow("outer fails");
+
+    const counts = await db.prepare("SELECT COUNT(*) as c FROM txn_tbl").get<{ c: number }>();
+    expect(counts).toMatchObject({ c: 0 });
+  });
+
+  it("serialises concurrent transactions on the single shared handle", async () => {
+    const db = getDb();
+    await db.exec("CREATE TABLE txn_log (who TEXT)");
+
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const worker = (who: string, hold: Promise<void>) =>
+      withTransaction(async (tx) => {
+        order.push(`begin:${who}`);
+        await tx.prepare("INSERT INTO txn_log (who) VALUES (?)").run(who);
+        await hold;
+        const rows = await tx.prepare("SELECT who FROM txn_log").all<{ who: string }>();
+        order.push(`count:${who}=${rows.length}`);
+      });
+
+    const first = worker("t1", gate);
+    // Queued while t1's transaction is still open — it must not BEGIN on top of it.
+    const second = worker("t2", Promise.resolve());
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    release();
+    await Promise.all([first, second]);
+
+    expect(order).toEqual(["begin:t1", "count:t1=1", "begin:t2", "count:t2=2"]);
   });
 });

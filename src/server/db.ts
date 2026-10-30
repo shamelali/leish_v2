@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { Pool } from "pg";
 import { neonConfig, Pool as NeonPool } from "@neondatabase/serverless";
+import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -968,9 +969,25 @@ export function migrateSqlite(db: DatabaseSync) {
 let facade: DbFacade | null = null;
 let pgPool: Pool | null = null;
 let pgReady: Promise<void> | null = null;
+let sqliteDb: DatabaseSync | null = null;
+
+/**
+ * The facade belonging to the currently-open transaction, if this async flow
+ * is inside one. `getDb()` yields to it, so modules that take no database
+ * argument still write into the caller's transaction instead of the pool.
+ */
+const txStore = new AsyncLocalStorage<DbFacade>();
+
+/** Serialises SQLite transactions: one shared handle means one open txn. */
+let sqliteTxChain: Promise<unknown> = Promise.resolve();
 
 export function isPostgres(): boolean {
   return Boolean(process.env.DATABASE_URL);
+}
+
+/** True while this async flow is inside a {@link withTransaction} callback. */
+export function inTransaction(): boolean {
+  return txStore.getStore() !== undefined;
 }
 
 /**
@@ -1085,6 +1102,11 @@ export function resolvePoolConfig(rawConnectionString: string | undefined): {
 
 /** Synchronous accessor — initialization is sync; pg migration runs lazily. */
 export function getDb(): DbFacade {
+  // Inside a transaction, every statement must go through the checked-out
+  // client (or the open SQLite txn), otherwise it autocommits outside it.
+  const tx = txStore.getStore();
+  if (tx) return tx;
+
   if (facade) return facade;
 
   // Production guard: SQLite is not suitable for production (data lost on redeploy).
@@ -1197,6 +1219,7 @@ export function getDb(): DbFacade {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   migrateSqlite(db);
+  sqliteDb = db;
   facade = createSqliteFacade(db);
   return facade;
 }
@@ -1207,12 +1230,119 @@ export async function closeDb(): Promise<void> {
     await pgPool.end();
     pgPool = null;
   }
+  if (sqliteDb) {
+    sqliteDb.close();
+    sqliteDb = null;
+    sqliteTxChain = Promise.resolve();
+  }
   facade = null;
   pgReady = null;
 }
 
 export function getPgPool(): Pool | null {
   return pgPool;
+}
+
+/**
+ * Run `fn` as one atomic unit. Every `getDb()` call inside it — in this module
+ * or in any module it reaches — writes through the open transaction, so either
+ * all of the work lands or none of it does.
+ *
+ * Nested calls join the transaction that is already open rather than starting a
+ * second one.
+ *
+ * On the Workers runtime there is no transaction to open: each statement is a
+ * separate HTTPS request to Neon, so this throws rather than silently giving a
+ * non-atomic "transaction".
+ *
+ * Backend difference to keep in mind: on PostgreSQL a statement that fails
+ * aborts the whole transaction, so nothing after it can run; SQLite only
+ * discards the failing statement. Do not catch an error inside the callback and
+ * carry on — throw and let the caller retry.
+ */
+export async function withTransaction<T>(fn: (db: DbFacade) => Promise<T>): Promise<T> {
+  const active = txStore.getStore();
+  if (active) return fn(active);
+
+  getDb(); // bring the backend up (sync for SQLite, lazily migrating for pg)
+
+  if (isPostgres()) return withPgTransaction(fn);
+  return withSqliteTransaction(fn);
+}
+
+async function withPgTransaction<T>(fn: (db: DbFacade) => Promise<T>): Promise<T> {
+  const pool = pgPool;
+  if (!pool) {
+    throw new Error(
+      "[db] withTransaction needs the Node pg pool. On Cloudflare Workers every " +
+        "statement is a separate Neon HTTPS request, which cannot share a transaction.",
+    );
+  }
+  // The schema bootstrap issues multi-statement strings on the shared pool.
+  // Let it finish before pinning a server connection with an open transaction,
+  // otherwise BEGIN and CREATE TABLE can land on different backends.
+  if (pgReady) await pgReady;
+
+  const client = await pool.connect();
+  const tx = createPgFacade(
+    (sql, params) =>
+      client.query(sql, params as unknown[] | undefined) as unknown as Promise<PgQueryResult>,
+    () => Promise.resolve(),
+  );
+
+  await client.query("BEGIN");
+  try {
+    const result = await txStore.run(tx, () => fn(tx));
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      // A failed COMMIT may already have ended the transaction; the original
+      // error is the one the caller needs.
+      console.error(
+        "[db] ROLLBACK failed:",
+        rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+      );
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function withSqliteTransaction<T>(fn: (db: DbFacade) => Promise<T>): Promise<T> {
+  const db = sqliteDb;
+  if (!db) throw new Error("[db] withTransaction called with no SQLite handle open");
+  const tx = createSqliteFacade(db);
+
+  const run = async (): Promise<T> => {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const result = await txStore.run(tx, () => fn(tx));
+      db.exec("COMMIT");
+      return result;
+    } catch (err) {
+      try {
+        db.exec("ROLLBACK");
+      } catch (rollbackErr) {
+        console.error(
+          "[db] SQLite ROLLBACK failed:",
+          rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+        );
+      }
+      throw err;
+    }
+  };
+
+  // One handle, one transaction: queue concurrent callers behind each other.
+  const started = sqliteTxChain.then(run, run);
+  sqliteTxChain = started.then(
+    () => undefined,
+    () => undefined,
+  );
+  return started;
 }
 
 // ── Shared row types + helpers (kept for compatibility with call sites) ─────

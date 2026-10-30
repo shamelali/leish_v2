@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac, randomUUID } from "node:crypto";
-import { getDb } from "./db";
+import { getDb, withTransaction } from "./db";
 import { hashPassword } from "./password";
 import {
   activePaymentProvider,
@@ -490,6 +490,96 @@ describe("handlePaymentPaid", () => {
       .get(bookingId);
     expect(payout).toBeDefined();
     expect(payout).toMatchObject({ booking_id: bookingId, gross_sen: 30000 });
+  });
+});
+
+describe("settlement atomicity (the webhook transaction)", () => {
+  beforeEach(async () => {
+    await getDb().prepare("DELETE FROM payments").run();
+    await getDb().prepare("DELETE FROM bookings").run();
+    await getDb().prepare("DELETE FROM users").run();
+    await getDb().prepare("DELETE FROM quotations").run();
+    await getDb().prepare("DELETE FROM payouts").run();
+  });
+
+  // POST /api/payments/webhook marks the bill paid and then runs the settlement
+  // side effects. Both steps share one transaction there: if the mark-paid
+  // autocommitted first, a crash before the booking confirmation would leave a
+  // permanently `paid` row that every replayed callback reports as "already
+  // transitioned" — money collected, booking never confirmed.
+  it("rolls the mark-paid back with the settlement, so a retry can still land", async () => {
+    const bookingId = await createTestUserAndBooking("accepted");
+    const payment = await createBookingPayment(bookingId, "deposit", FEE);
+
+    await expect(
+      withTransaction(async () => {
+        expect(await markBillPaid(payment.provider_ref!)).toBe(true);
+        await handlePaymentPaid((await getPaymentForBooking(bookingId, "deposit"))!);
+        throw new Error("crash after the booking update");
+      }),
+    ).rejects.toThrow("crash after the booking update");
+
+    expect((await getPaymentForBill(payment.provider_ref!))?.status).toBe("required");
+    const rolledBack = (await getDb()
+      .prepare("SELECT status FROM bookings WHERE id = ?")
+      .get<{ status: string }>(bookingId))!;
+    expect(rolledBack.status).toBe("accepted");
+
+    // Billplz's next delivery therefore still has work to do.
+    expect(await markBillPaid(payment.provider_ref!)).toBe(true);
+    await handlePaymentPaid((await getPaymentForBill(payment.provider_ref!))!);
+    const settled = (await getDb()
+      .prepare("SELECT status FROM bookings WHERE id = ?")
+      .get<{ status: string }>(bookingId))!;
+    expect(settled.status).toBe("confirmed");
+  });
+
+  it("commits the paid status together with the payout it creates", async () => {
+    const bookingId = await createTestUserAndBooking("confirmed");
+    const artistId = await createTestArtist();
+    await getDb()
+      .prepare("UPDATE bookings SET artist_id = ? WHERE id = ?")
+      .run(artistId, bookingId);
+    const balance = await createBookingPayment(bookingId, "balance", 30_000);
+
+    await withTransaction(async () => {
+      expect(await markBillPaid(balance.provider_ref!)).toBe(true);
+      await handlePaymentPaid((await getPaymentForBooking(bookingId, "balance"))!);
+    });
+
+    expect((await getPaymentForBill(balance.provider_ref!))?.status).toBe("paid");
+    const payouts = await getDb()
+      .prepare("SELECT id FROM payouts WHERE booking_id = ?")
+      .all<{ id: string }>(bookingId);
+    expect(payouts).toHaveLength(1);
+
+    // A replay inside a transaction is still inert: markBillPaid is the guard.
+    await withTransaction(async () => {
+      expect(await markBillPaid(balance.provider_ref!)).toBe(false);
+      await handlePaymentPaid((await getPaymentForBooking(bookingId, "balance"))!);
+    });
+    const afterReplay = await getDb()
+      .prepare("SELECT id FROM payouts WHERE booking_id = ?")
+      .all<{ id: string }>(bookingId);
+    expect(afterReplay).toHaveLength(1);
+  });
+
+  it("never resurrects a refunded payment from inside a transaction", async () => {
+    const bookingId = await createTestUserAndBooking("confirmed");
+    const payment = await createBookingPayment(bookingId, "balance", 30_000);
+    await getDb().prepare("UPDATE payments SET status = 'refunded' WHERE id = ?").run(payment.id);
+
+    const settled = await withTransaction(async () => {
+      if (!(await markBillPaid(payment.provider_ref!))) return false;
+      await handlePaymentPaid((await getPaymentForBooking(bookingId, "balance"))!);
+      return true;
+    });
+
+    expect(settled).toBe(false);
+    expect((await getPaymentForBill(payment.provider_ref!))?.status).toBe("refunded");
+    expect(
+      await getDb().prepare("SELECT id FROM payouts WHERE booking_id = ?").get(bookingId),
+    ).toBeUndefined();
   });
 });
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb, type BookingRow, type UserRow } from "@/server/db";
+import { getDb, withTransaction, type BookingRow, type UserRow } from "@/server/db";
 import { verifySessionToken } from "@/server/session";
 import { getClaimedArtistIds } from "@/server/artist-profiles";
 import { getClaimedStudioIds } from "@/server/studio-profiles";
@@ -125,9 +125,15 @@ export const POST = statefulRoute(
     // Dev provider: nothing is charged, so settle instantly — this keeps demos
     // and e2e flows working without a real Billplz webhook round-trip.
     if (payment.provider === "dev") {
-      await markBillPaid(payment.provider_ref!);
-      const settled = await getPaymentForBooking(booking.id, "deposit");
-      if (settled) await handlePaymentPaid(settled);
+      const billId = payment.provider_ref!;
+      // One transaction, exactly as the real webhook does it: a failure partway
+      // through settlement rolls the mark-paid back instead of stranding the
+      // payment as `paid` with an unconfirmed booking.
+      await withTransaction(async () => {
+        if (!(await markBillPaid(billId))) return;
+        const settled = await getPaymentForBooking(booking.id, "deposit");
+        if (settled) await handlePaymentPaid(settled);
+      });
       return NextResponse.json(
         {
           payment: {

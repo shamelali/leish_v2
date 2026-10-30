@@ -10,7 +10,7 @@ import { tryRoute } from "@/server/http";
 import { reportError } from "@/server/errors";
 import { isAgnostEnabled, agnost } from "@/server/agnost";
 import { notifySlackPayment } from "@/server/notifications";
-import { getDb } from "@/server/db";
+import { getDb, withTransaction } from "@/server/db";
 
 /**
  * POST /api/payments/webhook
@@ -165,9 +165,17 @@ export const POST = tryRoute(
 
     try {
       // Conditional UPDATE: only the first delivery transitions the row, so
-      // the settlement side effects below run exactly once.
-      const changed = await markBillPaid(payload.id);
-      if (!changed) {
+      // the settlement side effects below run exactly once. Both run in one
+      // transaction: if settlement throws, the mark-paid rolls back with it and
+      // Billplz's retry can still complete the booking. Committed separately,
+      // the payment would be stuck `paid` forever with an unconfirmed booking.
+      const settled = await withTransaction(async () => {
+        if (!(await markBillPaid(payment.provider_ref!))) return false;
+        await handlePaymentPaid(payment);
+        return true;
+      });
+
+      if (!settled) {
         logger.info(
           { billId: payload.id, paymentId: payment.id },
           "payment already transitioned by a concurrent delivery (ignored)",
@@ -175,8 +183,6 @@ export const POST = tryRoute(
         interaction?.end("Already settled", true);
         return new NextResponse("OK", { status: 200 });
       }
-
-      await handlePaymentPaid(payment);
 
       // Slack notification (best-effort)
       const booking = (await getDb()
