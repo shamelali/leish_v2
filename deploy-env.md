@@ -41,12 +41,13 @@
 
 ## Required (production will crash without these)
 
-| Variable               | Value                                                       | Notes                                                                     |
-| ---------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `SESSION_SECRET`       | _(ROTATED — generate a new one: `openssl rand -base64 32`)_ | 32-byte base64, signs JWTs                                                |
-| `DATABASE_URL`         | _(ROTATED — pooler URI from the new Supabase project)_      | Supabase PostgreSQL (pooler, `sslmode=require`); old Neon project retired |
-| `NEXT_PUBLIC_SITE_URL` | `https://leish.my`                                          | Used for metadata, sitemap, emails, Billplz callbacks                     |
-| `CRON_SECRET`          | _(ROTATED — `openssl rand -base64 32`)_                     | Protects /api/cron/* endpoints                                            |
+| Variable               | Value                                                       | Notes                                                                                                     |
+| ---------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `SESSION_SECRET`       | _(ROTATED — generate a new one: `openssl rand -base64 32`)_ | 32-byte base64, signs JWTs                                                                                |
+| `DATABASE_URL`         | _(ROTATED — pooler URI from the new Supabase project)_      | Supabase PostgreSQL (pooler); old Neon project retired                                                    |
+| `PG_SSL_ROOT_CERT_PEM` | _(Supabase Root 2021 CA, PEM text — not a path)_            | Required: the pooler chain ends in a private root, so `sslmode=require` fails `SELF_SIGNED_CERT_IN_CHAIN` |
+| `NEXT_PUBLIC_SITE_URL` | `https://leish.my`                                          | Used for metadata, sitemap, emails, Billplz callbacks                                                     |
+| `CRON_SECRET`          | _(ROTATED — `openssl rand -base64 32`)_                     | Protects /api/cron/* endpoints                                                                            |
 
 ## Verified production cascade (2026-10-29)
 
@@ -137,6 +138,7 @@ is the recommended-variable warning for `PEPPER_SECRET`, `SENTRY_DSN` and
 | Variable                  | Status         | Action needed                                              |
 | ------------------------- | -------------- | ---------------------------------------------------------- |
 | `DATABASE_URL`            | ✅ Supplied    | New Supabase project pooler URI — set in Vercel Production |
+| `PG_SSL_ROOT_CERT_PEM`    | ✅ Required    | Supabase Root 2021 CA (PEM text) — set with `DATABASE_URL` |
 | `BILLPLZ_API_KEY`         | ✅ Supplied    | Set in Vercel Production (not `.env.local`)                |
 | `BILLPLZ_COLLECTION_ID`   | ✅ Supplied    | Set in Vercel Production (not `.env.local`)                |
 | `BREVO_API_KEY`           | ✅ Supplied    | Set in Vercel Production with `EMAIL_PROVIDER=brevo`       |

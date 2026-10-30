@@ -305,6 +305,31 @@ export const PG_SCHEMA = `
     consent_timestamp TEXT,
     created_at    TEXT NOT NULL
   );
+  -- studios is created before bookings on purpose: bookings.studio_id carries a
+  -- real FK, and PostgreSQL rejects a reference to a table that does not exist
+  -- yet. SQLite tolerates the forward reference, so only the pg path fails.
+  CREATE TABLE IF NOT EXISTS studios (
+    id            TEXT PRIMARY KEY,
+    slug          TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    tagline       TEXT NOT NULL DEFAULT '',
+    description   TEXT NOT NULL DEFAULT '',
+    image         TEXT NOT NULL DEFAULT '',
+    rating        REAL NOT NULL DEFAULT 0,
+    review_count  INTEGER NOT NULL DEFAULT 0,
+    state         TEXT NOT NULL DEFAULT '',
+    area          TEXT NOT NULL DEFAULT '',
+    address       TEXT NOT NULL DEFAULT '',
+    services      TEXT NOT NULL DEFAULT '[]',
+    price_from    INTEGER NOT NULL DEFAULT 0,
+    hours         TEXT NOT NULL DEFAULT '',
+    phone         TEXT NOT NULL DEFAULT '',
+    referral_code TEXT NOT NULL DEFAULT '',
+    referred_by   TEXT REFERENCES studios(id) ON DELETE SET NULL,
+    referral_earnings INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS bookings (
     id          TEXT PRIMARY KEY,
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -493,28 +518,6 @@ export const PG_SCHEMA = `
     portfolio     TEXT NOT NULL DEFAULT '[]',
     referral_code TEXT NOT NULL DEFAULT '',
     referred_by   TEXT REFERENCES artists(id) ON DELETE SET NULL,
-    referral_earnings INTEGER NOT NULL DEFAULT 0,
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS studios (
-    id            TEXT PRIMARY KEY,
-    slug          TEXT NOT NULL UNIQUE,
-    name          TEXT NOT NULL,
-    tagline       TEXT NOT NULL DEFAULT '',
-    description   TEXT NOT NULL DEFAULT '',
-    image         TEXT NOT NULL DEFAULT '',
-    rating        REAL NOT NULL DEFAULT 0,
-    review_count  INTEGER NOT NULL DEFAULT 0,
-    state         TEXT NOT NULL DEFAULT '',
-    area          TEXT NOT NULL DEFAULT '',
-    address       TEXT NOT NULL DEFAULT '',
-    services      TEXT NOT NULL DEFAULT '[]',
-    price_from    INTEGER NOT NULL DEFAULT 0,
-    hours         TEXT NOT NULL DEFAULT '',
-    phone         TEXT NOT NULL DEFAULT '',
-    referral_code TEXT NOT NULL DEFAULT '',
-    referred_by   TEXT REFERENCES studios(id) ON DELETE SET NULL,
     referral_earnings INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
@@ -590,6 +593,29 @@ const SQLITE_SCHEMA = `
     consent_timestamp TEXT,
     created_at TEXT NOT NULL
   );
+  -- Same ordering as PG_SCHEMA: bookings.studio_id references studios.
+  CREATE TABLE IF NOT EXISTS studios (
+    id            TEXT PRIMARY KEY,
+    slug          TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    tagline       TEXT NOT NULL DEFAULT '',
+    description   TEXT NOT NULL DEFAULT '',
+    image         TEXT NOT NULL DEFAULT '',
+    rating        REAL NOT NULL DEFAULT 0,
+    review_count  INTEGER NOT NULL DEFAULT 0,
+    state         TEXT NOT NULL DEFAULT '',
+    area          TEXT NOT NULL DEFAULT '',
+    address       TEXT NOT NULL DEFAULT '',
+    services      TEXT NOT NULL DEFAULT '[]',
+    price_from    INTEGER NOT NULL DEFAULT 0,
+    hours         TEXT NOT NULL DEFAULT '',
+    phone         TEXT NOT NULL DEFAULT '',
+    referral_code TEXT NOT NULL DEFAULT '',
+    referred_by   TEXT REFERENCES studios(id) ON DELETE SET NULL,
+    referral_earnings INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS bookings (
     id          TEXT PRIMARY KEY,
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -778,28 +804,6 @@ const SQLITE_SCHEMA = `
     portfolio     TEXT NOT NULL DEFAULT '[]',
     referral_code TEXT NOT NULL DEFAULT '',
     referred_by   TEXT REFERENCES artists(id) ON DELETE SET NULL,
-    referral_earnings INTEGER NOT NULL DEFAULT 0,
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS studios (
-    id            TEXT PRIMARY KEY,
-    slug          TEXT NOT NULL UNIQUE,
-    name          TEXT NOT NULL,
-    tagline       TEXT NOT NULL DEFAULT '',
-    description   TEXT NOT NULL DEFAULT '',
-    image         TEXT NOT NULL DEFAULT '',
-    rating        REAL NOT NULL DEFAULT 0,
-    review_count  INTEGER NOT NULL DEFAULT 0,
-    state         TEXT NOT NULL DEFAULT '',
-    area          TEXT NOT NULL DEFAULT '',
-    address       TEXT NOT NULL DEFAULT '',
-    services      TEXT NOT NULL DEFAULT '[]',
-    price_from    INTEGER NOT NULL DEFAULT 0,
-    hours         TEXT NOT NULL DEFAULT '',
-    phone         TEXT NOT NULL DEFAULT '',
-    referral_code TEXT NOT NULL DEFAULT '',
-    referred_by   TEXT REFERENCES studios(id) ON DELETE SET NULL,
     referral_earnings INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL

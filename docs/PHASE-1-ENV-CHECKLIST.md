@@ -328,6 +328,9 @@ listed together) → Billplz pair → email provider → recommended warnings. W
 `BILLPLZ_COLLECTION_ID`, `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY` and
 `EMAIL_FROM`, it does not throw; the only output is the warning for
 `PEPPER_SECRET`, `SENTRY_DSN` and `ERROR_WEBHOOK_URL` (verified 2026-10-29).
+For the Supabase pooler, also set `PG_SSL_ROOT_CERT_PEM` to the Supabase Root
+2021 CA (PEM text, not a path) — without it the TLS handshake fails with
+`SELF_SIGNED_CERT_IN_CHAIN` before authentication.
 
 Then, on the deployed instance:
 

@@ -23,6 +23,11 @@ export default defineConfig({
     globals: false,
     reporters: ["verbose"],
     pool: "forks",
+    // Each fork boots its own pool and getDb() applies PG_SCHEMA on an empty
+    // database. CREATE TABLE IF NOT EXISTS is a check-then-create, so two forks
+    // racing the same table make one of them fail on pg_type's catalog unique
+    // index (23505) — the whole suite must run one file at a time.
+    fileParallelism: false,
     testTimeout: 30_000,
     hookTimeout: 30_000,
   },
